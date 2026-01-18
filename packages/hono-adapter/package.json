@@ -1,0 +1,41 @@
+{
+  "name": "@suamox/hono-adapter",
+  "version": "0.1.0",
+  "description": "Hono server adapter for Suamox framework",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["hono", "server", "adapter", "ssr"],
+  "license": "MIT",
+  "peerDependencies": {
+    "@suamox/ssr-runtime": "workspace:*",
+    "hono": "^4.0.0",
+    "vite": "^6.0.0"
+  },
+  "dependencies": {
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^1.14.0",
+    "@suamox/ssr-runtime": "workspace:*",
+    "@types/node": "^22.10.5",
+    "hono": "^4.6.17",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7"
+  }
+}

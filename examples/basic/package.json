@@ -1,0 +1,31 @@
+{
+  "name": "example-basic",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "build": "vite build && vite build --ssr src/entry-server.tsx",
+    "build:ssg": "tsx scripts/ssg.ts",
+    "preview": "NODE_ENV=production node server.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.0",
+    "@suamox/hono-adapter": "workspace:*",
+    "@suamox/ssr-runtime": "workspace:*",
+    "@suamox/vite-plugin-pages": "workspace:*",
+    "hono": "^4.6.17",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.0.6",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7"
+  }
+}

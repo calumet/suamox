@@ -1,0 +1,27 @@
+{
+  "name": "suamox",
+  "version": "0.1.0",
+  "description": "Meta-framework with SSR/SSG, filesystem routing, and islands architecture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm --filter @suamox/* build",
+    "dev": "pnpm --parallel --filter @suamox/* dev",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "keywords": ["framework", "ssr", "ssg", "react", "vite", "hono"],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@10.14.0",
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/node": "^22.10.5",
+    "eslint": "^9.18.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.19.1"
+  }
+}
