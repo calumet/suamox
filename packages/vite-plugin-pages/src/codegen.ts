@@ -31,6 +31,8 @@ export function generateRoutesModule(routes: RouteRecord[]): string {
 
     // Determine loader value - access from module namespace
     const loaderValue = route.hasLoader ? `${moduleName}.loader` : 'undefined';
+    const getStaticPathsValue = route.hasGetStaticPaths ? `${moduleName}.getStaticPaths` : 'undefined';
+    const prerenderValue = route.hasPrerender ? `${moduleName}.prerender === true` : 'false';
     const layoutsValue = layoutNames.length > 0 ? `[${layoutNames.join(', ')}]` : '[]';
 
     // Generate route object
@@ -39,6 +41,8 @@ export function generateRoutesModule(routes: RouteRecord[]): string {
     component: ${importName},
     layouts: ${layoutsValue},
     loader: ${loaderValue},
+    getStaticPaths: ${getStaticPathsValue},
+    prerender: ${prerenderValue},
     filePath: ${JSON.stringify(route.filePath)},
     params: ${JSON.stringify(route.params)},
     isCatchAll: ${route.isCatchAll},

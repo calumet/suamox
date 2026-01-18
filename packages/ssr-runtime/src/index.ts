@@ -7,6 +7,8 @@ export interface RouteRecord {
   filePath: string;
   component: React.ComponentType<PageProps>;
   layouts?: Array<React.ComponentType<{ children: React.ReactNode }>>;
+  getStaticPaths?: GetStaticPaths;
+  prerender?: boolean;
   params: string[];
   isCatchAll: boolean;
   isIndex: boolean;
@@ -140,6 +142,7 @@ function matchPattern(
   return { params };
 }
 
+
 export function createPageElement(route: RouteRecord, data: unknown): React.ReactElement {
   const pageElement = createElement(route.component, { data });
   const layouts = route.layouts ?? [];
@@ -234,14 +237,27 @@ export function generateHTML(options: {
   head?: string;
   initialData?: unknown;
   scripts?: string[];
+  includeInitialDataScript?: boolean;
 }): string {
-  const { html, head = '', initialData, scripts = [] } = options;
-
-  const serializedData = initialData !== undefined ? serializeData(initialData) : 'null';
+  const {
+    html,
+    head = '',
+    initialData,
+    scripts = [],
+    includeInitialDataScript = true,
+  } = options;
 
   const scriptTags = scripts
     .map((src) => `<script type="module" src="${src}"></script>`)
     .join('\n    ');
+
+  const dataScript = includeInitialDataScript
+    ? `<script>
+      window.__INITIAL_DATA__ = ${
+        initialData !== undefined ? serializeData(initialData) : 'null'
+      };
+    </script>`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -252,15 +268,8 @@ export function generateHTML(options: {
   </head>
   <body>
     ${html}
-    <script>
-      window.__INITIAL_DATA__ = ${serializedData};
-    </script>
+    ${dataScript}
     ${scriptTags}
   </body>
 </html>`;
-}
-
-// Prerender will be implemented in Phase 4
-export function prerender(_options: unknown): void {
-  throw new Error('Not implemented - will be added in Phase 4');
 }

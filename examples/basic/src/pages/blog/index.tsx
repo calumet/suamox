@@ -1,3 +1,5 @@
+export const prerender = true;
+
 export default function BlogIndexPage() {
   return (
     <div>

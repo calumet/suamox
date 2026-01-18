@@ -12,8 +12,27 @@ const loaderExportPatterns = [
   /\bexport\s*{\s*[^}]*\bloader\b[^}]*}/,
 ];
 
+const getStaticPathsExportPatterns = [
+  /\bexport\s+(async\s+)?function\s+getStaticPaths\b/,
+  /\bexport\s+(const|let|var)\s+getStaticPaths\b/,
+  /\bexport\s*{\s*[^}]*\bgetStaticPaths\b[^}]*}/,
+];
+
+const prerenderExportPatterns = [
+  /\bexport\s+(const|let|var)\s+prerender\b/,
+  /\bexport\s*{\s*[^}]*\bprerender\b[^}]*}/,
+];
+
 function fallbackHasLoader(content: string): boolean {
   return loaderExportPatterns.some((pattern) => pattern.test(content));
+}
+
+function fallbackHasGetStaticPaths(content: string): boolean {
+  return getStaticPathsExportPatterns.some((pattern) => pattern.test(content));
+}
+
+function fallbackHasPrerender(content: string): boolean {
+  return prerenderExportPatterns.some((pattern) => pattern.test(content));
 }
 
 function isLayoutFile(filePath: string, extensions: string[]): boolean {
@@ -124,8 +143,12 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
       });
       const [, exports] = parse(code);
       route.hasLoader = exports.some((exp) => exp.n === 'loader');
+      route.hasGetStaticPaths = exports.some((exp) => exp.n === 'getStaticPaths');
+      route.hasPrerender = exports.some((exp) => exp.n === 'prerender');
     } catch {
       route.hasLoader = fallbackHasLoader(content);
+      route.hasGetStaticPaths = fallbackHasGetStaticPaths(content);
+      route.hasPrerender = fallbackHasPrerender(content);
     }
 
     routes.push(route);

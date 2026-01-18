@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && vite build --ssr src/entry-server.tsx --outDir dist/server",
-    "build:ssg": "tsx scripts/ssg.ts",
+    "build": "vite build && vite build --ssr src/entry-server.tsx --outDir dist/server && node -e \"import('@suamox/ssr-runtime/ssg').then((m) => m.runSsg()).catch((err) => { console.error(err); process.exit(1); })\"",
     "preview": "cross-env NODE_ENV=production tsx server.ts",
     "start": "cross-env NODE_ENV=production tsx server.ts",
     "typecheck": "tsc --noEmit"

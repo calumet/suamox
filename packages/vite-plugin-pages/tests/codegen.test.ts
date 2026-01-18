@@ -32,6 +32,8 @@ describe('generateRoutesModule', () => {
     expect(code).toContain('path: "/about"');
     expect(code).toContain('component: Page0');
     expect(code).toContain('layouts: []');
+    expect(code).toContain('getStaticPaths: undefined');
+    expect(code).toContain('prerender: false');
     expect(code).toContain('params: []');
     expect(code).toContain('isCatchAll: false');
     expect(code).toContain('isIndex: false');
@@ -86,6 +88,8 @@ describe('generateRoutesModule', () => {
     const code = generateRoutesModule(routes);
 
     expect(code).toContain('path: "/blog/:slug"');
+    expect(code).toContain('getStaticPaths: undefined');
+    expect(code).toContain('prerender: false');
     expect(code).toContain('params: ["slug"]');
   });
 
@@ -107,6 +111,27 @@ describe('generateRoutesModule', () => {
     expect(code).toContain('path: "/*"');
     expect(code).toContain('params: ["all"]');
     expect(code).toContain('isCatchAll: true');
+  });
+
+  it('should include getStaticPaths and prerender when exported', () => {
+    const routes: RouteRecord[] = [
+      {
+        path: '/blog/:slug',
+        filePath: '/pages/blog/[slug].tsx',
+        params: ['slug'],
+        isCatchAll: false,
+        isIndex: false,
+        segments: [],
+        priority: 215,
+        hasGetStaticPaths: true,
+        hasPrerender: true,
+      },
+    ];
+
+    const code = generateRoutesModule(routes);
+
+    expect(code).toContain('getStaticPaths: _module0.getStaticPaths');
+    expect(code).toContain('prerender: _module0.prerender === true');
   });
 
   it('should include layouts when provided', () => {

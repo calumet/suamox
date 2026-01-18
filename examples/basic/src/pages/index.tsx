@@ -1,3 +1,5 @@
+export const prerender = true;
+
 export default function HomePage() {
   return (
     <div>

@@ -19,6 +19,12 @@ const blogPosts = {
   },
 };
 
+export const prerender = true;
+
+export async function getStaticPaths() {
+  return Object.keys(blogPosts).map((slug) => ({ params: { slug } }));
+}
+
 export function loader({ params }: LoaderContext) {
   const { slug } = params;
   const post = blogPosts[slug as keyof typeof blogPosts];

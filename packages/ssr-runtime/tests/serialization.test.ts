@@ -174,6 +174,15 @@ describe('generateHTML', () => {
     expect(html).toContain('window.__INITIAL_DATA__');
   });
 
+  it('should allow skipping initial data script', () => {
+    const html = generateHTML({
+      html: '<div>Content</div>',
+      includeInitialDataScript: false,
+    });
+
+    expect(html).not.toContain('window.__INITIAL_DATA__');
+  });
+
   it('should place initial data before external scripts', () => {
     const html = generateHTML({
       html: '<div id="root"></div>',

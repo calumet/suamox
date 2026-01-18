@@ -3,9 +3,10 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import type { Context } from 'hono';
 import type { ViteDevServer } from 'vite';
 import pc from 'picocolors';
-import { resolve } from 'node:path';
+import { isAbsolute, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import type { RenderOptions, RouteRecord, RenderResult } from '@suamox/ssr-runtime';
 import { generateHTML, renderPage, serializeData } from '@suamox/ssr-runtime';
 
@@ -30,6 +31,7 @@ export interface ProdHandlerOptions extends HonoAdapterOptions {
   clientDir?: string;
   serverEntry?: string;
   root?: string;
+  staticDir?: string;
 }
 
 /**
@@ -200,6 +202,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     onBeforeRender,
     onAfterRender,
     root = process.cwd(),
+    staticDir = 'dist/static',
   } = options;
 
   const app = createHonoApp(options);
@@ -207,6 +210,9 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   // Convert relative server entry path to absolute file URL for dynamic import
   const serverEntryPath = resolve(root, serverEntry);
   const serverEntryURL = pathToFileURL(serverEntryPath).href;
+
+  const staticRoot = resolve(root, staticDir);
+  const staticFallbackEnabled = staticRoot.length > 0;
 
   // Read Vite manifest to get hashed asset names
   const manifestPath = resolve(root, clientDir, '.vite/manifest.json');
@@ -224,6 +230,38 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 
   // Serve static assets from client build directory
   app.use('/assets/*', serveStatic({ root: clientDir }));
+  if (staticFallbackEnabled) {
+    app.use('/client/*', serveStatic({ root: staticDir }));
+  }
+
+  const resolveStaticHtmlPath = (pathname: string): string | null => {
+    const normalizedPath = pathname === '/' ? '' : pathname;
+    const candidatePath = resolve(staticRoot, `.${normalizedPath}`, 'index.html');
+    const relativePath = relative(staticRoot, candidatePath);
+
+    if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
+      return null;
+    }
+
+    return candidatePath;
+  };
+
+  const readStaticHtml = async (pathname: string): Promise<string | null> => {
+    if (!staticFallbackEnabled) {
+      return null;
+    }
+
+    const filePath = resolveStaticHtmlPath(pathname);
+    if (!filePath) {
+      return null;
+    }
+
+    try {
+      return await readFile(filePath, 'utf-8');
+    } catch {
+      return null;
+    }
+  };
 
   // SSR handler - only for non-asset routes
   app.use('*', async (c) => {
@@ -232,6 +270,12 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       return c.notFound();
     }
     const url = new URL(c.req.url);
+
+    const staticHtml = await readStaticHtml(url.pathname);
+    if (staticHtml) {
+      const status = url.pathname === '/404' ? 404 : 200;
+      return c.html(staticHtml, status);
+    }
 
     try {
       // Execute onRequest hook

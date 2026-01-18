@@ -7,8 +7,12 @@ export interface RouteRecord {
   isIndex: boolean;
   segments: RouteSegment[];
   priority: number;
+  getStaticPaths?: GetStaticPaths;
+  prerender?: boolean;
   layouts?: string[];
   hasLoader?: boolean;
+  hasGetStaticPaths?: boolean;
+  hasPrerender?: boolean;
 }
 
 export interface RouteSegment {
@@ -21,3 +25,5 @@ export interface ParsedRoute {
   route: RouteRecord;
   errors: string[];
 }
+
+export type GetStaticPaths = () => Promise<Array<{ params: Record<string, string> }>>;

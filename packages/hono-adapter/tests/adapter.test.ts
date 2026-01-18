@@ -77,9 +77,11 @@ describe('createProdHandler', () => {
     const root = await mkdtemp(join(tmpdir(), 'suamox-hono-'));
     const serverDir = join(root, 'dist', 'server');
     const clientDir = join(root, 'dist', 'client', '.vite');
+    const staticDir = join(root, 'dist', 'static');
 
     await mkdir(serverDir, { recursive: true });
     await mkdir(clientDir, { recursive: true });
+    await mkdir(staticDir, { recursive: true });
     await writeFile(join(serverDir, 'entry-server.mjs'), 'export const routes = [];');
     await writeFile(
       join(clientDir, 'manifest.json'),
