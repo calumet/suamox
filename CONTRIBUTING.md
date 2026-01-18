@@ -41,6 +41,7 @@ suamox/
 4. Run linting: `pnpm lint`
 5. Format code: `pnpm format`
 6. Build packages: `pnpm build`
+7. Run tests: `pnpm test`
 
 ### Package Development
 
