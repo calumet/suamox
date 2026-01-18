@@ -19,7 +19,7 @@ const blogPosts = {
   },
 };
 
-export async function loader({ params }: LoaderContext) {
+export function loader({ params }: LoaderContext) {
   const { slug } = params;
   const post = blogPosts[slug as keyof typeof blogPosts];
 

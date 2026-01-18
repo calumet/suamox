@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+import { createElement } from 'react';
+import type { ReactNode } from 'react';
 import { renderPage } from '../src/index';
 import type { RouteRecord, LoaderContext } from '../src/index';
 
@@ -7,7 +9,8 @@ function createMockRoute(overrides: Partial<RouteRecord>): RouteRecord {
     path: '/',
     filePath: '/pages/index.tsx',
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
-    component: (() => null) as any,
+    component: (() => createElement('div', { id: 'root' })) as any,
+    layouts: [],
     params: [],
     isCatchAll: false,
     isIndex: true,
@@ -33,6 +36,21 @@ describe('renderPage', () => {
 
     expect(result.status).toBe(404);
     expect(result.html).toContain('404');
+  });
+
+  it('should render custom 404 page when present', async () => {
+    const NotFoundPage = () => createElement('div', null, 'Custom 404');
+    const routes: RouteRecord[] = [createMockRoute({ path: '/404', component: NotFoundPage })];
+    const request = createMockRequest('http://localhost:3000/missing');
+
+    const result = await renderPage({
+      pathname: '/missing',
+      request,
+      routes,
+    });
+
+    expect(result.status).toBe(404);
+    expect(result.html).toContain('Custom 404');
   });
 
   it('should return 200 for matching static route', async () => {
@@ -202,13 +220,13 @@ describe('renderPage', () => {
   it('should handle catch-all routes', async () => {
     // eslint-disable-next-line @typescript-eslint/require-await
     const loader = vi.fn(async ({ params }: LoaderContext) => ({
-      path: params['*'],
+      path: params.path,
     }));
 
     const routes: RouteRecord[] = [
       createMockRoute({
         path: '/docs/*',
-        params: ['*'],
+        params: ['path'],
         isCatchAll: true,
         loader,
       }),
@@ -225,6 +243,35 @@ describe('renderPage', () => {
     expect(result.initialData).toEqual({
       path: 'guide/intro',
     });
+  });
+
+  it('should render layouts around the page', async () => {
+    const LayoutA = ({ children }: { children: ReactNode }) =>
+      createElement('div', { id: 'layout-a' }, children);
+    const LayoutB = ({ children }: { children: ReactNode }) =>
+      createElement('section', { id: 'layout-b' }, children);
+    const Page = () => createElement('main', null, 'Layout Content');
+
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: '/layout',
+        component: Page,
+        layouts: [LayoutA, LayoutB],
+      }),
+    ];
+    const request = createMockRequest('http://localhost:3000/layout');
+
+    const result = await renderPage({
+      pathname: '/layout',
+      request,
+      routes,
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.html).toContain('layout-a');
+    expect(result.html).toContain('layout-b');
+    expect(result.html).toContain('Layout Content');
+    expect(result.html.indexOf('layout-a')).toBeLessThan(result.html.indexOf('layout-b'));
   });
 
   it('should handle root route', async () => {

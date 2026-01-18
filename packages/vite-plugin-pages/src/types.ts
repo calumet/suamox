@@ -7,6 +7,7 @@ export interface RouteRecord {
   isIndex: boolean;
   segments: RouteSegment[];
   priority: number;
+  layouts?: string[];
   hasLoader?: boolean;
 }
 

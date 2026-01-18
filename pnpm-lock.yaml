@@ -91,6 +91,9 @@ importers:
       '@types/node':
         specifier: ^22.10.5
         version: 22.19.7
+      '@vitest/coverage-v8':
+        specifier: ^2.1.8
+        version: 2.1.9(vitest@2.1.9(@types/node@22.19.7))
       hono:
         specifier: ^4.6.17
         version: 4.11.4
@@ -103,6 +106,9 @@ importers:
       vite:
         specifier: ^6.0.7
         version: 6.4.1(@types/node@22.19.7)(tsx@4.21.0)
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.7)
 
   packages/ssr-runtime:
     devDependencies:

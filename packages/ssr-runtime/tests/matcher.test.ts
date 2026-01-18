@@ -8,6 +8,7 @@ function createMockRoute(overrides: Partial<RouteRecord>): RouteRecord {
     filePath: '/pages/index.tsx',
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
     component: (() => null) as any,
+    layouts: [],
     params: [],
     isCatchAll: false,
     isIndex: true,
@@ -116,41 +117,41 @@ describe('matchRoute', () => {
   describe('catch-all routes', () => {
     it('should match catch-all route at root', () => {
       const routes = [
-        createMockRoute({ path: '/*', isCatchAll: true, params: ['*'], priority: 101 }),
+        createMockRoute({ path: '/*', isCatchAll: true, params: ['all'], priority: 101 }),
       ];
 
       const match = matchRoute(routes, '/any/path/here');
 
       expect(match).toBeTruthy();
       expect(match?.route.path).toBe('/*');
-      expect(match?.params).toEqual({ '*': 'any/path/here' });
+      expect(match?.params).toEqual({ all: 'any/path/here' });
     });
 
     it('should match catch-all with base path', () => {
       const routes = [
-        createMockRoute({ path: '/docs/*', isCatchAll: true, params: ['*'], priority: 201 }),
+        createMockRoute({ path: '/docs/*', isCatchAll: true, params: ['path'], priority: 201 }),
       ];
 
       const match = matchRoute(routes, '/docs/getting-started/intro');
 
       expect(match).toBeTruthy();
-      expect(match?.params).toEqual({ '*': 'getting-started/intro' });
+      expect(match?.params).toEqual({ path: 'getting-started/intro' });
     });
 
     it('should match catch-all with empty remaining path', () => {
       const routes = [
-        createMockRoute({ path: '/docs/*', isCatchAll: true, params: ['*'], priority: 201 }),
+        createMockRoute({ path: '/docs/*', isCatchAll: true, params: ['path'], priority: 201 }),
       ];
 
       const match = matchRoute(routes, '/docs/');
 
       expect(match).toBeTruthy();
-      expect(match?.params).toEqual({ '*': '' });
+      expect(match?.params).toEqual({ path: '' });
     });
 
     it('should not match catch-all if base path does not match', () => {
       const routes = [
-        createMockRoute({ path: '/docs/*', isCatchAll: true, params: ['*'], priority: 201 }),
+        createMockRoute({ path: '/docs/*', isCatchAll: true, params: ['path'], priority: 201 }),
       ];
 
       const match = matchRoute(routes, '/blog/post');

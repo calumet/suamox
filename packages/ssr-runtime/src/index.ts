@@ -6,6 +6,7 @@ export interface RouteRecord {
   path: string;
   filePath: string;
   component: React.ComponentType<PageProps>;
+  layouts?: Array<React.ComponentType<{ children: React.ReactNode }>>;
   params: string[];
   isCatchAll: boolean;
   isIndex: boolean;
@@ -53,7 +54,7 @@ export function matchRoute(routes: RouteRecord[], pathname: string): MatchResult
   const normalizedPath = pathname === '' ? '/' : pathname;
 
   for (const route of routes) {
-    const match = matchPattern(route.path, normalizedPath);
+    const match = matchPattern(route, normalizedPath);
     if (match) {
       return {
         route,
@@ -69,9 +70,10 @@ export function matchRoute(routes: RouteRecord[], pathname: string): MatchResult
  * Match a route pattern against a pathname
  */
 function matchPattern(
-  pattern: string,
+  route: RouteRecord,
   pathname: string
 ): { params: Record<string, string> } | null {
+  const pattern = route.path;
   // Handle exact match for static routes
   if (!pattern.includes(':') && !pattern.includes('*')) {
     return pattern === pathname ? { params: {} } : null;
@@ -105,7 +107,7 @@ function matchPattern(
 
     // Extract catch-all param
     const catchAllParts = pathParts.slice(baseParts.length);
-    const paramName = pattern.match(/\*$/)?.[0] ? '*' : 'all';
+    const paramName = route.params[0] ?? 'all';
 
     return {
       params: {
@@ -138,6 +140,19 @@ function matchPattern(
   return { params };
 }
 
+export function createPageElement(route: RouteRecord, data: unknown): React.ReactElement {
+  const pageElement = createElement(route.component, { data });
+  const layouts = route.layouts ?? [];
+  if (layouts.length === 0) {
+    return pageElement;
+  }
+
+  return layouts.reduceRight<React.ReactElement>(
+    (child, Layout) => createElement(Layout, null, child),
+    pageElement
+  );
+}
+
 /**
  * Render a page with SSR
  */
@@ -146,15 +161,18 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
 
   // Match route
   const match = matchRoute(routes, pathname);
+  const notFoundRoute = routes.find((route) => route.path === '/404');
 
-  if (!match) {
+  if (!match && !notFoundRoute) {
     return {
       status: 404,
       html: '<h1>404 - Page Not Found</h1>',
     };
   }
 
-  const { route, params } = match;
+  const resolvedMatch = match ?? { route: notFoundRoute!, params: {} };
+  const { route, params } = resolvedMatch;
+  const status = !match || route.path === '/404' ? 404 : 200;
   const url = new URL(request.url);
 
   // Build loader context
@@ -181,11 +199,11 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
 
   // Render component with React SSR
   try {
-    const element = createElement(route.component, { data });
+    const element = createPageElement(route, data);
     const html = renderToString(element);
 
     return {
-      status: 200,
+      status,
       html,
       initialData: data,
     };

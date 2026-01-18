@@ -27,10 +27,11 @@ describe('generateRoutesModule', () => {
 
     const code = generateRoutesModule(routes);
 
-    expect(code).toContain('import Page0 from');
-    expect(code).toContain('/project/src/pages/about.tsx');
+    expect(code).toContain("import * as _module0 from '/project/src/pages/about.tsx'");
+    expect(code).toContain('const Page0 = _module0.default;');
     expect(code).toContain('path: "/about"');
     expect(code).toContain('component: Page0');
+    expect(code).toContain('layouts: []');
     expect(code).toContain('params: []');
     expect(code).toContain('isCatchAll: false');
     expect(code).toContain('isIndex: false');
@@ -61,8 +62,10 @@ describe('generateRoutesModule', () => {
 
     const code = generateRoutesModule(routes);
 
-    expect(code).toContain('import Page0 from');
-    expect(code).toContain('import Page1 from');
+    expect(code).toContain('import * as _module0 from');
+    expect(code).toContain('import * as _module1 from');
+    expect(code).toContain('const Page0 = _module0.default;');
+    expect(code).toContain('const Page1 = _module1.default;');
     expect(code).toContain('/pages/index.tsx');
     expect(code).toContain('/pages/about.tsx');
   });
@@ -106,6 +109,29 @@ describe('generateRoutesModule', () => {
     expect(code).toContain('isCatchAll: true');
   });
 
+  it('should include layouts when provided', () => {
+    const routes: RouteRecord[] = [
+      {
+        path: '/blog/:slug',
+        filePath: '/pages/blog/[slug].tsx',
+        params: ['slug'],
+        isCatchAll: false,
+        isIndex: false,
+        segments: [],
+        priority: 215,
+        layouts: ['/pages/layout.tsx', '/pages/blog/layout.tsx'],
+      },
+    ];
+
+    const code = generateRoutesModule(routes);
+
+    expect(code).toContain("import * as _layoutModule0_0 from '/pages/layout.tsx'");
+    expect(code).toContain("import * as _layoutModule0_1 from '/pages/blog/layout.tsx'");
+    expect(code).toContain('const Layout0_0 = _layoutModule0_0.default;');
+    expect(code).toContain('const Layout0_1 = _layoutModule0_1.default;');
+    expect(code).toContain('layouts: [Layout0_0, Layout0_1]');
+  });
+
   it('should normalize Windows paths to forward slashes', () => {
     const routes: RouteRecord[] = [
       {
@@ -121,7 +147,7 @@ describe('generateRoutesModule', () => {
 
     const code = generateRoutesModule(routes);
 
-    expect(code).toContain("import Page0 from '/home/user/project/src/pages/about.tsx'");
+    expect(code).toContain("import * as _module0 from '/home/user/project/src/pages/about.tsx'");
   });
 
   it('should generate valid JavaScript structure', () => {

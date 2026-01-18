@@ -1,4 +1,4 @@
-import { resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import fg from 'fast-glob';
 import { init, parse } from 'es-module-lexer';
@@ -14,6 +14,44 @@ const loaderExportPatterns = [
 
 function fallbackHasLoader(content: string): boolean {
   return loaderExportPatterns.some((pattern) => pattern.test(content));
+}
+
+function isLayoutFile(filePath: string, extensions: string[]): boolean {
+  const matchedExtension = extensions.find((extension) => filePath.endsWith(extension));
+  if (!matchedExtension) {
+    return false;
+  }
+
+  return basename(filePath, matchedExtension) === 'layout';
+}
+
+function collectLayoutsForFile(
+  filePath: string,
+  layoutMap: Map<string, string>,
+  pagesDir: string
+): string[] {
+  const layouts: string[] = [];
+  let currentDir = dirname(filePath);
+
+  while (true) {
+    const layoutFile = layoutMap.get(currentDir);
+    if (layoutFile) {
+      layouts.push(layoutFile);
+    }
+
+    if (currentDir === pagesDir) {
+      break;
+    }
+
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) {
+      break;
+    }
+
+    currentDir = parentDir;
+  }
+
+  return layouts.reverse();
 }
 
 export interface ScanOptions {
@@ -48,16 +86,26 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     ignore: ['**/node_modules/**', '**/.git/**'],
   });
 
+  const layoutFiles = files.filter((file) => isLayoutFile(file, extensions));
+  const pageFiles = files.filter((file) => !isLayoutFile(file, extensions));
+  const layoutMap = new Map<string, string>();
+
+  for (const layoutFile of layoutFiles) {
+    layoutMap.set(dirname(layoutFile), layoutFile);
+  }
+
   // Parse each file into a route
   const routes: RouteRecord[] = [];
   const errors: string[] = [];
 
-  for (const file of files) {
+  for (const file of pageFiles) {
     const { route, errors: parseErrors } = parseRoute(file, absolutePagesDir);
 
     if (parseErrors.length > 0) {
       errors.push(...parseErrors.map((err) => `${file}: ${err}`));
     }
+
+    route.layouts = collectLayoutsForFile(file, layoutMap, absolutePagesDir);
 
     // Check if the file exports a loader function using es-module-lexer
     let content = '';

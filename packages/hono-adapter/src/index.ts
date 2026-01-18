@@ -6,14 +6,19 @@ import pc from 'picocolors';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
-import type { RouteRecord, RenderResult } from '@suamox/ssr-runtime';
-import { renderPage, generateHTML } from '@suamox/ssr-runtime';
+import type { RenderOptions, RouteRecord, RenderResult } from '@suamox/ssr-runtime';
+import { generateHTML, renderPage, serializeData } from '@suamox/ssr-runtime';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export interface HonoAdapterOptions {
   onRequest?: (c: Context) => void | Promise<void>;
-  onBeforeRender?: (ctx: any) => Promise<any>;
-  onAfterRender?: (result: RenderResult) => Promise<RenderResult>;
+  onBeforeRender?: (ctx: RenderOptions) => RenderOptions | Promise<RenderOptions>;
+  onAfterRender?: (result: RenderResult) => RenderResult | Promise<RenderResult>;
+}
+
+export interface CreateServerOptions extends HonoAdapterOptions {
+  port?: number;
+  clientDir?: string;
+  serverEntry?: string;
 }
 
 export interface DevHandlerOptions extends HonoAdapterOptions {
@@ -26,7 +31,6 @@ export interface ProdHandlerOptions extends HonoAdapterOptions {
   serverEntry?: string;
   root?: string;
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 /**
  * Create a Hono app with SSR support
@@ -45,14 +49,7 @@ export function createHonoApp(_options: HonoAdapterOptions = {}): Hono {
 /**
  * Create and start a server (dev or prod based on NODE_ENV)
  */
-export async function createServer(options: {
-  port?: number;
-  clientDir?: string;
-  serverEntry?: string;
-  onRequest?: (c: Context) => void | Promise<void>;
-  onBeforeRender?: (ctx: any) => Promise<any>;
-  onAfterRender?: (result: RenderResult) => Promise<RenderResult>;
-}): Promise<void> {
+export async function createServer(options: CreateServerOptions): Promise<void> {
   const { port = 3000, ...adapterOptions } = options;
   const isProd = process.env.NODE_ENV === 'production';
 
@@ -95,14 +92,14 @@ export async function createServer(options: {
         res.writeHead(response.status, Object.fromEntries(response.headers.entries()));
 
         if (response.body) {
-          const reader = response.body.getReader();
+          const reader = response.body.getReader() as ReadableStreamDefaultReader<Uint8Array>;
           const pump = async (): Promise<void> => {
-            const { done, value } = await reader.read();
-            if (done) {
+            const readResult = await reader.read();
+            if (readResult.done || !readResult.value) {
               res.end();
               return;
             }
-            res.write(value);
+            res.write(readResult.value);
             return pump();
           };
           await pump();
@@ -136,12 +133,14 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       }
 
       // Load virtual:pages module
-      const { routes } = (await vite.ssrLoadModule('virtual:pages')) as { routes: RouteRecord[] };
+      const routesModule = (await vite.ssrLoadModule('virtual:pages')) as {
+        routes: RouteRecord[];
+      };
+      const routes = routesModule.routes;
 
       // Execute onBeforeRender hook
-      let renderContext = { pathname: url.pathname, request: c.req.raw, routes };
+      let renderContext: RenderOptions = { pathname: url.pathname, request: c.req.raw, routes };
       if (onBeforeRender) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         renderContext = await onBeforeRender(renderContext);
       }
 
@@ -171,9 +170,10 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       );
 
       // Inject initial data
+      const serializedData = serializeData(result.initialData ?? null);
       const finalHtml = template.replace(
         '</body>',
-        `<script>window.__INITIAL_DATA__ = ${JSON.stringify(result.initialData || null)};</script></body>`
+        `<script>window.__INITIAL_DATA__ = ${serializedData};</script></body>`
       );
 
       return c.html(finalHtml, result.status as 200 | 404 | 500);
@@ -251,9 +251,8 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       }
 
       // Execute onBeforeRender hook
-      let renderContext = { pathname: url.pathname, request: c.req.raw, routes };
+      let renderContext: RenderOptions = { pathname: url.pathname, request: c.req.raw, routes };
       if (onBeforeRender) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         renderContext = await onBeforeRender(renderContext);
       }
 
