@@ -41,6 +41,7 @@ export function generateRoutesModule(routes: RouteRecord[]): string {
     loader: _module.loader,
     getStaticPaths: _module.getStaticPaths,
     prerender: _module.prerender === true,
+    csr: _module.csr === true,
     layouts: _layouts
   };
 };`);

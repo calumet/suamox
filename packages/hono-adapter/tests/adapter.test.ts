@@ -107,7 +107,11 @@ describe('createProdHandler', () => {
     const body = await response.text();
 
     expect(mocks.generateHTML).toHaveBeenCalledWith(
-      expect.objectContaining({ scripts: ['/assets/client.js'] })
+      expect.objectContaining({
+        scripts: ['/assets/client.js'],
+        preloadScripts: ['/assets/client.js'],
+        scriptPlacement: 'head',
+      })
     );
     expect(body).toContain('/assets/client.js');
   });

@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import type { RenderOptions, RouteRecord, RenderResult } from '@suamox/ssr-runtime';
-import { generateHTML, renderPage, serializeData } from '@suamox/ssr-runtime';
+import { generateHTML, matchRoute, renderPage, serializeData } from '@suamox/ssr-runtime';
 
 export interface HonoAdapterOptions {
   onRequest?: (c: Context) => void | Promise<void>;
@@ -163,10 +163,11 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     ${result.head || ''}
+    <link rel="modulepreload" href="/src/entry-client.tsx">
+    <script type="module" src="/src/entry-client.tsx"></script>
   </head>
   <body>
     <div id="root">${result.html}</div>
-    <script type="module" src="/src/entry-client.tsx"></script>
   </body>
 </html>`
       );
@@ -216,9 +217,15 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 
   // Read Vite manifest to get hashed asset names
   const manifestPath = resolve(root, clientDir, '.vite/manifest.json');
-  let manifest: Record<string, { file: string }> = {};
+  type ManifestEntry = {
+    file: string;
+    imports?: string[];
+    dynamicImports?: string[];
+  };
+  type Manifest = Record<string, ManifestEntry>;
+  let manifest: Manifest = {};
   try {
-    manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as Record<string, { file: string }>;
+    manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as Manifest;
   } catch {
     console.warn('[Hono Adapter] Could not read Vite manifest, client assets may not load');
   }
@@ -228,8 +235,64 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     ? `/${manifest['index.html'].file}`
     : '/assets/index.js';
 
+  const toManifestKey = (filePath: string): string | null => {
+    const relativePath = relative(root, filePath).replace(/\\/g, '/');
+    if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
+      return null;
+    }
+    return relativePath;
+  };
+
+  const collectPreloadScripts = (routes: RouteRecord[], pathname: string): string[] => {
+    const preloadScripts = new Set<string>();
+    preloadScripts.add(entryClientScript);
+
+    const manifestKeys = Object.keys(manifest);
+    if (manifestKeys.length === 0) {
+      return Array.from(preloadScripts);
+    }
+
+    const visit = (key: string): void => {
+      const entry = manifest[key];
+      if (!entry) {
+        return;
+      }
+      const href = `/${entry.file}`;
+      if (preloadScripts.has(href)) {
+        return;
+      }
+      preloadScripts.add(href);
+      for (const importKey of entry.imports ?? []) {
+        visit(importKey);
+      }
+      for (const importKey of entry.dynamicImports ?? []) {
+        visit(importKey);
+      }
+    };
+
+    visit('index.html');
+
+    const matched = matchRoute(routes, pathname);
+    const routeKey = matched?.route?.filePath ? toManifestKey(matched.route.filePath) : null;
+    if (routeKey) {
+      visit(routeKey);
+    }
+
+    return Array.from(preloadScripts);
+  };
+
   // Serve static assets from client build directory
-  app.use('/assets/*', serveStatic({ root: clientDir }));
+  const assetHandler = serveStatic({ root: clientDir });
+  app.use('/assets/*', async (c, next) => {
+    const response = await assetHandler(c, next);
+    if (
+      response &&
+      /^\/assets\/(index|client|jsx-runtime)-[^/]+\.js$/.test(c.req.path)
+    ) {
+      response.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+    return response;
+  });
   if (staticFallbackEnabled) {
     app.use('/client/*', serveStatic({ root: staticDir }));
   }
@@ -309,11 +372,14 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       }
 
       // Generate full HTML
+      const preloadScripts = collectPreloadScripts(routes, url.pathname);
       const html = generateHTML({
         html: `<div id="root">${result.html}</div>`,
         head: result.head,
         initialData: result.initialData,
         scripts: [entryClientScript],
+        preloadScripts,
+        scriptPlacement: 'head',
       });
 
       return c.html(html, result.status as 200 | 404 | 500);

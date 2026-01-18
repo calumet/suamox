@@ -160,6 +160,28 @@ describe('renderPage', () => {
     expect(result.initialData).toBeNull();
   });
 
+  it('should skip SSR when csr is true', async () => {
+    const loader = vi.fn();
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: '/csr',
+        loader,
+        csr: true,
+      }),
+    ];
+    const request = createMockRequest('http://localhost:3000/csr');
+
+    const result = await renderPage({
+      pathname: '/csr',
+      request,
+      routes,
+    });
+
+    expect(loader).not.toHaveBeenCalled();
+    expect(result.status).toBe(200);
+    expect(result.html).toBe('');
+  });
+
   it('should handle dynamic routes with params', async () => {
     // eslint-disable-next-line @typescript-eslint/require-await
     const loader = vi.fn(async ({ params }: LoaderContext) => ({

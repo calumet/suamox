@@ -10,6 +10,7 @@ export interface RouteRecord {
   layouts?: Array<React.ComponentType<{ children: React.ReactNode }>>;
   getStaticPaths?: GetStaticPaths;
   prerender?: boolean;
+  csr?: boolean;
   params: string[];
   isCatchAll: boolean;
   isIndex: boolean;
@@ -37,6 +38,7 @@ export interface RouteModule {
   loader?: (ctx: LoaderContext) => Promise<unknown>;
   getStaticPaths?: GetStaticPaths;
   prerender?: boolean;
+  csr?: boolean;
 }
 
 export type RouteModuleLoader = () => Promise<RouteModule>;
@@ -57,6 +59,11 @@ export interface RenderResult {
   html: string;
   head?: string;
   initialData?: unknown;
+}
+
+export interface HydrationAdapter {
+  hydrateRoot: typeof import('react-dom/client').hydrateRoot;
+  createRoot: typeof import('react-dom/client').createRoot;
 }
 
 /**
@@ -185,11 +192,15 @@ export async function resolveRouteModule(route: RouteRecord): Promise<RouteRecor
   route.loader = loaded.loader;
   route.getStaticPaths = loaded.getStaticPaths;
   route.prerender = loaded.prerender === true;
+  route.csr = loaded.csr === true;
 
   return route;
 }
 
-export async function hydrateApp(routes: RouteRecord[]): Promise<void> {
+export async function hydrateApp(
+  routes: RouteRecord[],
+  adapter?: HydrationAdapter
+): Promise<void> {
   const rootElement = document.getElementById('root');
   if (!rootElement) {
     return;
@@ -204,7 +215,19 @@ export async function hydrateApp(routes: RouteRecord[]): Promise<void> {
   const resolvedRoute = await resolveRouteModule(match.route);
   const element = createPageElement(resolvedRoute, initialData);
 
-  const { hydrateRoot } = await import('react-dom/client');
+  let hydrateRoot = adapter?.hydrateRoot;
+  let createRoot = adapter?.createRoot;
+  if (!hydrateRoot || !createRoot) {
+    const client = await import('react-dom/client');
+    hydrateRoot = client.hydrateRoot;
+    createRoot = client.createRoot;
+  }
+
+  if (resolvedRoute.csr) {
+    createRoot(rootElement).render(element);
+    return;
+  }
+
   hydrateRoot(rootElement, element);
 }
 
@@ -230,6 +253,14 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
   const status = !match || route.path === '/404' ? 404 : 200;
   const resolvedRoute = await resolveRouteModule(route);
   const url = new URL(request.url);
+
+  if (resolvedRoute.csr) {
+    return {
+      status,
+      html: '',
+      initialData: null,
+    };
+  }
 
   // Build loader context
   const loaderContext: LoaderContext = {
@@ -290,15 +321,23 @@ export function generateHTML(options: {
   head?: string;
   initialData?: unknown;
   scripts?: string[];
+  preloadScripts?: string[];
   includeInitialDataScript?: boolean;
+  scriptPlacement?: 'head' | 'body';
 }): string {
   const {
     html,
     head = '',
     initialData,
     scripts = [],
+    preloadScripts = [],
     includeInitialDataScript = true,
+    scriptPlacement = 'body',
   } = options;
+
+  const preloadTags = preloadScripts
+    .map((href) => `<link rel="modulepreload" href="${href}">`)
+    .join('\n    ');
 
   const scriptTags = scripts
     .map((src) => `<script type="module" src="${src}"></script>`)
@@ -312,17 +351,21 @@ export function generateHTML(options: {
     </script>`
     : '';
 
+  const headContent = [head, preloadTags, scriptPlacement === 'head' ? scriptTags : '']
+    .filter(Boolean)
+    .join('\n    ');
+  const bodyScripts = scriptPlacement === 'body' ? scriptTags : '';
+  const bodyContent = [html, dataScript, bodyScripts].filter(Boolean).join('\n    ');
+
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    ${head}
+    ${headContent}
   </head>
   <body>
-    ${html}
-    ${dataScript}
-    ${scriptTags}
+    ${bodyContent}
   </body>
 </html>`;
 }

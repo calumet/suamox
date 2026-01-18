@@ -112,6 +112,10 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
   for (const route of routes) {
     const resolvedRoute = await resolveRouteModule(route);
 
+    if (resolvedRoute.csr) {
+      continue;
+    }
+
     if (!resolvedRoute.prerender) {
       continue;
     }
