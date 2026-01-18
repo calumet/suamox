@@ -22,7 +22,12 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["vite", "plugin", "routing", "filesystem"],
+  "keywords": [
+    "vite",
+    "plugin",
+    "routing",
+    "filesystem"
+  ],
   "license": "MIT",
   "peerDependencies": {
     "vite": "^6.0.0"

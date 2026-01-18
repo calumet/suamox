@@ -1,4 +1,4 @@
-import { hydrateRoot } from 'react-dom/client';
+// import { hydrateRoot } from 'react-dom/client';
 
 // Placeholder for Phase 3
 console.log('Client entry point - hydration will be implemented in Phase 3');

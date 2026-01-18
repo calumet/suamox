@@ -19,7 +19,12 @@
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["ssr", "ssg", "react", "rendering"],
+  "keywords": [
+    "ssr",
+    "ssg",
+    "react",
+    "rendering"
+  ],
   "license": "MIT",
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",

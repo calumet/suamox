@@ -69,6 +69,7 @@ pnpm format
 ### [@suamox/vite-plugin-pages](./packages/vite-plugin-pages)
 
 Vite plugin for filesystem-based routing with support for:
+
 - Static routes
 - Dynamic parameters `[slug]`
 - Catch-all routes `[...path]`
@@ -79,6 +80,7 @@ Vite plugin for filesystem-based routing with support for:
 ### [@suamox/ssr-runtime](./packages/ssr-runtime)
 
 Runtime for server-side rendering and static site generation:
+
 - Route matching
 - Data loading with `loader()`
 - SSR rendering with React
@@ -89,6 +91,7 @@ Runtime for server-side rendering and static site generation:
 ### [@suamox/hono-adapter](./packages/hono-adapter)
 
 Hono server adapter with:
+
 - Development server with HMR
 - Production SSR server
 - Middleware hooks

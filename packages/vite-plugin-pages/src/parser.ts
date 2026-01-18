@@ -20,7 +20,7 @@ export function parseRoute(filePath: string, pagesDir: string): ParsedRoute {
   // Process segments
   const segments: RouteSegment[] = [];
   const params: string[] = [];
-  let pathParts: string[] = [];
+  const pathParts: string[] = [];
   let isCatchAll = false;
   let isIndex = false;
 
@@ -161,8 +161,8 @@ export function validateRoutes(routes: RouteRecord[]): string[] {
     if (existing) {
       errors.push(
         `Duplicate route path: ${route.path}\n` +
-        `  - ${existing.filePath}\n` +
-        `  - ${route.filePath}`
+          `  - ${existing.filePath}\n` +
+          `  - ${route.filePath}`
       );
     } else {
       pathMap.set(route.path, route);

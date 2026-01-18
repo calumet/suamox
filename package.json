@@ -12,7 +12,14 @@
     "lint": "eslint .",
     "format": "prettier --write ."
   },
-  "keywords": ["framework", "ssr", "ssg", "react", "vite", "hono"],
+  "keywords": [
+    "framework",
+    "ssr",
+    "ssg",
+    "react",
+    "vite",
+    "hono"
+  ],
   "author": "",
   "license": "MIT",
   "packageManager": "pnpm@10.14.0",

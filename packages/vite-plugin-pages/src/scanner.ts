@@ -22,9 +22,7 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
   const absolutePagesDir = resolve(root, pagesDir);
 
   // Build glob pattern
-  const extPattern = extensions.length === 1
-    ? extensions[0]
-    : `{${extensions.join(',')}}`;
+  const extPattern = extensions.length === 1 ? extensions[0] : `{${extensions.join(',')}}`;
   const pattern = `**/*${extPattern}`;
 
   // Scan files
@@ -42,7 +40,7 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     const { route, errors: parseErrors } = parseRoute(file, absolutePagesDir);
 
     if (parseErrors.length > 0) {
-      errors.push(...parseErrors.map(err => `${file}: ${err}`));
+      errors.push(...parseErrors.map((err) => `${file}: ${err}`));
     }
 
     routes.push(route);

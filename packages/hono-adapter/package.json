@@ -19,7 +19,12 @@
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["hono", "server", "adapter", "ssr"],
+  "keywords": [
+    "hono",
+    "server",
+    "adapter",
+    "ssr"
+  ],
   "license": "MIT",
   "peerDependencies": {
     "@suamox/ssr-runtime": "workspace:*",

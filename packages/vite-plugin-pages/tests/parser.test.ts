@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolve, join } from 'node:path';
+import { join } from 'node:path';
 import { parseRoute, sortRoutes, validateRoutes } from '../src/parser';
 import type { RouteRecord } from '../src/types';
 
@@ -112,7 +112,7 @@ describe('parseRoute', () => {
 
   it('should report error for catch-all not at end', () => {
     const filePath = join(pagesDir, '[...all]', 'invalid.tsx');
-    const { route, errors } = parseRoute(filePath, pagesDir);
+    const { errors } = parseRoute(filePath, pagesDir);
 
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0]).toContain('must be the last segment');
@@ -120,7 +120,7 @@ describe('parseRoute', () => {
 
   it('should report error for invalid parameter syntax', () => {
     const filePath = join(pagesDir, '[].tsx');
-    const { route, errors } = parseRoute(filePath, pagesDir);
+    const { errors } = parseRoute(filePath, pagesDir);
 
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0]).toContain('Invalid parameter segment');
@@ -128,7 +128,7 @@ describe('parseRoute', () => {
 
   it('should report error for invalid catch-all syntax', () => {
     const filePath = join(pagesDir, '[...].tsx');
-    const { route, errors } = parseRoute(filePath, pagesDir);
+    const { errors } = parseRoute(filePath, pagesDir);
 
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0]).toContain('Invalid catch-all segment');
@@ -179,9 +179,9 @@ describe('sortRoutes', () => {
     const sorted = sortRoutes(routes);
 
     expect(sorted[0]?.path).toBe('/blog/:slug'); // priority 215
-    expect(sorted[1]?.path).toBe('/blog');       // priority 110
-    expect(sorted[2]?.path).toBe('/*');          // priority 101
-    expect(sorted[3]?.path).toBe('/');           // priority 0
+    expect(sorted[1]?.path).toBe('/blog'); // priority 110
+    expect(sorted[2]?.path).toBe('/*'); // priority 101
+    expect(sorted[3]?.path).toBe('/'); // priority 0
   });
 
   it('should sort alphabetically when priorities are equal', () => {

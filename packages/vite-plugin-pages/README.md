@@ -31,7 +31,7 @@ import { suamoxPages } from '@suamox/vite-plugin-pages';
 export default defineConfig({
   plugins: [
     suamoxPages({
-      pagesDir: 'src/pages',     // default
+      pagesDir: 'src/pages', // default
       extensions: ['.tsx', '.ts'], // default
     }),
   ],
@@ -74,22 +74,26 @@ import { routes } from 'virtual:pages';
 ### Static Routes
 
 Files map directly to URLs:
+
 - `src/pages/about.tsx` → `/about`
 - `src/pages/contact.tsx` → `/contact`
 
 ### Index Routes
 
 Files named `index.tsx` represent the root of their directory:
+
 - `src/pages/index.tsx` → `/`
 - `src/pages/blog/index.tsx` → `/blog`
 
 ### Dynamic Parameters
 
 Wrap segments in brackets to create dynamic routes:
+
 - `src/pages/blog/[slug].tsx` → `/blog/:slug`
 - `src/pages/users/[id].tsx` → `/users/:id`
 
 Access params in your component:
+
 ```tsx
 // src/pages/blog/[slug].tsx
 export default function BlogPost({ params }: { params: { slug: string } }) {
@@ -100,6 +104,7 @@ export default function BlogPost({ params }: { params: { slug: string } }) {
 ### Catch-All Routes
 
 Use `[...param]` for catch-all routes:
+
 - `src/pages/[...all].tsx` → `/*`
 - `src/pages/docs/[...path].tsx` → `/docs/*`
 
@@ -113,10 +118,12 @@ export default function DocsPage({ params }: { params: { path: string[] } }) {
 ### Route Groups
 
 Wrap folder names in parentheses to organize routes without affecting the URL:
+
 - `src/pages/(admin)/dashboard.tsx` → `/dashboard`
 - `src/pages/(auth)/login.tsx` → `/login`
 
 Useful for:
+
 - Organizing related routes
 - Sharing layouts (future feature)
 - Logical grouping without URL nesting
@@ -132,6 +139,7 @@ Routes are automatically sorted by priority:
 5. **Lowest**: Catch-all routes
 
 Example order:
+
 ```
 /blog/featured     (priority: 210)
 /blog/:slug        (priority: 215)
@@ -162,6 +170,7 @@ declare module 'virtual:pages' {
 ## HMR Support
 
 The plugin watches the pages directory and automatically:
+
 - Detects new pages
 - Removes deleted pages
 - Triggers full reload when routes change

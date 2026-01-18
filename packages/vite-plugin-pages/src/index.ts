@@ -16,10 +16,7 @@ const VIRTUAL_MODULE_ID = 'virtual:pages';
 const RESOLVED_VIRTUAL_MODULE_ID = '\0' + VIRTUAL_MODULE_ID;
 
 export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
-  const {
-    pagesDir = 'src/pages',
-    extensions = ['.tsx', '.ts'],
-  } = options;
+  const { pagesDir = 'src/pages', extensions = ['.tsx', '.ts'] } = options;
 
   let server: ViteDevServer | undefined;
   let root: string;
@@ -38,7 +35,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
 
     if (logErrors && result.errors.length > 0) {
       console.error(pc.red('\n[suamox:pages] Route errors:'));
-      result.errors.forEach(err => {
+      result.errors.forEach((err) => {
         console.error(pc.red(`  - ${err}`));
       });
     }
@@ -70,22 +67,22 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
 
       server.watcher.add(absolutePagesDir);
 
-      server.watcher.on('add', async (file) => {
-        if (file.startsWith(absolutePagesDir) && extensions.some(ext => file.endsWith(ext))) {
+      server.watcher.on('add', (file) => {
+        if (file.startsWith(absolutePagesDir) && extensions.some((ext) => file.endsWith(ext))) {
           console.log(pc.green(`[suamox:pages] Page added: ${file}`));
-          await updateRoutes();
+          void updateRoutes();
         }
       });
 
-      server.watcher.on('unlink', async (file) => {
-        if (file.startsWith(absolutePagesDir) && extensions.some(ext => file.endsWith(ext))) {
+      server.watcher.on('unlink', (file) => {
+        if (file.startsWith(absolutePagesDir) && extensions.some((ext) => file.endsWith(ext))) {
           console.log(pc.yellow(`[suamox:pages] Page removed: ${file}`));
-          await updateRoutes();
+          void updateRoutes();
         }
       });
 
-      server.watcher.on('change', async (file) => {
-        if (file.startsWith(absolutePagesDir) && extensions.some(ext => file.endsWith(ext))) {
+      server.watcher.on('change', (file) => {
+        if (file.startsWith(absolutePagesDir) && extensions.some((ext) => file.endsWith(ext))) {
           // File content changed but path is same - no need to regenerate routes
           // Just let Vite's normal HMR handle it
         }
@@ -97,7 +94,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
 
       if (routesCache) {
         console.log(pc.cyan(`[suamox:pages] Found ${routesCache.length} route(s)`));
-        routesCache.forEach(route => {
+        routesCache.forEach((route) => {
           console.log(pc.dim(`  ${route.path} -> ${route.filePath}`));
         });
       }
