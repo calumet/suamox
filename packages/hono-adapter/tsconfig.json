@@ -5,8 +5,5 @@
     "rootDir": "./src"
   },
   "include": ["src"],
-  "exclude": ["node_modules", "dist"],
-  "references": [
-    { "path": "../ssr-runtime" }
-  ]
+  "exclude": ["node_modules", "dist"]
 }
