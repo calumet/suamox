@@ -9,16 +9,24 @@ export function generateRoutesModule(routes: RouteRecord[]): string {
 
   routes.forEach((route, index) => {
     const importName = `Page${index}`;
-
-    // Generate import statement
-    // Use forward slashes for Windows compatibility in import paths
     const importPath = route.filePath.replace(/\\/g, '/');
+
+    // Import default export (the component)
     imports.push(`import ${importName} from '${importPath}';`);
+
+    // Only import loader if it exists
+    let loaderValue = 'undefined';
+    if (route.hasLoader) {
+      const loaderName = `loader${index}`;
+      imports.push(`import { loader as ${loaderName} } from '${importPath}';`);
+      loaderValue = loaderName;
+    }
 
     // Generate route object
     const routeObj = `  {
     path: ${JSON.stringify(route.path)},
     component: ${importName},
+    loader: ${loaderValue},
     filePath: ${JSON.stringify(route.filePath)},
     params: ${JSON.stringify(route.params)},
     isCatchAll: ${route.isCatchAll},

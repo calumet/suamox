@@ -1,4 +1,6 @@
 import type React from 'react';
+import { createElement } from 'react';
+import { renderToString } from 'react-dom/server';
 
 export interface RouteRecord {
   path: string;
@@ -177,13 +179,23 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
     }
   }
 
-  // Render component (this will be completed in Phase 3 with React integration)
-  // For now, we return a basic structure
-  return {
-    status: 200,
-    html: '<div id="root"></div>',
-    initialData: data,
-  };
+  // Render component with React SSR
+  try {
+    const element = createElement(route.component, { data });
+    const html = renderToString(element);
+
+    return {
+      status: 200,
+      html,
+      initialData: data,
+    };
+  } catch (error) {
+    console.error('Render error:', error);
+    return {
+      status: 500,
+      html: '<h1>500 - Internal Server Error</h1>',
+    };
+  }
 }
 
 /**

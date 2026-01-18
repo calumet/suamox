@@ -15,6 +15,9 @@ export type { RouteRecord, RouteSegment, ParsedRoute } from './types.js';
 const VIRTUAL_MODULE_ID = 'virtual:pages';
 const RESOLVED_VIRTUAL_MODULE_ID = '\0' + VIRTUAL_MODULE_ID;
 
+const VIRTUAL_SERVER_MODULE_ID = 'virtual:pages/server';
+const RESOLVED_VIRTUAL_SERVER_MODULE_ID = '\0' + VIRTUAL_SERVER_MODULE_ID;
+
 export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
   const { pagesDir = 'src/pages', extensions = ['.tsx', '.ts'] } = options;
 
@@ -104,6 +107,9 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       if (id === VIRTUAL_MODULE_ID) {
         return RESOLVED_VIRTUAL_MODULE_ID;
       }
+      if (id === VIRTUAL_SERVER_MODULE_ID) {
+        return RESOLVED_VIRTUAL_SERVER_MODULE_ID;
+      }
     },
 
     async load(id) {
@@ -112,6 +118,10 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
           await updateRoutes(false);
         }
         return moduleCode;
+      }
+      if (id === RESOLVED_VIRTUAL_SERVER_MODULE_ID) {
+        // Simple re-export for SSR entry point
+        return `export { routes } from 'virtual:pages';`;
       }
     },
   };

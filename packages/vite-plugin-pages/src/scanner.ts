@@ -1,5 +1,7 @@
 import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import fg from 'fast-glob';
+import { init, parse } from 'es-module-lexer';
 import type { RouteRecord } from './types.js';
 import { parseRoute, sortRoutes, validateRoutes } from './parser.js';
 
@@ -21,6 +23,9 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
   const { pagesDir, extensions, root = process.cwd() } = options;
   const absolutePagesDir = resolve(root, pagesDir);
 
+  // Initialize es-module-lexer (only needs to be done once)
+  await init;
+
   // Build glob pattern
   const extPattern = extensions.length === 1 ? extensions[0] : `{${extensions.join(',')}}`;
   const pattern = `**/*${extPattern}`;
@@ -41,6 +46,15 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
 
     if (parseErrors.length > 0) {
       errors.push(...parseErrors.map((err) => `${file}: ${err}`));
+    }
+
+    // Check if the file exports a loader function using es-module-lexer
+    try {
+      const content = readFileSync(file, 'utf-8');
+      const [, exports] = parse(content);
+      route.hasLoader = exports.some((exp) => exp.n === 'loader');
+    } catch {
+      route.hasLoader = false;
     }
 
     routes.push(route);

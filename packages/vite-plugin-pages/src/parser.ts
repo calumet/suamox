@@ -119,6 +119,9 @@ function calculatePriority(segments: RouteSegment[]): number {
   // Depth contributes to priority (more specific routes first)
   priority += segments.length * 100;
 
+  // Subtract heavily for catch-all to ensure they're last
+  let hasCatchAll = false;
+
   // Static segments add more priority
   for (const segment of segments) {
     if (segment.type === 'static') {
@@ -126,8 +129,20 @@ function calculatePriority(segments: RouteSegment[]): number {
     } else if (segment.type === 'param') {
       priority += 5;
     } else if (segment.type === 'catchAll') {
-      priority += 1;
+      hasCatchAll = true;
+      // Catch-all reduces priority significantly
+      priority -= 1000;
     }
+  }
+
+  // Special case: if no segments (root index), give it high priority
+  if (segments.length === 0) {
+    priority = 10000;
+  }
+
+  // Catch-all routes should always be last, even if they're deep
+  if (hasCatchAll) {
+    priority -= 10000;
   }
 
   return priority;

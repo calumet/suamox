@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node server.js",
-    "build": "vite build && vite build --ssr src/entry-server.tsx",
+    "dev": "tsx server.ts",
+    "build": "vite build && vite build --ssr src/entry-server.tsx --outDir dist/server",
     "build:ssg": "tsx scripts/ssg.ts",
-    "preview": "NODE_ENV=production node server.js",
+    "preview": "cross-env NODE_ENV=production tsx server.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -24,6 +24,7 @@
     "@types/react": "^19.0.6",
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^4.3.4",
+    "cross-env": "^10.1.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vite": "^6.0.7"
