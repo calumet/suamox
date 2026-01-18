@@ -12,7 +12,7 @@ describe('generateRoutesModule', () => {
     expect(code).toContain('export default routes;');
   });
 
-  it('should generate imports and route objects for single route', () => {
+  it('should generate route loaders for single route', () => {
     const routes: RouteRecord[] = [
       {
         path: '/about',
@@ -27,13 +27,12 @@ describe('generateRoutesModule', () => {
 
     const code = generateRoutesModule(routes);
 
-    expect(code).toContain("import * as _module0 from '/project/src/pages/about.tsx'");
-    expect(code).toContain('const Page0 = _module0.default;');
+    expect(code).toContain("const loadPage0 = () => import('/project/src/pages/about.tsx');");
+    expect(code).toContain('const loadRoute0 = async () => {');
     expect(code).toContain('path: "/about"');
-    expect(code).toContain('component: Page0');
-    expect(code).toContain('layouts: []');
-    expect(code).toContain('getStaticPaths: undefined');
-    expect(code).toContain('prerender: false');
+    expect(code).toContain('load: loadRoute0');
+    expect(code).toContain('getStaticPaths: _module.getStaticPaths');
+    expect(code).toContain('prerender: _module.prerender === true');
     expect(code).toContain('params: []');
     expect(code).toContain('isCatchAll: false');
     expect(code).toContain('isIndex: false');
@@ -64,10 +63,8 @@ describe('generateRoutesModule', () => {
 
     const code = generateRoutesModule(routes);
 
-    expect(code).toContain('import * as _module0 from');
-    expect(code).toContain('import * as _module1 from');
-    expect(code).toContain('const Page0 = _module0.default;');
-    expect(code).toContain('const Page1 = _module1.default;');
+    expect(code).toContain('const loadPage0 = () => import');
+    expect(code).toContain('const loadPage1 = () => import');
     expect(code).toContain('/pages/index.tsx');
     expect(code).toContain('/pages/about.tsx');
   });
@@ -88,8 +85,8 @@ describe('generateRoutesModule', () => {
     const code = generateRoutesModule(routes);
 
     expect(code).toContain('path: "/blog/:slug"');
-    expect(code).toContain('getStaticPaths: undefined');
-    expect(code).toContain('prerender: false');
+    expect(code).toContain('getStaticPaths: _module.getStaticPaths');
+    expect(code).toContain('prerender: _module.prerender === true');
     expect(code).toContain('params: ["slug"]');
   });
 
@@ -113,7 +110,7 @@ describe('generateRoutesModule', () => {
     expect(code).toContain('isCatchAll: true');
   });
 
-  it('should include getStaticPaths and prerender when exported', () => {
+  it('should include getStaticPaths and prerender from the module', () => {
     const routes: RouteRecord[] = [
       {
         path: '/blog/:slug',
@@ -123,15 +120,13 @@ describe('generateRoutesModule', () => {
         isIndex: false,
         segments: [],
         priority: 215,
-        hasGetStaticPaths: true,
-        hasPrerender: true,
       },
     ];
 
     const code = generateRoutesModule(routes);
 
-    expect(code).toContain('getStaticPaths: _module0.getStaticPaths');
-    expect(code).toContain('prerender: _module0.prerender === true');
+    expect(code).toContain('getStaticPaths: _module.getStaticPaths');
+    expect(code).toContain('prerender: _module.prerender === true');
   });
 
   it('should include layouts when provided', () => {
@@ -150,11 +145,10 @@ describe('generateRoutesModule', () => {
 
     const code = generateRoutesModule(routes);
 
-    expect(code).toContain("import * as _layoutModule0_0 from '/pages/layout.tsx'");
-    expect(code).toContain("import * as _layoutModule0_1 from '/pages/blog/layout.tsx'");
-    expect(code).toContain('const Layout0_0 = _layoutModule0_0.default;');
-    expect(code).toContain('const Layout0_1 = _layoutModule0_1.default;');
-    expect(code).toContain('layouts: [Layout0_0, Layout0_1]');
+    expect(code).toContain("const loadLayout0_0 = () => import('/pages/layout.tsx');");
+    expect(code).toContain("const loadLayout0_1 = () => import('/pages/blog/layout.tsx');");
+    expect(code).toContain('Promise.all([loadLayout0_0(), loadLayout0_1()])');
+    expect(code).toContain('layouts: _layouts');
   });
 
   it('should normalize Windows paths to forward slashes', () => {
@@ -172,7 +166,7 @@ describe('generateRoutesModule', () => {
 
     const code = generateRoutesModule(routes);
 
-    expect(code).toContain("import * as _module0 from '/home/user/project/src/pages/about.tsx'");
+    expect(code).toContain("const loadPage0 = () => import('/home/user/project/src/pages/about.tsx');");
   });
 
   it('should generate valid JavaScript structure', () => {
@@ -196,7 +190,7 @@ describe('generateRoutesModule', () => {
 
     // Should have valid route structure
     expect(code).toContain('path:');
-    expect(code).toContain('component:');
+    expect(code).toContain('load:');
     expect(code).toContain('filePath:');
   });
 

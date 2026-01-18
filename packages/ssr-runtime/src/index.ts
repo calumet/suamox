@@ -5,7 +5,8 @@ import { renderToString } from 'react-dom/server';
 export interface RouteRecord {
   path: string;
   filePath: string;
-  component: React.ComponentType<PageProps>;
+  component?: React.ComponentType<PageProps>;
+  load?: RouteModuleLoader;
   layouts?: Array<React.ComponentType<{ children: React.ReactNode }>>;
   getStaticPaths?: GetStaticPaths;
   prerender?: boolean;
@@ -29,6 +30,16 @@ export interface PageProps<T = any> {
 }
 
 export type GetStaticPaths = () => Promise<Array<{ params: Record<string, string> }>>;
+
+export interface RouteModule {
+  component: React.ComponentType<PageProps>;
+  layouts?: Array<React.ComponentType<{ children: React.ReactNode }>>;
+  loader?: (ctx: LoaderContext) => Promise<unknown>;
+  getStaticPaths?: GetStaticPaths;
+  prerender?: boolean;
+}
+
+export type RouteModuleLoader = () => Promise<RouteModule>;
 
 export interface MatchResult {
   route: RouteRecord;
@@ -144,6 +155,9 @@ function matchPattern(
 
 
 export function createPageElement(route: RouteRecord, data: unknown): React.ReactElement {
+  if (!route.component) {
+    throw new Error(`Route component not resolved for ${route.path}`);
+  }
   const pageElement = createElement(route.component, { data });
   const layouts = route.layouts ?? [];
   if (layouts.length === 0) {
@@ -154,6 +168,44 @@ export function createPageElement(route: RouteRecord, data: unknown): React.Reac
     (child, Layout) => createElement(Layout, null, child),
     pageElement
   );
+}
+
+export async function resolveRouteModule(route: RouteRecord): Promise<RouteRecord> {
+  if (route.component) {
+    return route;
+  }
+
+  if (!route.load) {
+    return route;
+  }
+
+  const loaded = await route.load();
+  route.component = loaded.component;
+  route.layouts = loaded.layouts ?? [];
+  route.loader = loaded.loader;
+  route.getStaticPaths = loaded.getStaticPaths;
+  route.prerender = loaded.prerender === true;
+
+  return route;
+}
+
+export async function hydrateApp(routes: RouteRecord[]): Promise<void> {
+  const rootElement = document.getElementById('root');
+  if (!rootElement) {
+    return;
+  }
+
+  const match = matchRoute(routes, window.location.pathname);
+  if (!match) {
+    return;
+  }
+
+  const initialData = (window as Window & { __INITIAL_DATA__?: unknown }).__INITIAL_DATA__ ?? null;
+  const resolvedRoute = await resolveRouteModule(match.route);
+  const element = createPageElement(resolvedRoute, initialData);
+
+  const { hydrateRoot } = await import('react-dom/client');
+  hydrateRoot(rootElement, element);
 }
 
 /**
@@ -176,6 +228,7 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
   const resolvedMatch = match ?? { route: notFoundRoute!, params: {} };
   const { route, params } = resolvedMatch;
   const status = !match || route.path === '/404' ? 404 : 200;
+  const resolvedRoute = await resolveRouteModule(route);
   const url = new URL(request.url);
 
   // Build loader context
@@ -188,9 +241,9 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
 
   // Execute loader if present
   let data: unknown = null;
-  if (route.loader) {
+  if (resolvedRoute.loader) {
     try {
-      data = await route.loader(loaderContext);
+      data = await resolvedRoute.loader(loaderContext);
     } catch (error) {
       console.error('Loader error:', error);
       return {
@@ -202,7 +255,7 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
 
   // Render component with React SSR
   try {
-    const element = createPageElement(route, data);
+    const element = createPageElement(resolvedRoute, data);
     const html = renderToString(element);
 
     return {

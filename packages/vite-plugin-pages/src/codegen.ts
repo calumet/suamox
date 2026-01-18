@@ -4,45 +4,51 @@ import type { RouteRecord } from './types.js';
  * Generate the virtual module code for routes
  */
 export function generateRoutesModule(routes: RouteRecord[]): string {
-  const imports: string[] = [];
+  const declarations: string[] = [];
   const routeObjects: string[] = [];
 
   routes.forEach((route, index) => {
-    const importName = `Page${index}`;
-    const moduleName = `_module${index}`;
+    const loadPageName = `loadPage${index}`;
+    const loadLayoutsName = `loadLayouts${index}`;
+    const loadRouteName = `loadRoute${index}`;
     const importPath = route.filePath.replace(/\\/g, '/');
-    const layoutNames: string[] = [];
+    const layoutLoadCalls: string[] = [];
 
-    // Import the entire module as namespace to prevent tree-shaking
-    imports.push(`import * as ${moduleName} from '${importPath}';`);
-    imports.push(`const ${importName} = ${moduleName}.default;`);
+    declarations.push(`const ${loadPageName} = () => import('${importPath}');`);
 
     if (route.layouts) {
       route.layouts.forEach((layoutPath, layoutIndex) => {
-        const layoutModuleName = `_layoutModule${index}_${layoutIndex}`;
-        const layoutName = `Layout${index}_${layoutIndex}`;
+        const layoutLoaderName = `loadLayout${index}_${layoutIndex}`;
         const layoutImportPath = layoutPath.replace(/\\/g, '/');
 
-        imports.push(`import * as ${layoutModuleName} from '${layoutImportPath}';`);
-        imports.push(`const ${layoutName} = ${layoutModuleName}.default;`);
-        layoutNames.push(layoutName);
+        declarations.push(`const ${layoutLoaderName} = () => import('${layoutImportPath}');`);
+        layoutLoadCalls.push(`${layoutLoaderName}()`);
       });
     }
 
-    // Determine loader value - access from module namespace
-    const loaderValue = route.hasLoader ? `${moduleName}.loader` : 'undefined';
-    const getStaticPathsValue = route.hasGetStaticPaths ? `${moduleName}.getStaticPaths` : 'undefined';
-    const prerenderValue = route.hasPrerender ? `${moduleName}.prerender === true` : 'false';
-    const layoutsValue = layoutNames.length > 0 ? `[${layoutNames.join(', ')}]` : '[]';
+    const layoutsValue =
+      layoutLoadCalls.length > 0
+        ? `Promise.all([${layoutLoadCalls.join(', ')}]).then((modules) => modules.map((mod) => mod.default))`
+        : 'Promise.resolve([])';
+
+    declarations.push(`const ${loadLayoutsName} = () => ${layoutsValue};`);
+
+    declarations.push(`const ${loadRouteName} = async () => {
+  const _module = await ${loadPageName}();
+  const _layouts = await ${loadLayoutsName}();
+  return {
+    component: _module.default,
+    loader: _module.loader,
+    getStaticPaths: _module.getStaticPaths,
+    prerender: _module.prerender === true,
+    layouts: _layouts
+  };
+};`);
 
     // Generate route object
     const routeObj = `  {
     path: ${JSON.stringify(route.path)},
-    component: ${importName},
-    layouts: ${layoutsValue},
-    loader: ${loaderValue},
-    getStaticPaths: ${getStaticPathsValue},
-    prerender: ${prerenderValue},
+    load: ${loadRouteName},
     filePath: ${JSON.stringify(route.filePath)},
     params: ${JSON.stringify(route.params)},
     isCatchAll: ${route.isCatchAll},
@@ -53,7 +59,7 @@ export function generateRoutesModule(routes: RouteRecord[]): string {
     routeObjects.push(routeObj);
   });
 
-  return `${imports.join('\n')}
+  return `${declarations.join('\n')}
 
 export const routes = [
 ${routeObjects.join(',\n')}

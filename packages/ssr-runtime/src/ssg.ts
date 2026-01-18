@@ -1,7 +1,7 @@
 import { cp, mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { generateHTML, renderPage } from './index';
+import { generateHTML, renderPage, resolveRouteModule } from './index';
 import type { RouteRecord } from './index';
 
 export interface PrerenderOptions {
@@ -110,24 +110,28 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
   };
 
   for (const route of routes) {
-    if (!route.prerender) {
+    const resolvedRoute = await resolveRouteModule(route);
+
+    if (!resolvedRoute.prerender) {
       continue;
     }
 
-    if (isDynamicRoute(route)) {
-      if (!route.getStaticPaths) {
-        throw new Error(`Route ${route.path} is dynamic but does not export getStaticPaths`);
+    if (isDynamicRoute(resolvedRoute)) {
+      if (!resolvedRoute.getStaticPaths) {
+        throw new Error(
+          `Route ${resolvedRoute.path} is dynamic but does not export getStaticPaths`
+        );
       }
 
-      const staticPaths = await route.getStaticPaths();
+      const staticPaths = await resolvedRoute.getStaticPaths();
       for (const entry of staticPaths) {
-        const pathname = resolvePrerenderPath(route, entry.params ?? {});
+        const pathname = resolvePrerenderPath(resolvedRoute, entry.params ?? {});
         await renderRoute(pathname);
       }
       continue;
     }
 
-    await renderRoute(route.path);
+    await renderRoute(resolvedRoute.path);
   }
 }
 
