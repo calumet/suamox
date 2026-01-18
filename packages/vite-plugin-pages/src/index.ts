@@ -98,7 +98,8 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       if (routesCache) {
         console.log(pc.cyan(`[suamox:pages] Found ${routesCache.length} route(s)`));
         routesCache.forEach((route) => {
-          console.log(pc.dim(`  ${route.path} -> ${route.filePath}`));
+          const loaderInfo = route.hasLoader ? pc.green(' [has loader]') : '';
+          console.log(pc.dim(`  ${route.path} -> ${route.filePath}${loaderInfo}`));
         });
       }
     },

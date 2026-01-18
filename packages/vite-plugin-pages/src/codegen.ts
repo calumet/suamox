@@ -9,18 +9,15 @@ export function generateRoutesModule(routes: RouteRecord[]): string {
 
   routes.forEach((route, index) => {
     const importName = `Page${index}`;
+    const moduleName = `_module${index}`;
     const importPath = route.filePath.replace(/\\/g, '/');
 
-    // Import default export (the component)
-    imports.push(`import ${importName} from '${importPath}';`);
+    // Import the entire module as namespace to prevent tree-shaking
+    imports.push(`import * as ${moduleName} from '${importPath}';`);
+    imports.push(`const ${importName} = ${moduleName}.default;`);
 
-    // Only import loader if it exists
-    let loaderValue = 'undefined';
-    if (route.hasLoader) {
-      const loaderName = `loader${index}`;
-      imports.push(`import { loader as ${loaderName} } from '${importPath}';`);
-      loaderValue = loaderName;
-    }
+    // Determine loader value - access from module namespace
+    const loaderValue = route.hasLoader ? `${moduleName}.loader` : 'undefined';
 
     // Generate route object
     const routeObj = `  {

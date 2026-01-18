@@ -33,6 +33,7 @@
     "vite": "^6.0.0"
   },
   "dependencies": {
+    "@swc/wasm-typescript": "^1.15.8",
     "es-module-lexer": "^2.0.0",
     "fast-glob": "^3.3.3",
     "picocolors": "^1.1.1"

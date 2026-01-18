@@ -136,6 +136,9 @@ importers:
 
   packages/vite-plugin-pages:
     dependencies:
+      '@swc/wasm-typescript':
+        specifier: ^1.15.8
+        version: 1.15.8
       es-module-lexer:
         specifier: ^2.0.0
         version: 2.0.0
@@ -937,6 +940,9 @@ packages:
     resolution: {integrity: sha512-SPEpaL6DX4rmcXtnhdrQYgzQ5W2uW3SCJch88lB2zImhJRhIIK44fkUrgIV/Q8yUNfw5oyZ5vkeQsZLhCb06lw==}
     cpu: [x64]
     os: [win32]
+
+  '@swc/wasm-typescript@1.15.8':
+    resolution: {integrity: sha512-pnUNhMrw6S2XvnJvqpV3mItpLpRQWuZzeknoEv4dzyCwbFQ38Jm0cbxNaCwteTV02dS/O2FPRRIwqcYcAwlMuw==}
 
   '@types/babel__core@7.20.5':
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
@@ -2539,6 +2545,8 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.55.1':
     optional: true
+
+  '@swc/wasm-typescript@1.15.8': {}
 
   '@types/babel__core@7.20.5':
     dependencies:

@@ -2,8 +2,19 @@ import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import fg from 'fast-glob';
 import { init, parse } from 'es-module-lexer';
+import { transformSync } from '@swc/wasm-typescript';
 import type { RouteRecord } from './types.js';
 import { parseRoute, sortRoutes, validateRoutes } from './parser.js';
+
+const loaderExportPatterns = [
+  /\bexport\s+(async\s+)?function\s+loader\b/,
+  /\bexport\s+(const|let|var)\s+loader\b/,
+  /\bexport\s*{\s*[^}]*\bloader\b[^}]*}/,
+];
+
+function fallbackHasLoader(content: string): boolean {
+  return loaderExportPatterns.some((pattern) => pattern.test(content));
+}
 
 export interface ScanOptions {
   pagesDir: string;
@@ -49,12 +60,24 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     }
 
     // Check if the file exports a loader function using es-module-lexer
+    let content = '';
     try {
-      const content = readFileSync(file, 'utf-8');
-      const [, exports] = parse(content);
+      content = readFileSync(file, 'utf-8');
+      // Strip TypeScript types using SWC for es-module-lexer compatibility
+      // Need to preserve JSX syntax for proper parsing
+      const { code } = transformSync(content, {
+        mode: 'transform',
+        filename: file,
+        transform: {
+          jsx: {
+            transform: 'react-jsx',
+          },
+        },
+      });
+      const [, exports] = parse(code);
       route.hasLoader = exports.some((exp) => exp.n === 'loader');
     } catch {
-      route.hasLoader = false;
+      route.hasLoader = fallbackHasLoader(content);
     }
 
     routes.push(route);
