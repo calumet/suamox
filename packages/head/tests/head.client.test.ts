@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { act, createElement, Fragment } from 'react';
 import { createRoot } from 'react-dom/client';
