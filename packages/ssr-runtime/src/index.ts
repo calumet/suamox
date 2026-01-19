@@ -1,6 +1,13 @@
 import type React from 'react';
-import { createElement } from 'react';
-import { renderToString } from 'react-dom/server';
+import { createElement, Fragment } from 'react';
+import { renderToStaticMarkup, renderToString } from 'react-dom/server';
+import {
+  HeadProvider,
+  createHeadManager,
+  headMarkerAttribute,
+  headMarkerEndValue,
+  headMarkerStartValue,
+} from '@suamox/head';
 
 export interface RouteRecord {
   path: string;
@@ -65,6 +72,16 @@ export interface HydrationAdapter {
   hydrateRoot: typeof import('react-dom/client').hydrateRoot;
   createRoot: typeof import('react-dom/client').createRoot;
 }
+
+const renderHeadToString = (nodes: React.ReactNode[]): string => {
+  const startTag = `<meta ${headMarkerAttribute}="${headMarkerStartValue}">`;
+  const endTag = `<meta ${headMarkerAttribute}="${headMarkerEndValue}">`;
+  const content = nodes
+    .map((node) => renderToStaticMarkup(createElement(Fragment, null, node)))
+    .join('\n');
+
+  return [startTag, content, endTag].filter(Boolean).join('\n');
+};
 
 /**
  * Match a pathname against routes and extract params
@@ -213,7 +230,8 @@ export async function hydrateApp(
 
   const initialData = (window as Window & { __INITIAL_DATA__?: unknown }).__INITIAL_DATA__ ?? null;
   const resolvedRoute = await resolveRouteModule(match.route);
-  const element = createPageElement(resolvedRoute, initialData);
+  const pageElement = createPageElement(resolvedRoute, initialData);
+  const element = createElement(HeadProvider, null, pageElement);
 
   let hydrateRoot = adapter?.hydrateRoot;
   let createRoot = adapter?.createRoot;
@@ -258,6 +276,7 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
     return {
       status,
       html: '',
+      head: renderHeadToString([]),
       initialData: null,
     };
   }
@@ -286,12 +305,19 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
 
   // Render component with React SSR
   try {
-    const element = createPageElement(resolvedRoute, data);
+    const headManager = createHeadManager('server');
+    const element = createElement(
+      HeadProvider,
+      { manager: headManager },
+      createPageElement(resolvedRoute, data)
+    );
     const html = renderToString(element);
+    const head = renderHeadToString(headManager.getSnapshot());
 
     return {
       status,
       html,
+      head,
       initialData: data,
     };
   } catch (error) {

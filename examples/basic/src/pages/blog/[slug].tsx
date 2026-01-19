@@ -1,3 +1,4 @@
+import { Head } from '@suamox/head';
 import type { LoaderContext } from '@suamox/ssr-runtime';
 
 // Simulated blog posts database
@@ -50,6 +51,10 @@ export default function BlogPostPage({ data }: { data: BlogPostData | null }) {
   if (!data || data.notFound) {
     return (
       <div style={{ padding: '2rem' }}>
+        <Head>
+          <title>Post Not Found</title>
+          <meta name="description" content="Blog post not found." />
+        </Head>
         <h1>Post Not Found</h1>
         <p>The blog post you're looking for doesn't exist.</p>
         <a href="/">Back to home</a>
@@ -62,6 +67,10 @@ export default function BlogPostPage({ data }: { data: BlogPostData | null }) {
   if (!post) {
     return (
       <div style={{ padding: '2rem' }}>
+        <Head>
+          <title>Blog Error</title>
+          <meta name="description" content="Unable to load post data." />
+        </Head>
         <h1>Error</h1>
         <p>Unable to load post data.</p>
         <a href="/">Back to home</a>
@@ -71,6 +80,10 @@ export default function BlogPostPage({ data }: { data: BlogPostData | null }) {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
+      <Head>
+        <title>{post.title}</title>
+        <meta name="description" content={post.content} />
+      </Head>
       <article>
         <header>
           <h1>{post.title}</h1>

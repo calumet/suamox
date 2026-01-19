@@ -8,12 +8,14 @@ const mocks = vi.hoisted(() => ({
   renderPage: vi.fn(),
   generateHTML: vi.fn(),
   serializeData: vi.fn((data: unknown) => JSON.stringify(data)),
+  matchRoute: vi.fn(() => null),
 }));
 
 vi.mock('@suamox/ssr-runtime', () => ({
   renderPage: mocks.renderPage,
   generateHTML: mocks.generateHTML,
   serializeData: mocks.serializeData,
+  matchRoute: mocks.matchRoute,
 }));
 
 import { createDevHandler, createHonoApp, createProdHandler } from '../src/index';
