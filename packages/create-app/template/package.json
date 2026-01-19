@@ -29,5 +29,15 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vite": "^6.0.7"
+  },
+  "pnpm": {
+    "overrides": {
+      "@suamox/cli": "github:calumet/suamox#path:packages/cli",
+      "@suamox/head": "github:calumet/suamox#path:packages/head",
+      "@suamox/hono-adapter": "github:calumet/suamox#path:packages/hono-adapter",
+      "@suamox/router": "github:calumet/suamox#path:packages/router",
+      "@suamox/ssr-runtime": "github:calumet/suamox#path:packages/ssr-runtime",
+      "@suamox/vite-plugin-pages": "github:calumet/suamox#path:packages/vite-plugin-pages"
+    }
   }
 }
