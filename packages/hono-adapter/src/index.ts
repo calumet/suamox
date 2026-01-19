@@ -289,8 +289,13 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   app.use('/assets/*', async (c, next) => {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     const response = await assetHandler(c, next);
-    if (response && /^\/assets\/(index|client|jsx-runtime)-[^/]+\.js$/.test(c.req.path)) {
-      response.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    const headers = response?.headers;
+    if (
+      headers &&
+      typeof headers.set === 'function' &&
+      /^\/assets\/(index|client|jsx-runtime)-[^/]+\.js$/.test(c.req.path)
+    ) {
+      headers.set('Cache-Control', 'public, max-age=31536000, immutable');
     }
     return response;
   });

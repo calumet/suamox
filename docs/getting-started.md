@@ -7,34 +7,26 @@
 - Node.js 18+ or Bun 1.0+
 - pnpm 10+
 
-## Installation
-
-The Suamox packages will be published to npm once Phase 1-3 are complete.
+## Create a new project (recommended)
 
 ```bash
-pnpm add @suamox/vite-plugin-pages @suamox/ssr-runtime @suamox/hono-adapter
-pnpm add -D vite @vitejs/plugin-react typescript
-```
-
-## Quick Start
-
-### 1. Create a new project
-
-```bash
-mkdir my-suamox-app
+pnpm dlx @suamox/create-app my-suamox-app
 cd my-suamox-app
-pnpm init
+pnpm install
+pnpm run dev
 ```
 
-### 2. Install dependencies
+## Manual Installation
 
 ```bash
-pnpm add @suamox/vite-plugin-pages @suamox/ssr-runtime @suamox/hono-adapter
+pnpm add @suamox/vite-plugin-pages @suamox/ssr-runtime @suamox/hono-adapter @suamox/router @suamox/head
 pnpm add react react-dom hono @hono/node-server
-pnpm add -D vite @vitejs/plugin-react typescript @types/react @types/react-dom @types/node
+pnpm add -D @suamox/cli vite @vitejs/plugin-react typescript tsx @types/react @types/react-dom @types/node
 ```
 
-### 3. Configure Vite
+## Manual Setup
+
+### 1. Configure Vite
 
 Create `vite.config.ts`:
 
@@ -54,7 +46,7 @@ export default defineConfig({
 });
 ```
 
-### 4. Create your first page
+### 2. Create your first page
 
 Create `src/pages/index.tsx`:
 
@@ -69,37 +61,30 @@ export default function HomePage() {
 }
 ```
 
-### 5. Set up the server
+### 3. Set up the server
 
 Create `server.ts`:
 
 ```ts
-import { createHonoApp } from '@suamox/hono-adapter';
-import { serve } from '@hono/node-server';
+import { createServer } from '@suamox/hono-adapter';
 
-const app = createHonoApp();
-
-serve({
-  fetch: app.fetch,
-  port: 3000,
-});
-
-console.log('Server running at http://localhost:3000');
+await createServer({ port: 3000 });
 ```
 
-### 6. Add scripts to package.json
+### 4. Add scripts to package.json
 
 ```json
 {
   "scripts": {
-    "dev": "node server.js",
-    "build": "vite build && vite build --ssr src/entry-server.tsx",
-    "preview": "NODE_ENV=production node server.js"
+    "dev": "suamox dev",
+    "build": "suamox build",
+    "build:ssg": "suamox ssg",
+    "preview": "suamox preview"
   }
 }
 ```
 
-### 7. Start development
+### 5. Start development
 
 ```bash
 pnpm dev
@@ -113,16 +98,3 @@ Visit [http://localhost:3000](http://localhost:3000) to see your app!
 - [Data Loading](./data-loading.md) - Fetch data with loaders
 - [SSR](./ssr.md) - Server-side rendering
 - [SSG](./ssg.md) - Static site generation
-
-## Development Status
-
-Suamox is being built in phases:
-
-- [x] Phase 0: Design decisions ✅
-- [ ] Phase 1: Routing and manifest (In Progress)
-- [ ] Phase 2: SSR runtime
-- [ ] Phase 3: Hono adapter
-- [ ] Phase 4: SSG
-- [ ] Phase 5: Layouts
-- [ ] Phase 6: CLI + Create-app
-- [ ] Phase 7: Islands (Optional)

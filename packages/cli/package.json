@@ -1,0 +1,39 @@
+{
+  "name": "@suamox/cli",
+  "version": "0.1.0",
+  "description": "Suamox CLI for dev/build/ssg/preview workflows",
+  "type": "module",
+  "bin": {
+    "suamox": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "cli",
+    "ssr",
+    "ssg"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@suamox/ssr-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.3"
+  }
+}
