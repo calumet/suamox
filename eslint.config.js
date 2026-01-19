@@ -20,6 +20,7 @@ export default tseslint.config(
       '**/*.config.ts',
       'bin/**',
       'packages/create-app/template/**',
+      'tests/**',
     ],
   },
   {

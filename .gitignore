@@ -39,3 +39,4 @@ coverage/
 # Temporary
 .temp/
 .cache/
+tests/.tmp/

@@ -26,6 +26,9 @@ importers:
       typescript-eslint:
         specifier: ^8.19.1
         version: 8.53.0(eslint@9.39.2)(typescript@5.9.3)
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@22.19.7)(happy-dom@20.3.3)
 
   examples/basic:
     dependencies:
