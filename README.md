@@ -1,24 +1,39 @@
 # Suamox Framework
 
-A meta-framework with SSR/SSG, filesystem routing, and islands architecture built on Vite, React, and Hono.
+Meta-framework with SSR/SSG, filesystem routing, and layouts on Vite, React, and Hono.
 
 ## Status
 
-🚧 **In Development** - Currently implementing Phase 0 (Design Decisions)
+Active development. Phases 0-6 are implemented; Islands (Phase 7) are planned.
+
+## Quick Start
+
+```bash
+pnpm dlx @suamox/create-app my-suamox-app
+cd my-suamox-app
+pnpm install
+pnpm run dev
+```
+
+See `docs/getting-started.md` for manual setup and details.
 
 ## Project Structure
 
 ```
 suamox/
-├── packages/
-│   ├── vite-plugin-pages/    # Filesystem routing plugin
-│   ├── ssr-runtime/           # SSR and SSG runtime
-│   └── hono-adapter/          # Hono server adapter
-├── examples/
-│   └── basic/                 # Basic example project
-├── docs/                      # Documentation
-├── PLAN.md                    # Implementation plan
-└── CONVENTIONS_v1.md          # Framework conventions (frozen)
+  packages/
+    vite-plugin-pages/   # Filesystem routing plugin
+    ssr-runtime/         # SSR/SSG runtime
+    hono-adapter/        # Hono server adapter
+    head/                # Head manager (SSR/SSG/CSR)
+    router/              # Client router
+    cli/                 # CLI: dev/build/ssg/preview
+    create-app/          # Project scaffold
+  examples/
+    basic/               # Example project
+  docs/                  # Documentation
+  PLAN.md                # Implementation plan
+  CONVENTIONS_v1.md      # Framework conventions (frozen)
 ```
 
 ## Development Setup
@@ -28,88 +43,65 @@ suamox/
 - Node.js 18+ or Bun 1.0+
 - pnpm 10+
 
-### Install Dependencies
+### Install
 
 ```bash
 pnpm install
 ```
 
-### Build All Packages
-
-```bash
-pnpm build
-```
-
-### Development Mode
+### Scripts
 
 ```bash
 pnpm dev
-```
-
-### Type Check
-
-```bash
+pnpm build
 pnpm typecheck
-```
-
-### Lint
-
-```bash
 pnpm lint
-```
-
-### Format
-
-```bash
 pnpm format
+pnpm test
 ```
 
 ## Packages
 
-### [@suamox/vite-plugin-pages](./packages/vite-plugin-pages)
+### `@suamox/vite-plugin-pages`
 
-Vite plugin for filesystem-based routing with support for:
+Filesystem routing with static, dynamic, catch-all, and route groups.
 
-- Static routes
-- Dynamic parameters `[slug]`
-- Catch-all routes `[...path]`
-- Route groups `(group)`
+### `@suamox/ssr-runtime`
 
-**Status:** Phase 1 (Planned)
+Route matching, loaders, SSR rendering, and SSG prerendering.
 
-### [@suamox/ssr-runtime](./packages/ssr-runtime)
+### `@suamox/hono-adapter`
 
-Runtime for server-side rendering and static site generation:
+Hono dev server + production SSR handler.
 
-- Route matching
-- Data loading with `loader()`
-- SSR rendering with React
-- SSG pre-rendering
+### `@suamox/head`
 
-**Status:** Phase 2 (Planned)
+Head metadata management across SSR/SSG/CSR.
 
-### [@suamox/hono-adapter](./packages/hono-adapter)
+### `@suamox/router`
 
-Hono server adapter with:
+Client-side router for smooth navigations.
 
-- Development server with HMR
-- Production SSR server
-- Middleware hooks
+### `@suamox/cli`
 
-**Status:** Phase 3 (Planned)
+Standardized `dev/build/ssg/preview` commands.
+
+### `@suamox/create-app`
+
+Project scaffold with minimal starter template.
 
 ## Roadmap
 
-- [x] **Phase 0:** Design decisions and conventions
-- [ ] **Phase 1:** Routing and manifest
-- [ ] **Phase 2:** SSR runtime
-- [ ] **Phase 3:** Hono adapter (Dev + Prod)
-- [ ] **Phase 4:** SSG (Pre-render)
-- [ ] **Phase 5:** Layouts
-- [ ] **Phase 6:** CLI + Create-app
-- [ ] **Phase 7:** Islands (Optional)
+- [x] Phase 0: Design decisions and conventions
+- [x] Phase 1: Routing and manifest
+- [x] Phase 2: SSR runtime
+- [x] Phase 3: Hono adapter (Dev + Prod)
+- [x] Phase 4: SSG (Prerender)
+- [x] Phase 5: Layouts
+- [x] Phase 6: CLI + Create-app
+- [ ] Phase 7: Islands (Optional)
 
-See [PLAN.md](./PLAN.md) for detailed implementation plan.
+See `PLAN.md` for details.
 
 ## License
 
