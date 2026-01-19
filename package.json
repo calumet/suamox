@@ -4,9 +4,13 @@
   "description": "Meta-framework with SSR/SSG, filesystem routing, and islands architecture",
   "private": true,
   "type": "module",
+  "bin": {
+    "suamox": "./bin/create-suamox.js",
+    "create-suamox": "./bin/create-suamox.js"
+  },
   "scripts": {
-    "build": "pnpm --filter @suamox/* build",
-    "dev": "pnpm --parallel --filter @suamox/* dev",
+    "build": "pnpm --filter \"@suamox/*\" build",
+    "dev": "pnpm --parallel --filter \"@suamox/*\" dev",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
