@@ -18,6 +18,7 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/*.config.js',
       '**/*.config.ts',
+      'bin/**',
       'packages/create-app/template/**',
     ],
   },
