@@ -166,7 +166,9 @@ describe('generateRoutesModule', () => {
 
     const code = generateRoutesModule(routes);
 
-    expect(code).toContain("const loadPage0 = () => import('/home/user/project/src/pages/about.tsx');");
+    expect(code).toContain(
+      "const loadPage0 = () => import('/home/user/project/src/pages/about.tsx');"
+    );
   });
 
   it('should generate valid JavaScript structure', () => {

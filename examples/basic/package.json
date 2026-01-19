@@ -14,6 +14,7 @@
     "@hono/node-server": "^1.14.0",
     "@suamox/head": "workspace:*",
     "@suamox/hono-adapter": "workspace:*",
+    "@suamox/router": "workspace:*",
     "@suamox/ssr-runtime": "workspace:*",
     "@suamox/vite-plugin-pages": "workspace:*",
     "hono": "^4.6.17",

@@ -177,7 +177,6 @@ function matchPattern(
   return { params };
 }
 
-
 export function createPageElement(route: RouteRecord, data: unknown): React.ReactElement {
   if (!route.component) {
     throw new Error(`Route component not resolved for ${route.path}`);
@@ -214,10 +213,7 @@ export async function resolveRouteModule(route: RouteRecord): Promise<RouteRecor
   return route;
 }
 
-export async function hydrateApp(
-  routes: RouteRecord[],
-  adapter?: HydrationAdapter
-): Promise<void> {
+export async function hydrateApp(routes: RouteRecord[], adapter?: HydrationAdapter): Promise<void> {
   const rootElement = document.getElementById('root');
   if (!rootElement) {
     return;
@@ -371,9 +367,7 @@ export function generateHTML(options: {
 
   const dataScript = includeInitialDataScript
     ? `<script>
-      window.__INITIAL_DATA__ = ${
-        initialData !== undefined ? serializeData(initialData) : 'null'
-      };
+      window.__INITIAL_DATA__ = ${initialData !== undefined ? serializeData(initialData) : 'null'};
     </script>`
     : '';
 

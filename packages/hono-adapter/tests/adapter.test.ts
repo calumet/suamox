@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { ViteDevServer } from 'vite';
+import type { RenderOptions, RenderResult } from '@suamox/ssr-runtime';
 
 const mocks = vi.hoisted(() => ({
   renderPage: vi.fn(),
@@ -47,23 +48,30 @@ describe('createDevHandler', () => {
     });
 
     const routes: unknown[] = [];
+    const ssrLoadModule = vi.fn(() => Promise.resolve({ routes }));
+    const transformIndexHtml = vi.fn((_url: string, html: string) => Promise.resolve(html));
     const vite = {
-      ssrLoadModule: vi.fn(async () => ({ routes })),
-      transformIndexHtml: vi.fn(async (_url: string, html: string) => html),
+      ssrLoadModule,
+      transformIndexHtml,
       ssrFixStacktrace: vi.fn(),
     } as unknown as ViteDevServer;
 
-    const onBeforeRender = vi.fn((ctx) => ({ ...ctx, pathname: '/changed' }));
-    const onAfterRender = vi.fn((result) => ({ ...result, html: '<div>After</div>' }));
+    const onBeforeRender = vi.fn((ctx: RenderOptions) => ({ ...ctx, pathname: '/changed' }));
+    const onAfterRender = vi.fn((result: RenderResult) => ({
+      ...result,
+      html: '<div>After</div>',
+    }));
 
     const app = createDevHandler({ vite, onBeforeRender, onAfterRender });
     const response = await app.request('http://localhost/');
     const body = await response.text();
 
     expect(onBeforeRender).toHaveBeenCalledTimes(1);
-    expect(mocks.renderPage).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/changed' }));
+    expect(mocks.renderPage).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: '/changed' })
+    );
     expect(onAfterRender).toHaveBeenCalledTimes(1);
-    expect(vite.transformIndexHtml).toHaveBeenCalledTimes(1);
+    expect(transformIndexHtml).toHaveBeenCalledTimes(1);
     expect(body).toContain('<div>After</div>');
     expect(body).toContain('window.__INITIAL_DATA__ = {"ok":true}');
   });
@@ -96,14 +104,17 @@ describe('createProdHandler', () => {
       head: '',
       initialData: null,
     });
-    mocks.generateHTML.mockImplementation(({ html, scripts }) => {
-      return `<html>${html}<script src="${scripts?.[0] ?? ''}"></script></html>`;
-    });
+    mocks.generateHTML.mockImplementation(
+      ({ html, scripts }: { html: string; scripts?: string[] }) => {
+        return `<html>${html}<script src="${scripts?.[0] ?? ''}"></script></html>`;
+      }
+    );
 
     const app = createProdHandler({
       root,
       clientDir: join(root, 'dist', 'client'),
       serverEntry: join(root, 'dist', 'server', 'entry-server.mjs'),
+      staticDir: join(root, 'dist', 'static'),
     });
     const response = await app.request('http://localhost/');
     const body = await response.text();

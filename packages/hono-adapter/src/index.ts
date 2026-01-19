@@ -282,13 +282,14 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   };
 
   // Serve static assets from client build directory
-  const assetHandler = serveStatic({ root: clientDir });
+  const assetHandler = serveStatic({ root: clientDir }) as (
+    c: Context,
+    next: () => Promise<void>
+  ) => Promise<Response | void>;
   app.use('/assets/*', async (c, next) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     const response = await assetHandler(c, next);
-    if (
-      response &&
-      /^\/assets\/(index|client|jsx-runtime)-[^/]+\.js$/.test(c.req.path)
-    ) {
+    if (response && /^\/assets\/(index|client|jsx-runtime)-[^/]+\.js$/.test(c.req.path)) {
       response.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
     }
     return response;

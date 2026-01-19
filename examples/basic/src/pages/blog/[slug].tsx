@@ -22,7 +22,7 @@ const blogPosts = {
 
 export const prerender = true;
 
-export async function getStaticPaths() {
+export function getStaticPaths() {
   return Object.keys(blogPosts).map((slug) => ({ params: { slug } }));
 }
 

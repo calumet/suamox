@@ -11,8 +11,7 @@ const writeFileWithDirs = async (filePath: string, contents: string): Promise<vo
 
 const normalizePath = (value: string): string => value.replace(/\\/g, '/');
 
-const normalizeList = (values: string[] | undefined): string[] =>
-  (values ?? []).map(normalizePath);
+const normalizeList = (values: string[] | undefined): string[] => (values ?? []).map(normalizePath);
 
 describe('scanRoutes layouts', () => {
   it('collects layouts from root to leaf and skips layout files as routes', async () => {
@@ -27,9 +26,18 @@ describe('scanRoutes layouts', () => {
     const blogIndex = join(pagesDir, 'blog', 'index.tsx');
     const dashboard = join(pagesDir, '(admin)', 'dashboard.tsx');
 
-    await writeFileWithDirs(rootLayout, 'export default function Layout({ children }) { return children; }');
-    await writeFileWithDirs(blogLayout, 'export default function Layout({ children }) { return children; }');
-    await writeFileWithDirs(adminLayout, 'export default function Layout({ children }) { return children; }');
+    await writeFileWithDirs(
+      rootLayout,
+      'export default function Layout({ children }) { return children; }'
+    );
+    await writeFileWithDirs(
+      blogLayout,
+      'export default function Layout({ children }) { return children; }'
+    );
+    await writeFileWithDirs(
+      adminLayout,
+      'export default function Layout({ children }) { return children; }'
+    );
 
     await writeFileWithDirs(rootPage, 'export default function Page() { return null; }');
     await writeFileWithDirs(blogIndex, 'export default function Page() { return null; }');
@@ -47,9 +55,7 @@ describe('scanRoutes layouts', () => {
     const adminRoute = findRoute('/dashboard');
 
     expect(normalizeList(rootRoute?.layouts)).toEqual([rootLayout].map(normalizePath));
-    expect(normalizeList(blogRoute?.layouts)).toEqual(
-      [rootLayout, blogLayout].map(normalizePath)
-    );
+    expect(normalizeList(blogRoute?.layouts)).toEqual([rootLayout, blogLayout].map(normalizePath));
     expect(normalizeList(adminRoute?.layouts)).toEqual(
       [rootLayout, adminLayout].map(normalizePath)
     );

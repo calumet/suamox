@@ -1,5 +1,4 @@
-import { createRoot, hydrateRoot } from 'react-dom/client';
-import { hydrateApp } from '@suamox/ssr-runtime';
+import { startRouter } from '@suamox/router';
 import { routes } from 'virtual:pages';
 
-void hydrateApp(routes, { hydrateRoot, createRoot });
+void startRouter({ routes });

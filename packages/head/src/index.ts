@@ -115,7 +115,8 @@ const renderHeadDom = (node: React.ReactNode, target: Document): Node[] => {
   }
 
   if (Array.isArray(node)) {
-    return node.flatMap((child) => renderHeadDom(child, target));
+    const nodes = node as React.ReactNode[];
+    return nodes.flatMap((child) => renderHeadDom(child, target));
   }
 
   if (!isValidElement(node)) {
@@ -136,12 +137,7 @@ const renderHeadDom = (node: React.ReactNode, target: Document): Node[] => {
   const props = elementNode.props;
 
   for (const [key, value] of Object.entries(props)) {
-    if (
-      key === 'children' ||
-      key === 'dangerouslySetInnerHTML' ||
-      key === 'ref' ||
-      key === 'key'
-    ) {
+    if (key === 'children' || key === 'dangerouslySetInnerHTML' || key === 'ref' || key === 'key') {
       continue;
     }
 
@@ -179,7 +175,9 @@ const renderHeadDom = (node: React.ReactNode, target: Document): Node[] => {
       continue;
     }
 
-    element.setAttribute(key, String(value));
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint') {
+      element.setAttribute(key, String(value));
+    }
   }
 
   const dangerouslySetInnerHTML = props.dangerouslySetInnerHTML as { __html?: string } | undefined;

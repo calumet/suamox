@@ -10,8 +10,7 @@ function createMockRoute(overrides: Partial<RouteRecord>): RouteRecord {
   return {
     path: '/',
     filePath: '/pages/index.tsx',
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    component: (() => createElement('div', null, 'Home')) as any,
+    component: (() => createElement('div', null, 'Home')) as RouteRecord['component'],
     layouts: [],
     params: [],
     isCatchAll: false,
@@ -44,8 +43,8 @@ describe('prerender', () => {
         params: ['slug'],
         isIndex: false,
         prerender: true,
-        getStaticPaths: async () => [{ params: { slug: 'hello-world' } }],
-        loader: async ({ params }) => ({ slug: params.slug }),
+        getStaticPaths: () => Promise.resolve([{ params: { slug: 'hello-world' } }]),
+        loader: ({ params }) => Promise.resolve({ slug: params.slug }),
         component: (({ data }: { data: { slug: string } }) =>
           createElement('div', null, `Post ${data.slug}`)) as RouteRecord['component'],
       }),
@@ -74,8 +73,8 @@ describe('prerender', () => {
         isCatchAll: true,
         isIndex: false,
         prerender: true,
-        getStaticPaths: async () => [{ params: { path: 'guide/getting-started' } }],
-        loader: async ({ params }) => ({ path: params.path }),
+        getStaticPaths: () => Promise.resolve([{ params: { path: 'guide/getting-started' } }]),
+        loader: ({ params }) => Promise.resolve({ path: params.path }),
         component: (({ data }: { data: { path: string } }) =>
           createElement('div', null, `Doc ${data.path}`)) as RouteRecord['component'],
       }),

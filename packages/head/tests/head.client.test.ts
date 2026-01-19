@@ -1,3 +1,4 @@
+/// <reference lib="dom" />
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { act, createElement, Fragment } from 'react';
@@ -30,11 +31,16 @@ describe('Head (client)', () => {
             Fragment,
             null,
             createElement(Head, null, createElement('title', null, 'Client Title')),
-            createElement(Head, null, createElement('meta', { name: 'description', content: 'CSR' })),
+            createElement(
+              Head,
+              null,
+              createElement('meta', { name: 'description', content: 'CSR' })
+            ),
             createElement('main', null, 'App')
           )
         )
       );
+      await Promise.resolve();
     });
 
     const title = document.head.querySelector('title');
@@ -42,9 +48,7 @@ describe('Head (client)', () => {
     const start = document.head.querySelector(
       `meta[${headMarkerAttribute}="${headMarkerStartValue}"]`
     );
-    const end = document.head.querySelector(
-      `meta[${headMarkerAttribute}="${headMarkerEndValue}"]`
-    );
+    const end = document.head.querySelector(`meta[${headMarkerAttribute}="${headMarkerEndValue}"]`);
 
     expect(title?.textContent).toBe('Client Title');
     expect(meta?.getAttribute('content')).toBe('CSR');
@@ -53,6 +57,7 @@ describe('Head (client)', () => {
 
     await act(async () => {
       root.unmount();
+      await Promise.resolve();
     });
     container.remove();
   });
