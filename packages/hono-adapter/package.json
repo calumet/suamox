@@ -20,6 +20,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "prepack": "pnpm build",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
@@ -29,6 +30,9 @@
     "ssr"
   ],
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "peerDependencies": {
     "@suamox/ssr-runtime": "^0.1.0",
     "hono": "^4.0.0",

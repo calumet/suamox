@@ -20,6 +20,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "prepack": "pnpm build",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
@@ -29,6 +30,9 @@
     "filesystem"
   ],
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "peerDependencies": {
     "vite": "^6.0.0"
   },

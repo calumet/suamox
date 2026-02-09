@@ -11,17 +11,17 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@suamox/head": "github:calumet/suamox#path:packages/head",
-    "@suamox/hono-adapter": "github:calumet/suamox#path:packages/hono-adapter",
-    "@suamox/router": "github:calumet/suamox#path:packages/router",
-    "@suamox/ssr-runtime": "github:calumet/suamox#path:packages/ssr-runtime",
-    "@suamox/vite-plugin-pages": "github:calumet/suamox#path:packages/vite-plugin-pages",
+    "@suamox/head": "^0.1.0",
+    "@suamox/hono-adapter": "^0.1.0",
+    "@suamox/router": "^0.1.0",
+    "@suamox/ssr-runtime": "^0.1.0",
+    "@suamox/vite-plugin-pages": "^0.1.0",
     "hono": "^4.6.17",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@suamox/cli": "github:calumet/suamox#path:packages/cli",
+    "@suamox/cli": "^0.1.0",
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.6",
     "@types/react-dom": "^19.0.3",
@@ -29,15 +29,5 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vite": "^6.0.7"
-  },
-  "pnpm": {
-    "overrides": {
-      "@suamox/cli": "github:calumet/suamox#path:packages/cli",
-      "@suamox/head": "github:calumet/suamox#path:packages/head",
-      "@suamox/hono-adapter": "github:calumet/suamox#path:packages/hono-adapter",
-      "@suamox/router": "github:calumet/suamox#path:packages/router",
-      "@suamox/ssr-runtime": "github:calumet/suamox#path:packages/ssr-runtime",
-      "@suamox/vite-plugin-pages": "github:calumet/suamox#path:packages/vite-plugin-pages"
-    }
   }
 }

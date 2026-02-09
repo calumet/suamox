@@ -21,6 +21,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "prepack": "pnpm build",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
@@ -28,6 +29,9 @@
     "scaffold"
   ],
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@types/node": "^22.10.5",
     "tsup": "^8.3.5",

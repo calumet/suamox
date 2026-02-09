@@ -20,6 +20,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "prepack": "pnpm build",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
@@ -28,6 +29,9 @@
     "ssg"
   ],
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@suamox/ssr-runtime": "^0.1.0"
   },
