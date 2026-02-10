@@ -1,9 +1,21 @@
 import type { RouteRecord } from './types.js';
 
+export type DefaultPageMode = 'ssr' | 'ssg' | 'csr';
+
+export interface GenerateRoutesOptions {
+  defaultMode?: DefaultPageMode;
+}
+
 /**
  * Generate the virtual module code for routes
  */
-export function generateRoutesModule(routes: RouteRecord[]): string {
+export function generateRoutesModule(
+  routes: RouteRecord[],
+  options: GenerateRoutesOptions = {}
+): string {
+  const { defaultMode = 'ssr' } = options;
+  const defaultPrerender = defaultMode === 'ssg';
+  const defaultCsr = defaultMode === 'csr';
   const declarations: string[] = [];
   const routeObjects: string[] = [];
 
@@ -36,12 +48,16 @@ export function generateRoutesModule(routes: RouteRecord[]): string {
     declarations.push(`const ${loadRouteName} = async () => {
   const _module = await ${loadPageName}();
   const _layouts = await ${loadLayoutsName}();
+  const _hasPrerender = 'prerender' in _module;
+  const _hasCsr = 'csr' in _module;
+  const _prerender = _hasPrerender ? _module.prerender === true : ${defaultPrerender};
+  const _csr = _hasCsr ? _module.csr === true : ${defaultCsr ? '!_prerender' : 'false'};
   return {
     component: _module.default,
     loader: _module.loader,
     getStaticPaths: _module.getStaticPaths,
-    prerender: _module.prerender === true,
-    csr: _module.csr === true,
+    prerender: _prerender,
+    csr: _csr,
     layouts: _layouts
   };
 };`);

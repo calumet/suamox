@@ -32,7 +32,10 @@ describe('generateRoutesModule', () => {
     expect(code).toContain('path: "/about"');
     expect(code).toContain('load: loadRoute0');
     expect(code).toContain('getStaticPaths: _module.getStaticPaths');
-    expect(code).toContain('prerender: _module.prerender === true');
+    expect(code).toContain("const _hasPrerender = 'prerender' in _module;");
+    expect(code).toContain('const _prerender = _hasPrerender ? _module.prerender === true : false;');
+    expect(code).toContain("const _hasCsr = 'csr' in _module;");
+    expect(code).toContain('const _csr = _hasCsr ? _module.csr === true : false;');
     expect(code).toContain('params: []');
     expect(code).toContain('isCatchAll: false');
     expect(code).toContain('isIndex: false');
@@ -86,7 +89,7 @@ describe('generateRoutesModule', () => {
 
     expect(code).toContain('path: "/blog/:slug"');
     expect(code).toContain('getStaticPaths: _module.getStaticPaths');
-    expect(code).toContain('prerender: _module.prerender === true');
+    expect(code).toContain('const _prerender = _hasPrerender ? _module.prerender === true : false;');
     expect(code).toContain('params: ["slug"]');
   });
 
@@ -126,7 +129,7 @@ describe('generateRoutesModule', () => {
     const code = generateRoutesModule(routes);
 
     expect(code).toContain('getStaticPaths: _module.getStaticPaths');
-    expect(code).toContain('prerender: _module.prerender === true');
+    expect(code).toContain('const _prerender = _hasPrerender ? _module.prerender === true : false;');
   });
 
   it('should include layouts when provided', () => {
@@ -235,5 +238,43 @@ describe('generateRoutesModule', () => {
 
     expect(aIndex).toBeLessThan(bIndex);
     expect(bIndex).toBeLessThan(cIndex);
+  });
+
+  it('should default to SSG when defaultMode is ssg', () => {
+    const routes: RouteRecord[] = [
+      {
+        path: '/ssg',
+        filePath: '/pages/ssg.tsx',
+        params: [],
+        isCatchAll: false,
+        isIndex: false,
+        segments: [],
+        priority: 110,
+      },
+    ];
+
+    const code = generateRoutesModule(routes, { defaultMode: 'ssg' });
+
+    expect(code).toContain('const _prerender = _hasPrerender ? _module.prerender === true : true;');
+    expect(code).toContain('const _csr = _hasCsr ? _module.csr === true : false;');
+  });
+
+  it('should default to CSR when defaultMode is csr', () => {
+    const routes: RouteRecord[] = [
+      {
+        path: '/csr',
+        filePath: '/pages/csr.tsx',
+        params: [],
+        isCatchAll: false,
+        isIndex: false,
+        segments: [],
+        priority: 110,
+      },
+    ];
+
+    const code = generateRoutesModule(routes, { defaultMode: 'csr' });
+
+    expect(code).toContain('const _prerender = _hasPrerender ? _module.prerender === true : false;');
+    expect(code).toContain('const _csr = _hasCsr ? _module.csr === true : !_prerender;');
   });
 });

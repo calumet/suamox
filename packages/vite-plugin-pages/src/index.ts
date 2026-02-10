@@ -2,12 +2,13 @@ import { resolve } from 'node:path';
 import type { Plugin, ViteDevServer } from 'vite';
 import pc from 'picocolors';
 import { scanRoutes } from './scanner.js';
-import { generateRoutesModule } from './codegen.js';
+import { generateRoutesModule, type DefaultPageMode } from './codegen.js';
 import type { RouteRecord } from './types.js';
 
 export interface SuamoxPagesOptions {
   pagesDir?: string;
   extensions?: string[];
+  defaultMode?: DefaultPageMode;
 }
 
 export type { RouteRecord, RouteSegment, ParsedRoute } from './types.js';
@@ -19,7 +20,11 @@ const VIRTUAL_SERVER_MODULE_ID = 'virtual:pages/server';
 const RESOLVED_VIRTUAL_SERVER_MODULE_ID = '\0' + VIRTUAL_SERVER_MODULE_ID;
 
 export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
-  const { pagesDir = 'src/pages', extensions = ['.tsx', '.ts'] } = options;
+  const {
+    pagesDir = 'src/pages',
+    extensions = ['.tsx', '.ts'],
+    defaultMode = 'ssr',
+  } = options;
 
   let server: ViteDevServer | undefined;
   let root: string;
@@ -34,7 +39,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     });
 
     routesCache = result.routes;
-    moduleCode = generateRoutesModule(result.routes);
+    moduleCode = generateRoutesModule(result.routes, { defaultMode });
 
     if (logErrors && result.errors.length > 0) {
       console.error(pc.red('\n[suamox:pages] Route errors:'));
