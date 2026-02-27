@@ -1,5 +1,5 @@
 {
-  "name": "@suamox/vite-plugin-pages",
+  "name": "@calumet/suamox-vite-plugin-pages",
   "version": "0.1.0",
   "description": "Vite plugin for filesystem-based routing",
   "type": "module",

@@ -7,7 +7,7 @@ import {
   headMarkerAttribute,
   headMarkerEndValue,
   headMarkerStartValue,
-} from '@suamox/head';
+} from '@calumet/suamox-head';
 
 export interface RouteRecord {
   path: string;

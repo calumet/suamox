@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import type { Root } from 'react-dom/client';
-import { HeadProvider } from '@suamox/head';
+import { HeadProvider } from '@calumet/suamox-head';
 import {
   createPageElement,
   matchRoute,
@@ -8,7 +8,7 @@ import {
   type HydrationAdapter,
   type LoaderContext,
   type RouteRecord,
-} from '@suamox/ssr-runtime';
+} from '@calumet/suamox';
 
 export interface RouterOptions {
   routes: RouteRecord[];

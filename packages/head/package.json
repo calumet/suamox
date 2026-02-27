@@ -1,5 +1,5 @@
 {
-  "name": "@suamox/head",
+  "name": "@calumet/suamox-head",
   "version": "0.1.0",
   "description": "Head manager for Suamox framework",
   "type": "module",

@@ -1,4 +1,4 @@
-import { Head } from '@suamox/head';
+import { Head } from '@calumet/suamox-head';
 import { useEffect, useState } from 'react';
 
 export default function CounterPage() {

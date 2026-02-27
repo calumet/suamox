@@ -9,7 +9,7 @@ Active development. Phases 0-6 are implemented; Islands (Phase 7) are planned.
 ## Quick Start
 
 ```bash
-pnpm dlx @suamox/create-app my-suamox-app
+pnpm dlx @calumet/suamox-create-app my-suamox-app
 cd my-suamox-app
 pnpm install
 pnpm run dev
@@ -62,31 +62,31 @@ pnpm test
 
 ## Packages
 
-### `@suamox/vite-plugin-pages`
+### `@calumet/suamox-vite-plugin-pages`
 
 Filesystem routing with static, dynamic, catch-all, and route groups.
 
-### `@suamox/ssr-runtime`
+### `@calumet/suamox`
 
 Route matching, loaders, SSR rendering, and SSG prerendering.
 
-### `@suamox/hono-adapter`
+### `@calumet/suamox-hono-adapter`
 
 Hono dev server + production SSR handler.
 
-### `@suamox/head`
+### `@calumet/suamox-head`
 
 Head metadata management across SSR/SSG/CSR.
 
-### `@suamox/router`
+### `@calumet/suamox-router`
 
 Client-side router for smooth navigations.
 
-### `@suamox/cli`
+### `@calumet/suamox-cli`
 
 Standardized `dev/build/ssg/preview` commands.
 
-### `@suamox/create-app`
+### `@calumet/suamox-create-app`
 
 Project scaffold with minimal starter template.
 

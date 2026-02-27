@@ -1,4 +1,4 @@
-import { Head } from '@suamox/head';
+import { Head } from '@calumet/suamox-head';
 import type { ReactNode } from 'react';
 
 export default function RootLayout({ children }: { children: ReactNode }) {

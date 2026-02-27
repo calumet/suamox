@@ -10,7 +10,7 @@
 ## Create a new project (recommended)
 
 ```bash
-pnpm dlx @suamox/create-app my-suamox-app
+pnpm dlx @calumet/suamox-create-app my-suamox-app
 cd my-suamox-app
 pnpm install
 pnpm run dev
@@ -19,9 +19,9 @@ pnpm run dev
 ## Manual Installation
 
 ```bash
-pnpm add @suamox/vite-plugin-pages @suamox/ssr-runtime @suamox/hono-adapter @suamox/router @suamox/head
+pnpm add @calumet/suamox-vite-plugin-pages @calumet/suamox @calumet/suamox-hono-adapter @calumet/suamox-router @calumet/suamox-head
 pnpm add react react-dom hono @hono/node-server
-pnpm add -D @suamox/cli vite @vitejs/plugin-react typescript tsx @types/react @types/react-dom @types/node
+pnpm add -D @calumet/suamox-cli vite @vitejs/plugin-react typescript tsx @types/react @types/react-dom @types/node
 ```
 
 ## Manual Setup
@@ -33,7 +33,7 @@ Create `vite.config.ts`:
 ```ts
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { suamoxPages } from '@suamox/vite-plugin-pages';
+import { suamoxPages } from '@calumet/suamox-vite-plugin-pages';
 
 export default defineConfig({
   plugins: [
@@ -66,7 +66,7 @@ export default function HomePage() {
 Create `server.ts`:
 
 ```ts
-import { createServer } from '@suamox/hono-adapter';
+import { createServer } from '@calumet/suamox-hono-adapter';
 
 await createServer({ port: 3000 });
 ```

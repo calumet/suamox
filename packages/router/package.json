@@ -1,5 +1,5 @@
 {
-  "name": "@suamox/router",
+  "name": "@calumet/suamox-router",
   "version": "0.1.0",
   "description": "Client-side router for Suamox framework",
   "type": "module",
@@ -30,8 +30,8 @@
     "access": "public"
   },
   "dependencies": {
-    "@suamox/head": "^0.1.0",
-    "@suamox/ssr-runtime": "^0.1.0"
+    "@calumet/suamox-head": "^0.1.0",
+    "@calumet/suamox": "^0.1.0"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",

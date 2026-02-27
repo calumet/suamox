@@ -6,5 +6,5 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
-  external: ['hono', 'vite', '@suamox/ssr-runtime'],
+  external: ['hono', 'vite', '@calumet/suamox'],
 });

@@ -26,30 +26,27 @@ importers:
       typescript-eslint:
         specifier: ^8.19.1
         version: 8.53.0(eslint@9.39.2)(typescript@5.9.3)
-      vitest:
-        specifier: ^2.1.9
-        version: 2.1.9(@types/node@22.19.7)(happy-dom@20.3.3)
 
   examples/basic:
     dependencies:
+      '@calumet/suamox':
+        specifier: workspace:*
+        version: link:../../packages/ssr-runtime
+      '@calumet/suamox-head':
+        specifier: workspace:*
+        version: link:../../packages/head
+      '@calumet/suamox-hono-adapter':
+        specifier: workspace:*
+        version: link:../../packages/hono-adapter
+      '@calumet/suamox-router':
+        specifier: workspace:*
+        version: link:../../packages/router
+      '@calumet/suamox-vite-plugin-pages':
+        specifier: workspace:*
+        version: link:../../packages/vite-plugin-pages
       '@hono/node-server':
         specifier: ^1.14.0
         version: 1.19.9(hono@4.11.4)
-      '@suamox/head':
-        specifier: workspace:*
-        version: link:../../packages/head
-      '@suamox/hono-adapter':
-        specifier: workspace:*
-        version: link:../../packages/hono-adapter
-      '@suamox/router':
-        specifier: workspace:*
-        version: link:../../packages/router
-      '@suamox/ssr-runtime':
-        specifier: workspace:*
-        version: link:../../packages/ssr-runtime
-      '@suamox/vite-plugin-pages':
-        specifier: workspace:*
-        version: link:../../packages/vite-plugin-pages
       hono:
         specifier: ^4.6.17
         version: 4.11.4
@@ -87,7 +84,7 @@ importers:
 
   packages/cli:
     dependencies:
-      '@suamox/ssr-runtime':
+      '@calumet/suamox':
         specifier: ^0.1.0
         version: link:../ssr-runtime
     devDependencies:
@@ -149,12 +146,12 @@ importers:
         specifier: ^1.1.1
         version: 1.1.1
     devDependencies:
+      '@calumet/suamox':
+        specifier: ^0.1.0
+        version: link:../ssr-runtime
       '@hono/node-server':
         specifier: ^1.14.0
         version: 1.19.9(hono@4.11.4)
-      '@suamox/ssr-runtime':
-        specifier: ^0.1.0
-        version: link:../ssr-runtime
       '@types/node':
         specifier: ^22.10.5
         version: 22.19.7
@@ -179,12 +176,12 @@ importers:
 
   packages/router:
     dependencies:
-      '@suamox/head':
-        specifier: ^0.1.0
-        version: link:../head
-      '@suamox/ssr-runtime':
+      '@calumet/suamox':
         specifier: ^0.1.0
         version: link:../ssr-runtime
+      '@calumet/suamox-head':
+        specifier: ^0.1.0
+        version: link:../head
     devDependencies:
       '@types/node':
         specifier: ^22.10.5
@@ -210,7 +207,7 @@ importers:
 
   packages/ssr-runtime:
     dependencies:
-      '@suamox/head':
+      '@calumet/suamox-head':
         specifier: ^0.1.0
         version: link:../head
     devDependencies:

@@ -1,4 +1,4 @@
-# @suamox/vite-plugin-pages
+# @calumet/suamox-vite-plugin-pages
 
 Vite plugin for filesystem-based routing with support for dynamic routes, catch-all routes, and route groups.
 
@@ -16,7 +16,7 @@ Vite plugin for filesystem-based routing with support for dynamic routes, catch-
 ## Installation
 
 ```bash
-pnpm add @suamox/vite-plugin-pages
+pnpm add @calumet/suamox-vite-plugin-pages
 ```
 
 ## Usage
@@ -26,7 +26,7 @@ pnpm add @suamox/vite-plugin-pages
 ```ts
 // vite.config.ts
 import { defineConfig } from 'vite';
-import { suamoxPages } from '@suamox/vite-plugin-pages';
+import { suamoxPages } from '@calumet/suamox-vite-plugin-pages';
 
 export default defineConfig({
   plugins: [
@@ -154,14 +154,14 @@ Example order:
 Add to your `vite-env.d.ts`:
 
 ```ts
-/// <reference types="@suamox/vite-plugin-pages/client" />
+/// <reference types="@calumet/suamox-vite-plugin-pages/client" />
 ```
 
 Or create `virtual-pages.d.ts`:
 
 ```ts
 declare module 'virtual:pages' {
-  import type { RouteRecord } from '@suamox/vite-plugin-pages';
+  import type { RouteRecord } from '@calumet/suamox-vite-plugin-pages';
   export const routes: RouteRecord[];
   export default routes;
 }

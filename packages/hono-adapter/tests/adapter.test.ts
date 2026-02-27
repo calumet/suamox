@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { ViteDevServer } from 'vite';
-import type { RenderOptions, RenderResult } from '@suamox/ssr-runtime';
+import type { RenderOptions, RenderResult } from '@calumet/suamox';
 
 const mocks = vi.hoisted(() => ({
   renderPage: vi.fn(),
@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   matchRoute: vi.fn(() => null),
 }));
 
-vi.mock('@suamox/ssr-runtime', () => ({
+vi.mock('@calumet/suamox', () => ({
   renderPage: mocks.renderPage,
   generateHTML: mocks.generateHTML,
   serializeData: mocks.serializeData,

@@ -6,7 +6,7 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
-  external: ['@suamox/ssr-runtime'],
+  external: ['@calumet/suamox'],
   banner: {
     js: '#!/usr/bin/env node',
   },

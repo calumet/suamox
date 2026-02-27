@@ -7,8 +7,8 @@ import { isAbsolute, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import type { RenderOptions, RouteRecord, RenderResult } from '@suamox/ssr-runtime';
-import { generateHTML, matchRoute, renderPage, serializeData } from '@suamox/ssr-runtime';
+import type { RenderOptions, RouteRecord, RenderResult } from '@calumet/suamox';
+import { generateHTML, matchRoute, renderPage, serializeData } from '@calumet/suamox';
 
 export interface HonoAdapterOptions {
   onRequest?: (c: Context) => void | Promise<void>;

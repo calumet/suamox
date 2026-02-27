@@ -1,5 +1,5 @@
 {
-  "name": "@suamox/create-app",
+  "name": "@calumet/suamox-create-app",
   "version": "0.1.0",
   "description": "Scaffold a new Suamox project",
   "type": "module",

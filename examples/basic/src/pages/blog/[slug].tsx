@@ -1,5 +1,5 @@
-import { Head } from '@suamox/head';
-import type { LoaderContext } from '@suamox/ssr-runtime';
+import { Head } from '@calumet/suamox-head';
+import type { LoaderContext } from '@calumet/suamox';
 
 // Simulated blog posts database
 const blogPosts = {

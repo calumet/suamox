@@ -1,5 +1,5 @@
 {
-  "name": "@suamox/cli",
+  "name": "@calumet/suamox-cli",
   "version": "0.1.0",
   "description": "Suamox CLI for dev/build/ssg/preview workflows",
   "type": "module",
@@ -33,7 +33,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@suamox/ssr-runtime": "^0.1.0"
+    "@calumet/suamox": "^0.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
