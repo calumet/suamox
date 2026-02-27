@@ -94,6 +94,20 @@ Use clear, descriptive commit messages:
 3. Add tests for new features
 4. Reference any related issues
 
+## Versioning & Publishing
+
+- Packages are published to GitHub Packages under `@calumet/suamox*`.
+- Do not republish an existing version. Once `x.y.z` is published, that exact version cannot be replaced with new code.
+- For any publishable change, bump the package version in its `package.json` before publishing.
+- Suggested version bump policy:
+  - `patch` for bug fixes (`0.1.0 -> 0.1.1`)
+  - `minor` for backward-compatible features (`0.1.x -> 0.2.0`)
+  - `major` for breaking changes (or a clearly documented minor bump while still in `0.x`)
+- `create-app` template dependencies should stay on a semver range (`^0.1.0`) to avoid updating the template on every patch release.
+- Publish examples:
+  - Single package: `pnpm --filter @calumet/suamox-cli publish --no-git-checks`
+  - All framework packages: `pnpm -r --filter "@calumet/suamox*" publish --no-git-checks`
+
 ## Questions?
 
 Feel free to open an issue for discussion before starting work on major changes.
