@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { runSsg } from '@calumet/suamox/ssg';
 
-const pnpmCmd = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+const pnpmCmd = 'pnpm';
 
 const readPackageVersion = (): string => {
   const packageJsonPath = new URL('../package.json', import.meta.url);
@@ -28,7 +28,8 @@ const run = async (command: string, args: string[], options: { env?: NodeJS.Proc
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const child = spawn(command, args, {
       stdio: 'inherit',
-      shell: false,
+      // Windows can fail with EINVAL when spawning .cmd-based commands without a shell.
+      shell: process.platform === 'win32',
       env: { ...process.env, ...options.env },
     });
     child.on('error', rejectPromise);
