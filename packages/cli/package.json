@@ -1,6 +1,6 @@
 {
   "name": "@calumet/suamox-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Suamox CLI for dev/build/ssg/preview workflows",
   "type": "module",
   "bin": {
