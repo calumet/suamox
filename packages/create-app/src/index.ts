@@ -8,6 +8,13 @@ create-suamox <project-name>
 
 const templateRoot = fileURLToPath(new URL('../template', import.meta.url));
 
+const resolveTemplateEntryName = (name: string): string => {
+  if (name === '_npmrc') {
+    return '.npmrc';
+  }
+  return name;
+};
+
 const isDirectory = async (path: string): Promise<boolean> => {
   try {
     const info = await stat(path);
@@ -33,7 +40,7 @@ const copyTemplate = async (srcDir: string, destDir: string, name: string): Prom
   const entries = await readdir(srcDir, { withFileTypes: true });
   for (const entry of entries) {
     const srcPath = resolve(srcDir, entry.name);
-    const destPath = resolve(destDir, entry.name);
+    const destPath = resolve(destDir, resolveTemplateEntryName(entry.name));
     if (entry.isDirectory()) {
       await mkdir(destPath, { recursive: true });
       await copyTemplate(srcPath, destPath, name);
@@ -60,6 +67,9 @@ const main = async () => {
   console.log(`Suamox app created at ${targetDir}`);
   console.log(`Next steps:`);
   console.log(`  cd ${name}`);
+  console.log(
+    `  # add auth in ~/.npmrc: //npm.pkg.github.com/:_authToken=\${GITHUB_TOKEN}`
+  );
   console.log(`  pnpm install`);
   console.log(`  pnpm run dev`);
 };
