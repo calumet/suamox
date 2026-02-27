@@ -28,7 +28,7 @@ const run = async (command: string, args: string[], options: { env?: NodeJS.Proc
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const child = spawn(command, args, {
       stdio: 'inherit',
-      // Windows can fail with EINVAL when spawning .cmd-based commands without a shell.
+      // En Windows puede fallar con EINVAL al ejecutar comandos .cmd sin shell.
       shell: process.platform === 'win32',
       env: { ...process.env, ...options.env },
     });

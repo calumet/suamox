@@ -1,27 +1,27 @@
 # @calumet/suamox-vite-plugin-pages
 
-Vite plugin for filesystem-based routing with support for dynamic routes, catch-all routes, and route groups.
+Plugin de Vite para enrutado por sistema de archivos con soporte para rutas dinámicas, catch-all y grupos de rutas.
 
-## Features
+## Características
 
-- ✅ Static routes (`/about`)
-- ✅ Dynamic parameters (`/blog/:slug`)
-- ✅ Catch-all routes (`/*`)
-- ✅ Route groups `(admin)` - excluded from URL
-- ✅ Index routes
-- ✅ Automatic route priority sorting
-- ✅ HMR support (hot module replacement)
-- ✅ TypeScript support
+- Rutas estáticas (`/about`)
+- Parámetros dinámicos (`/blog/:slug`)
+- Rutas catch-all (`/*`)
+- Grupos de rutas `(admin)` excluidos de la URL
+- Soporte para rutas index
+- Ordenamiento automático por prioridad de ruta
+- Soporte HMR (hot module replacement)
+- Soporte TypeScript
 
-## Installation
+## Instalación
 
 ```bash
 pnpm add @calumet/suamox-vite-plugin-pages
 ```
 
-## Usage
+## Uso
 
-### 1. Configure Vite
+### 1. Configura Vite
 
 ```ts
 // vite.config.ts
@@ -31,33 +31,33 @@ import { suamoxPages } from '@calumet/suamox-vite-plugin-pages';
 export default defineConfig({
   plugins: [
     suamoxPages({
-      pagesDir: 'src/pages', // default
-      extensions: ['.tsx', '.ts'], // default
+      pagesDir: 'src/pages', // por defecto
+      extensions: ['.tsx', '.ts'], // por defecto
     }),
   ],
 });
 ```
 
-### 2. Create Pages
+### 2. Crea páginas
 
-```
+```txt
 src/pages/
-├── index.tsx           → /
-├── about.tsx           → /about
-├── blog/
-│   ├── index.tsx       → /blog
-│   └── [slug].tsx      → /blog/:slug
-├── (admin)/
-│   └── dashboard.tsx   → /dashboard
-└── [...all].tsx        → /* (catch-all)
+  index.tsx            -> /
+  about.tsx            -> /about
+  blog/
+    index.tsx          -> /blog
+    [slug].tsx         -> /blog/:slug
+  (admin)/
+    dashboard.tsx      -> /dashboard
+  [...all].tsx         -> /* (catch-all)
 ```
 
-### 3. Import Routes
+### 3. Importa rutas
 
 ```ts
 import { routes } from 'virtual:pages';
 
-// routes is an array of RouteRecord objects:
+// routes es un arreglo de objetos RouteRecord:
 // {
 //   path: string;
 //   component: React.ComponentType;
@@ -69,30 +69,30 @@ import { routes } from 'virtual:pages';
 // }
 ```
 
-## Routing Conventions
+## Convenciones de Routing
 
-### Static Routes
+### Rutas estáticas
 
-Files map directly to URLs:
+Los archivos se mapean directamente a URLs:
 
-- `src/pages/about.tsx` → `/about`
-- `src/pages/contact.tsx` → `/contact`
+- `src/pages/about.tsx` -> `/about`
+- `src/pages/contact.tsx` -> `/contact`
 
-### Index Routes
+### Rutas index
 
-Files named `index.tsx` represent the root of their directory:
+Los archivos llamados `index.tsx` representan la raíz de su directorio:
 
-- `src/pages/index.tsx` → `/`
-- `src/pages/blog/index.tsx` → `/blog`
+- `src/pages/index.tsx` -> `/`
+- `src/pages/blog/index.tsx` -> `/blog`
 
-### Dynamic Parameters
+### Parámetros dinámicos
 
-Wrap segments in brackets to create dynamic routes:
+Encierra segmentos entre corchetes para crear rutas dinámicas:
 
-- `src/pages/blog/[slug].tsx` → `/blog/:slug`
-- `src/pages/users/[id].tsx` → `/users/:id`
+- `src/pages/blog/[slug].tsx` -> `/blog/:slug`
+- `src/pages/users/[id].tsx` -> `/users/:id`
 
-Access params in your component:
+Accede a params en tu componente:
 
 ```tsx
 // src/pages/blog/[slug].tsx
@@ -101,12 +101,12 @@ export default function BlogPost({ params }: { params: { slug: string } }) {
 }
 ```
 
-### Catch-All Routes
+### Rutas catch-all
 
-Use `[...param]` for catch-all routes:
+Usa `[...param]` para rutas catch-all:
 
-- `src/pages/[...all].tsx` → `/*`
-- `src/pages/docs/[...path].tsx` → `/docs/*`
+- `src/pages/[...all].tsx` -> `/*`
+- `src/pages/docs/[...path].tsx` -> `/docs/*`
 
 ```tsx
 // src/pages/docs/[...path].tsx
@@ -115,32 +115,32 @@ export default function DocsPage({ params }: { params: { path: string[] } }) {
 }
 ```
 
-### Route Groups
+### Grupos de rutas
 
-Wrap folder names in parentheses to organize routes without affecting the URL:
+Encierra nombres de carpetas entre paréntesis para organizar rutas sin afectar la URL:
 
-- `src/pages/(admin)/dashboard.tsx` → `/dashboard`
-- `src/pages/(auth)/login.tsx` → `/login`
+- `src/pages/(admin)/dashboard.tsx` -> `/dashboard`
+- `src/pages/(auth)/login.tsx` -> `/login`
 
-Useful for:
+Útil para:
 
-- Organizing related routes
-- Sharing layouts (future feature)
-- Logical grouping without URL nesting
+- Organizar rutas relacionadas
+- Compartir layouts (feature futura)
+- Agrupar lógicamente sin anidar URLs
 
-## Route Priority
+## Prioridad de Rutas
 
-Routes are automatically sorted by priority:
+Las rutas se ordenan automáticamente por prioridad:
 
-1. **Highest**: Static routes with more segments
-2. **High**: Dynamic routes with more segments
-3. **Medium**: Shorter static routes
-4. **Low**: Shorter dynamic routes
-5. **Lowest**: Catch-all routes
+1. Más alta: rutas estáticas con más segmentos
+2. Alta: rutas dinámicas con más segmentos
+3. Media: rutas estáticas más cortas
+4. Baja: rutas dinámicas más cortas
+5. Más baja: rutas catch-all
 
-Example order:
+Ejemplo de orden:
 
-```
+```txt
 /blog/featured     (priority: 210)
 /blog/:slug        (priority: 215)
 /blog              (priority: 110)
@@ -151,13 +151,13 @@ Example order:
 
 ## TypeScript
 
-Add to your `vite-env.d.ts`:
+Agrega esto a tu `vite-env.d.ts`:
 
 ```ts
 /// <reference types="@calumet/suamox-vite-plugin-pages/client" />
 ```
 
-Or create `virtual-pages.d.ts`:
+O crea `virtual-pages.d.ts`:
 
 ```ts
 declare module 'virtual:pages' {
@@ -167,42 +167,42 @@ declare module 'virtual:pages' {
 }
 ```
 
-## HMR Support
+## Soporte HMR
 
-The plugin watches the pages directory and automatically:
+El plugin observa el directorio de páginas y automáticamente:
 
-- Detects new pages
-- Removes deleted pages
-- Triggers full reload when routes change
+- Detecta páginas nuevas
+- Elimina páginas borradas
+- Dispara recarga completa cuando cambian las rutas
 
-## Development
+## Desarrollo
 
 ```bash
-# Build the plugin
+# Compilar el plugin
 pnpm build
 
-# Watch mode
+# Modo watch
 pnpm dev
 
-# Run tests
+# Ejecutar tests
 pnpm test
 
-# Run tests in watch mode
+# Ejecutar tests en modo watch
 pnpm test:watch
 
-# Generate coverage report
+# Generar reporte de cobertura
 pnpm test:coverage
 ```
 
 ## Testing
 
-The plugin includes a comprehensive test suite using Vitest with 26 unit tests covering:
+El plugin incluye una suite de tests completa con Vitest, cubriendo:
 
-- Route parsing and validation
-- Code generation
-- Route sorting and priority
-- Coverage reports available with `pnpm test:coverage`
+- Parseo y validación de rutas
+- Generación de código
+- Ordenamiento y prioridad de rutas
+- Reportes de cobertura disponibles con `pnpm test:coverage`
 
-## License
+## Licencia
 
 MIT

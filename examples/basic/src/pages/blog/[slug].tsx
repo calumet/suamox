@@ -1,7 +1,7 @@
 import { Head } from '@calumet/suamox-head';
 import type { LoaderContext } from '@calumet/suamox';
 
-// Simulated blog posts database
+// Base de datos simulada de posts del blog
 const blogPosts = {
   'hello-world': {
     title: 'Hello World',

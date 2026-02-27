@@ -84,10 +84,10 @@ const renderHeadToString = (nodes: React.ReactNode[]): string => {
 };
 
 /**
- * Match a pathname against routes and extract params
+ * Hace match de un pathname contra rutas y extrae params
  */
 export function matchRoute(routes: RouteRecord[], pathname: string): MatchResult | null {
-  // Normalize pathname
+  // Normalizar pathname
   const normalizedPath = pathname === '' ? '/' : pathname;
 
   for (const route of routes) {
@@ -104,14 +104,14 @@ export function matchRoute(routes: RouteRecord[], pathname: string): MatchResult
 }
 
 /**
- * Match a route pattern against a pathname
+ * Hace match de un patrón de ruta contra un pathname
  */
 function matchPattern(
   route: RouteRecord,
   pathname: string
 ): { params: Record<string, string> } | null {
   const pattern = route.path;
-  // Handle exact match for static routes
+  // Manejar match exacto para rutas estáticas
   if (!pattern.includes(':') && !pattern.includes('*')) {
     return pattern === pathname ? { params: {} } : null;
   }
@@ -119,12 +119,12 @@ function matchPattern(
   const patternParts = pattern.split('/').filter(Boolean);
   const pathParts = pathname.split('/').filter(Boolean);
 
-  // Catch-all route
+  // Ruta catch-all
   if (pattern.endsWith('/*')) {
     const basePattern = pattern.slice(0, -2);
     const baseParts = basePattern.split('/').filter(Boolean);
 
-    // Check if base matches
+    // Verificar si coincide la base
     for (let i = 0; i < baseParts.length; i++) {
       const patternPart = baseParts[i];
       const pathPart = pathParts[i];
@@ -142,7 +142,7 @@ function matchPattern(
       }
     }
 
-    // Extract catch-all param
+    // Extraer parámetro catch-all
     const catchAllParts = pathParts.slice(baseParts.length);
     const paramName = route.params[0] ?? 'all';
 
@@ -153,7 +153,7 @@ function matchPattern(
     };
   }
 
-  // Dynamic route matching
+  // Match de rutas dinámicas
   if (patternParts.length !== pathParts.length) {
     return null;
   }
@@ -165,11 +165,11 @@ function matchPattern(
     const pathPart = pathParts[i]!;
 
     if (patternPart.startsWith(':')) {
-      // Dynamic parameter
+      // Parámetro dinámico
       const paramName = patternPart.slice(1);
       params[paramName] = pathPart;
     } else if (patternPart !== pathPart) {
-      // Static part doesn't match
+      // La parte estática no coincide
       return null;
     }
   }
@@ -246,12 +246,12 @@ export async function hydrateApp(routes: RouteRecord[], adapter?: HydrationAdapt
 }
 
 /**
- * Render a page with SSR
+ * Renderiza una página con SSR
  */
 export async function renderPage(options: RenderOptions): Promise<RenderResult> {
   const { pathname, request, routes } = options;
 
-  // Match route
+  // Hacer match de ruta
   const match = matchRoute(routes, pathname);
   const notFoundRoute = routes.find((route) => route.path === '/404');
 
@@ -277,7 +277,7 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
     };
   }
 
-  // Build loader context
+  // Construir contexto del loader
   const loaderContext: LoaderContext = {
     request,
     url,
@@ -285,7 +285,7 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
     query: url.searchParams,
   };
 
-  // Execute loader if present
+  // Ejecutar loader si existe
   let data: unknown = null;
   if (resolvedRoute.loader) {
     try {
@@ -299,7 +299,7 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
     }
   }
 
-  // Render component with React SSR
+  // Renderizar componente con React SSR
   try {
     const headManager = createHeadManager('server');
     const element = createElement(
@@ -326,17 +326,17 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
 }
 
 /**
- * Safely serialize data for injection into HTML
+ * Serializa datos de forma segura para inyección en HTML
  */
 export function serializeData(data: unknown): string {
   const json = JSON.stringify(data);
-  // Escape HTML entities to prevent XSS
-  // Only escape <, >, and & which could break out of script context
+  // Escapar entidades HTML para prevenir XSS
+  // Solo se escapan <, > y & que pueden romper el contexto del script
   return json.replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
 }
 
 /**
- * Generate HTML template with initial data
+ * Genera la plantilla HTML con datos iniciales
  */
 export function generateHTML(options: {
   html: string;

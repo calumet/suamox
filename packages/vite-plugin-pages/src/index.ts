@@ -70,7 +70,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     configureServer(_server) {
       server = _server;
 
-      // Watch pages directory for changes
+      // Observar cambios en el directorio de paginas
       const absolutePagesDir = resolve(root, pagesDir);
 
       server.watcher.add(absolutePagesDir);
@@ -91,8 +91,8 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
 
       server.watcher.on('change', (file) => {
         if (file.startsWith(absolutePagesDir) && extensions.some((ext) => file.endsWith(ext))) {
-          // File content changed but path is same - no need to regenerate routes
-          // Just let Vite's normal HMR handle it
+          // El contenido cambio pero la ruta es la misma: no hace falta regenerar rutas
+          // Se deja que el HMR normal de Vite lo maneje
         }
       });
     },
@@ -126,7 +126,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
         return moduleCode;
       }
       if (id === RESOLVED_VIRTUAL_SERVER_MODULE_ID) {
-        // Simple re-export for SSR entry point
+        // Re-export simple para el entry point SSR
         return `export { routes } from 'virtual:pages';`;
       }
     },

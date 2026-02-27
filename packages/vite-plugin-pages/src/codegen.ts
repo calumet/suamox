@@ -7,7 +7,7 @@ export interface GenerateRoutesOptions {
 }
 
 /**
- * Generate the virtual module code for routes
+ * Genera el código del módulo virtual de rutas
  */
 export function generateRoutesModule(
   routes: RouteRecord[],
@@ -62,7 +62,7 @@ export function generateRoutesModule(
   };
 };`);
 
-    // Generate route object
+    // Generar objeto de ruta
     const routeObj = `  {
     path: ${JSON.stringify(route.path)},
     load: ${loadRouteName},

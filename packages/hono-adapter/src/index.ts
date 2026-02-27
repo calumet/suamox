@@ -35,12 +35,12 @@ export interface ProdHandlerOptions extends HonoAdapterOptions {
 }
 
 /**
- * Create a Hono app with SSR support
+ * Crea una app de Hono con soporte SSR
  */
 export function createHonoApp(_options: HonoAdapterOptions = {}): Hono {
   const app = new Hono();
 
-  // Health check endpoint
+  // Endpoint de health check
   app.get('/health', (c) => {
     return c.json({ status: 'ok' });
   });
@@ -49,20 +49,20 @@ export function createHonoApp(_options: HonoAdapterOptions = {}): Hono {
 }
 
 /**
- * Create and start a server (dev or prod based on NODE_ENV)
+ * Crea e inicia un servidor (dev o prod según NODE_ENV)
  */
 export async function createServer(options: CreateServerOptions): Promise<void> {
   const { port = 3000, ...adapterOptions } = options;
   const isProd = process.env.NODE_ENV === 'production';
 
   if (isProd) {
-    // Production mode - use standard serve
+    // Modo producción: usar serve estándar
     const { serve } = await import('@hono/node-server');
     const app = createProdHandler(adapterOptions);
     console.log(`Production server running at http://localhost:${port}`);
     serve({ fetch: app.fetch, port });
   } else {
-    // Development mode - need to integrate Vite middleware
+    // Modo desarrollo: integrar middleware de Vite
     const { createServer: createViteServer } = await import('vite');
     const { createServer: createNodeServer } = await import('node:http');
 
@@ -73,11 +73,11 @@ export async function createServer(options: CreateServerOptions): Promise<void> 
 
     const app = createDevHandler({ vite, ...adapterOptions });
 
-    // Create HTTP server that uses both Vite middleware and Hono
+    // Crear servidor HTTP que use middleware de Vite y Hono
     const server = createNodeServer((req, res) => {
-      // Try Vite middleware first
+      // Intentar primero el middleware de Vite
       vite.middlewares(req, res, async () => {
-        // If Vite doesn't handle it, use Hono
+        // Si Vite no lo maneja, usar Hono
         const headers: Record<string, string> = {};
         for (const [key, value] of Object.entries(req.headers)) {
           if (typeof value === 'string') {
@@ -117,44 +117,44 @@ export async function createServer(options: CreateServerOptions): Promise<void> 
 }
 
 /**
- * Create development handler with Vite integration
+ * Crea el handler de desarrollo con integración de Vite
  */
 export function createDevHandler(options: DevHandlerOptions): Hono {
   const { vite, onRequest, onBeforeRender, onAfterRender } = options;
   const app = createHonoApp(options);
 
-  // SSR handler for pages (Vite middleware is handled in createServer)
+  // Handler SSR para páginas (el middleware de Vite se maneja en createServer)
   app.use('*', async (c) => {
     const url = new URL(c.req.url);
 
     try {
-      // Execute onRequest hook
+      // Ejecutar hook onRequest
       if (onRequest) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         await onRequest(c);
       }
 
-      // Load virtual:pages module
+      // Cargar módulo virtual:pages
       const routesModule = (await vite.ssrLoadModule('virtual:pages')) as {
         routes: RouteRecord[];
       };
       const routes = routesModule.routes;
 
-      // Execute onBeforeRender hook
+      // Ejecutar hook onBeforeRender
       let renderContext: RenderOptions = { pathname: url.pathname, request: c.req.raw, routes };
       if (onBeforeRender) {
         renderContext = await onBeforeRender(renderContext);
       }
 
-      // Render page
+      // Renderizar página
       let result = await renderPage(renderContext);
 
-      // Execute onAfterRender hook
+      // Ejecutar hook onAfterRender
       if (onAfterRender) {
         result = await onAfterRender(result);
       }
 
-      // Read and transform index.html
+      // Leer y transformar index.html
       const template = await vite.transformIndexHtml(
         url.pathname,
         `<!DOCTYPE html>
@@ -172,7 +172,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
 </html>`
       );
 
-      // Inject initial data
+      // Inyectar datos iniciales
       const serializedData = serializeData(result.initialData ?? null);
       const finalHtml = template.replace(
         '</body>',
@@ -181,7 +181,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
 
       return c.html(finalHtml, result.status as 200 | 404 | 500);
     } catch (error) {
-      // Let Vite handle errors with stack trace
+      // Dejar que Vite maneje errores con stack trace
       vite.ssrFixStacktrace(error as Error);
       console.error(pc.red('[SSR Error]'), error);
 
@@ -193,7 +193,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
 }
 
 /**
- * Create production handler for serving built assets
+ * Crea el handler de producción para servir assets compilados
  */
 export function createProdHandler(options: ProdHandlerOptions): Hono {
   const {
@@ -208,14 +208,14 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 
   const app = createHonoApp(options);
 
-  // Convert relative server entry path to absolute file URL for dynamic import
+  // Convertir el path relativo del entry del servidor a URL absoluta para import dinámico
   const serverEntryPath = resolve(root, serverEntry);
   const serverEntryURL = pathToFileURL(serverEntryPath).href;
 
   const staticRoot = resolve(root, staticDir);
   const staticFallbackEnabled = staticRoot.length > 0;
 
-  // Read Vite manifest to get hashed asset names
+  // Leer el manifest de Vite para obtener nombres de assets con hash
   const manifestPath = resolve(root, clientDir, '.vite/manifest.json');
   type ManifestEntry = {
     file: string;
@@ -230,7 +230,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     console.warn('[Hono Adapter] Could not read Vite manifest, client assets may not load');
   }
 
-  // Get the entry client script from manifest
+  // Obtener script de entrada del cliente desde el manifest
   const entryClientScript = manifest['index.html']?.file
     ? `/${manifest['index.html'].file}`
     : '/assets/index.js';
@@ -281,7 +281,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     return Array.from(preloadScripts);
   };
 
-  // Serve static assets from client build directory
+  // Servir assets estáticos desde el directorio de build del cliente
   const assetHandler = serveStatic({ root: clientDir }) as (
     c: Context,
     next: () => Promise<void>
@@ -332,9 +332,9 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     }
   };
 
-  // SSR handler - only for non-asset routes
+  // Handler SSR: solo para rutas que no son assets
   app.use('*', async (c) => {
-    // Skip if it's requesting an asset file
+    // Omitir si está solicitando un archivo de assets
     if (c.req.path.startsWith('/assets/')) {
       return c.notFound();
     }
@@ -347,13 +347,13 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     }
 
     try {
-      // Execute onRequest hook
+      // Ejecutar hook onRequest
       if (onRequest) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         await onRequest(c);
       }
 
-      // Import server entry (this should export routes)
+      // Importar entry del servidor (debe exportar rutas)
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const serverModule = await import(serverEntryURL);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
@@ -363,21 +363,21 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         throw new Error('Server entry must export routes');
       }
 
-      // Execute onBeforeRender hook
+      // Ejecutar hook onBeforeRender
       let renderContext: RenderOptions = { pathname: url.pathname, request: c.req.raw, routes };
       if (onBeforeRender) {
         renderContext = await onBeforeRender(renderContext);
       }
 
-      // Render page
+      // Renderizar página
       let result = await renderPage(renderContext);
 
-      // Execute onAfterRender hook
+      // Ejecutar hook onAfterRender
       if (onAfterRender) {
         result = await onAfterRender(result);
       }
 
-      // Generate full HTML
+      // Generar HTML completo
       const preloadScripts = collectPreloadScripts(routes, url.pathname);
       const html = generateHTML({
         html: `<div id="root">${result.html}</div>`,
@@ -404,6 +404,6 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   return app;
 }
 
-// Export types
+// Exportar tipos
 export type { Context } from 'hono';
 export type { ViteDevServer } from 'vite';

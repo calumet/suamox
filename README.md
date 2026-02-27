@@ -1,12 +1,12 @@
 # Suamox Framework
 
-Meta-framework with SSR/SSG, filesystem routing, and layouts on Vite, React, and Hono.
+Meta-framework con SSR/SSG, enrutado por sistema de archivos y layouts sobre Vite, React y Hono.
 
-## Status
+## Estado
 
-Active development. Phases 0-6 are implemented; Islands (Phase 7) are planned.
+En desarrollo activo. Las fases 0-6 están implementadas; las Islas (fase 7) están planificadas.
 
-## Quick Start
+## Inicio Rápido
 
 ```bash
 pnpm dlx @calumet/suamox-create-app my-suamox-app
@@ -15,35 +15,35 @@ pnpm install
 pnpm run dev
 ```
 
-See `docs/getting-started.md` for manual setup and details.
+Consulta `docs/README.md` para el índice completo de documentación.
 
-## Project Structure
+## Estructura del Proyecto
 
-```
+```txt
 suamox/
   packages/
-    vite-plugin-pages/   # Filesystem routing plugin
-    ssr-runtime/         # SSR/SSG runtime
-    hono-adapter/        # Hono server adapter
-    head/                # Head manager (SSR/SSG/CSR)
-    router/              # Client router
+    vite-plugin-pages/   # Plugin de rutas por sistema de archivos
+    ssr-runtime/         # Runtime de SSR/SSG
+    hono-adapter/        # Adaptador de servidor Hono
+    head/                # Gestión de head (SSR/SSG/CSR)
+    router/              # Router del cliente
     cli/                 # CLI: dev/build/ssg/preview
-    create-app/          # Project scaffold
+    create-app/          # Scaffold de proyecto
   examples/
-    basic/               # Example project
-  docs/                  # Documentation
-  PLAN.md                # Implementation plan
-  CONVENTIONS_v1.md      # Framework conventions (frozen)
+    basic/               # Proyecto de ejemplo
+  docs/                  # Documentación
+  PLAN.md                # Plan de implementación
+  CONVENTIONS_v1.md      # Convenciones del framework (congeladas)
 ```
 
-## Development Setup
+## Configuración de Desarrollo
 
-### Prerequisites
+### Requisitos Previos
 
-- Node.js 18+ or Bun 1.0+
+- Node.js 18+ o Bun 1.0+
 - pnpm 10+
 
-### Install
+### Instalación
 
 ```bash
 pnpm install
@@ -60,49 +60,49 @@ pnpm format
 pnpm test
 ```
 
-## Packages
+## Paquetes
 
 ### `@calumet/suamox-vite-plugin-pages`
 
-Filesystem routing with static, dynamic, catch-all, and route groups.
+Enrutado por sistema de archivos con rutas estáticas, dinámicas, catch-all y grupos de rutas.
 
 ### `@calumet/suamox`
 
-Route matching, loaders, SSR rendering, and SSG prerendering.
+Match de rutas, loaders, renderizado SSR y prerender SSG.
 
 ### `@calumet/suamox-hono-adapter`
 
-Hono dev server + production SSR handler.
+Servidor de desarrollo con Hono + handler SSR para producción.
 
 ### `@calumet/suamox-head`
 
-Head metadata management across SSR/SSG/CSR.
+Gestión de metadatos `<head>` para SSR/SSG/CSR.
 
 ### `@calumet/suamox-router`
 
-Client-side router for smooth navigations.
+Router del lado cliente para navegación fluida.
 
 ### `@calumet/suamox-cli`
 
-Standardized `dev/build/ssg/preview` commands.
+Comandos estandarizados `dev/build/ssg/preview`.
 
 ### `@calumet/suamox-create-app`
 
-Project scaffold with minimal starter template.
+Scaffold de proyecto con plantilla inicial mínima.
 
-## Roadmap
+## Hoja de Ruta
 
-- [x] Phase 0: Design decisions and conventions
-- [x] Phase 1: Routing and manifest
-- [x] Phase 2: SSR runtime
-- [x] Phase 3: Hono adapter (Dev + Prod)
-- [x] Phase 4: SSG (Prerender)
-- [x] Phase 5: Layouts
-- [x] Phase 6: CLI + Create-app
-- [ ] Phase 7: Islands (Optional)
+- [x] Fase 0: decisiones de diseño y convenciones
+- [x] Fase 1: routing y manifest
+- [x] Fase 2: runtime SSR
+- [x] Fase 3: adaptador Hono (Dev + Prod)
+- [x] Fase 4: SSG (prerender)
+- [x] Fase 5: layouts
+- [x] Fase 6: CLI + Create-app
+- [ ] Fase 7: Islas (opcional)
 
-See `PLAN.md` for details.
+Consulta `PLAN.md` para más detalle.
 
-## License
+## Licencia
 
 MIT

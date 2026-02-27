@@ -85,20 +85,20 @@ export interface ScanResult {
 }
 
 /**
- * Scan the pages directory and generate route records
+ * Escanea el directorio de páginas y genera registros de rutas
  */
 export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
   const { pagesDir, extensions, root = process.cwd() } = options;
   const absolutePagesDir = resolve(root, pagesDir);
 
-  // Initialize es-module-lexer (only needs to be done once)
+  // Inicializar es-module-lexer (solo se hace una vez)
   await init;
 
-  // Build glob pattern
+  // Construir patrón glob
   const extPattern = extensions.length === 1 ? extensions[0] : `{${extensions.join(',')}}`;
   const pattern = `**/*${extPattern}`;
 
-  // Scan files
+  // Escanear archivos
   const files = await fg(pattern, {
     cwd: absolutePagesDir,
     absolute: true,
@@ -113,7 +113,7 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     layoutMap.set(dirname(layoutFile), layoutFile);
   }
 
-  // Parse each file into a route
+  // Parsear cada archivo a una ruta
   const routes: RouteRecord[] = [];
   const errors: string[] = [];
 
@@ -126,12 +126,12 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
 
     route.layouts = collectLayoutsForFile(file, layoutMap, absolutePagesDir);
 
-    // Check if the file exports a loader function using es-module-lexer
+    // Verificar si el archivo exporta loader usando es-module-lexer
     let content = '';
     try {
       content = readFileSync(file, 'utf-8');
-      // Strip TypeScript types using SWC for es-module-lexer compatibility
-      // Need to preserve JSX syntax for proper parsing
+      // Quitar tipos TypeScript con SWC para compatibilidad con es-module-lexer
+      // Se preserva sintaxis JSX para un análisis correcto
       const { code } = transformSync(content, {
         mode: 'transform',
         filename: file,
@@ -154,11 +154,11 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     routes.push(route);
   }
 
-  // Validate routes
+  // Validar rutas
   const validationErrors = validateRoutes(routes);
   errors.push(...validationErrors);
 
-  // Sort routes by priority
+  // Ordenar rutas por prioridad
   const sortedRoutes = sortRoutes(routes);
 
   return {
