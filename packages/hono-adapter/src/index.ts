@@ -219,6 +219,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   const manifestPath = resolve(root, clientDir, '.vite/manifest.json');
   type ManifestEntry = {
     file: string;
+    css?: string[];
     imports?: string[];
     dynamicImports?: string[];
   };
@@ -243,25 +244,44 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     return relativePath;
   };
 
-  const collectPreloadScripts = (routes: RouteRecord[], pathname: string): string[] => {
+  const isScriptAsset = (filePath: string): boolean => {
+    return filePath.endsWith('.js') || filePath.endsWith('.mjs');
+  };
+
+  const collectManifestAssets = (
+    routes: RouteRecord[],
+    pathname: string
+  ): { preloadScripts: string[]; styles: string[] } => {
     const preloadScripts = new Set<string>();
+    const styles = new Set<string>();
     preloadScripts.add(entryClientScript);
 
     const manifestKeys = Object.keys(manifest);
     if (manifestKeys.length === 0) {
-      return Array.from(preloadScripts);
+      return {
+        preloadScripts: Array.from(preloadScripts),
+        styles: Array.from(styles),
+      };
     }
 
+    const visited = new Set<string>();
     const visit = (key: string): void => {
+      if (visited.has(key)) {
+        return;
+      }
+      visited.add(key);
       const entry = manifest[key];
       if (!entry) {
         return;
       }
-      const href = `/${entry.file}`;
-      if (preloadScripts.has(href)) {
-        return;
+
+      if (entry.file && isScriptAsset(entry.file)) {
+        const href = `/${entry.file}`;
+        preloadScripts.add(href);
       }
-      preloadScripts.add(href);
+      for (const cssPath of entry.css ?? []) {
+        styles.add(`/${cssPath}`);
+      }
       for (const importKey of entry.imports ?? []) {
         visit(importKey);
       }
@@ -278,7 +298,10 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       visit(routeKey);
     }
 
-    return Array.from(preloadScripts);
+    return {
+      preloadScripts: Array.from(preloadScripts),
+      styles: Array.from(styles),
+    };
   };
 
   // Servir assets estáticos desde el directorio de build del cliente
@@ -378,13 +401,14 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       }
 
       // Generar HTML completo
-      const preloadScripts = collectPreloadScripts(routes, url.pathname);
+      const { preloadScripts, styles } = collectManifestAssets(routes, url.pathname);
       const html = generateHTML({
         html: `<div id="root">${result.html}</div>`,
         head: result.head,
         initialData: result.initialData,
         scripts: [entryClientScript],
         preloadScripts,
+        styles,
         scriptPlacement: 'head',
       });
 

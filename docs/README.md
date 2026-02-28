@@ -12,6 +12,7 @@ docs/
   README.md
   guias/
     getting-started.md
+    css.md
     routing.md
     router.md
     head.md
@@ -25,13 +26,14 @@ docs/
 ## Orden recomendado de lectura
 
 1. [Guía de inicio](./guias/getting-started.md)
-2. [Routing](./guias/routing.md)
-3. [Router](./guias/router.md)
-4. [Head](./guias/head.md)
-5. [Data loading](./guias/data-loading.md)
-6. [SSR](./guias/ssr.md)
-7. [SSG](./guias/ssg.md)
-8. [Publicación en GitHub Packages](./operaciones/github-packages-checklist.md)
+2. [CSS](./guias/css.md)
+3. [Routing](./guias/routing.md)
+4. [Router](./guias/router.md)
+5. [Head](./guias/head.md)
+6. [Data loading](./guias/data-loading.md)
+7. [SSR](./guias/ssr.md)
+8. [SSG](./guias/ssg.md)
+9. [Publicación en GitHub Packages](./operaciones/github-packages-checklist.md)
 
 ## Mantenimiento
 

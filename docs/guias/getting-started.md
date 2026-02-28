@@ -1,4 +1,4 @@
-# Guía de Inicio
+# Guía de inicio
 
 Guía rápida y actualizada para empezar con Suamox.
 
@@ -44,6 +44,8 @@ my-suamox-app/
   src/
     entry-client.tsx
     entry-server.tsx
+    styles/
+      global.css
     pages/
       layout.tsx
       index.tsx
@@ -89,6 +91,7 @@ pnpm run preview
 
 ## 6) Siguientes pasos
 
+- [css.md](./css.md): estilos globales, CSS Modules y comportamiento en SSR/SSG.
 - [routing.md](./routing.md): convenciones de rutas y layouts.
 - [router.md](./router.md): navegación cliente y API de `startRouter`.
 - [head.md](./head.md): manejo de metadatos con `<Head>`.

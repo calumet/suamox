@@ -57,6 +57,16 @@ dist/
   static/   # HTML prerenderizado + copia de client en static/client
 ```
 
+## CSS en SSG
+
+Durante `suamox ssg`, el runtime:
+
+- Lee `dist/client/.vite/manifest.json`.
+- Resuelve CSS del entry y del módulo de ruta.
+- Inyecta `<link rel="stylesheet">` en cada HTML generado.
+
+Esto evita páginas estáticas sin estilos al servir `dist/static`.
+
 ## Comportamiento en producción
 
 Al usar `suamox preview`:

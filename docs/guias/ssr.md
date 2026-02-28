@@ -30,6 +30,7 @@ En producción, el adaptador:
 - Sirve assets de `dist/client`.
 - Importa `dist/server/entry-server.js`.
 - Renderiza SSR con el runtime.
+- Inyecta scripts y CSS leyendo el manifest de Vite.
 - Si existe HTML estático en `dist/static`, lo sirve como fallback preferente.
 
 ## Hooks del adaptador
@@ -62,4 +63,5 @@ Siempre está disponible:
 El runtime genera HTML completo e inyecta:
 
 - `window.__INITIAL_DATA__` con datos serializados de `loader()`.
-- Scripts/preloads de cliente para hidratación.
+- `<link rel="stylesheet">` para CSS resuelto desde manifest.
+- Scripts y preloads de cliente para hidratación.

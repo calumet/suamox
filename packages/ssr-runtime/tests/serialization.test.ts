@@ -165,6 +165,28 @@ describe('generateHTML', () => {
     expect(html).toContain('<script type="module" src="/assets/vendor.js"></script>');
   });
 
+  it('should include stylesheet links', () => {
+    const html = generateHTML({
+      html: '<div>Content</div>',
+      styles: ['/assets/main.css', '/assets/vendor.css'],
+    });
+
+    expect(html).toContain('<link rel="stylesheet" href="/assets/main.css">');
+    expect(html).toContain('<link rel="stylesheet" href="/assets/vendor.css">');
+  });
+
+  it('should deduplicate repeated styles and scripts', () => {
+    const html = generateHTML({
+      html: '<div>Content</div>',
+      styles: ['/assets/main.css', '/assets/main.css'],
+      scripts: ['/assets/main.js', '/assets/main.js'],
+      preloadScripts: ['/assets/main.js', '/assets/main.js'],
+    });
+
+    expect(html.match(/\/assets\/main\.css/g)?.length).toBe(1);
+    expect(html.match(/\/assets\/main\.js/g)?.length).toBe(2);
+  });
+
   it('should handle no scripts', () => {
     const html = generateHTML({
       html: '<div>Content</div>',

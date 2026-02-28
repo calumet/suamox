@@ -1,3 +1,4 @@
+<!-- prettier-ignore -->
 # __NAME__
 
 Aplicación inicial construida con Suamox, Vite, React y Hono.
@@ -23,7 +24,7 @@ Igualmente necesitas autenticación en tu `~/.npmrc` de usuario (o en CI):
 
 `GITHUB_TOKEN` debe ser un Personal Access Token con permisos de lectura de paquetes.
 
-## Inicio Rápido
+## Inicio rápido
 
 ```bash
 pnpm install
@@ -34,18 +35,20 @@ Abre `http://localhost:3000`.
 
 ## Scripts
 
-- `pnpm run dev`: Inicia servidor de desarrollo con SSR.
-- `pnpm run build`: Compila bundles de cliente y servidor.
-- `pnpm run build:ssg`: Genera salida estática (SSG).
-- `pnpm run preview`: Previsualiza salida de producción.
-- `pnpm run typecheck`: Ejecuta validaciones de TypeScript.
+- `pnpm run dev`: inicia servidor de desarrollo con SSR.
+- `pnpm run build`: compila cliente + servidor y luego ejecuta SSG.
+- `pnpm run build:ssg`: genera salida estática (SSG).
+- `pnpm run preview`: previsualiza salida de producción.
+- `pnpm run typecheck`: ejecuta validaciones de TypeScript.
 
-## Estructura del Proyecto
+## Estructura del proyecto
 
 ```txt
 src/
   entry-client.tsx   # Bootstrap del cliente
   entry-server.tsx   # Entry del manifest de rutas del servidor
+  styles/
+    global.css       # Estilos globales
   pages/
     layout.tsx       # Layout raíz
     index.tsx        # Página de inicio (/)
@@ -53,7 +56,13 @@ server.ts            # Entry del servidor Hono
 vite.config.ts       # Vite + plugin suamoxPages
 ```
 
-## Convenciones de Routing
+## CSS
+
+- Importa estilos globales desde `src/entry-client.tsx`.
+- Para estilos por componente/página usa `*.module.css`.
+- En build/SSR/SSG Suamox resuelve CSS usando el manifest de Vite.
+
+## Convenciones de routing
 
 - Los archivos bajo `src/pages` definen rutas.
 - `index.tsx` corresponde a `/`.
@@ -61,7 +70,7 @@ vite.config.ts       # Vite + plugin suamoxPages
 - Las rutas catch-all usan `[...all].tsx`.
 - Carpetas de grupo como `(admin)` no afectan segmentos de URL.
 
-## Siguientes Pasos
+## Siguientes pasos
 
 1. Agrega nuevas páginas en `src/pages`.
 2. Agrega `loader()` y `getStaticPaths()` donde haga falta.

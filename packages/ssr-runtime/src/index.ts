@@ -344,6 +344,7 @@ export function generateHTML(options: {
   initialData?: unknown;
   scripts?: string[];
   preloadScripts?: string[];
+  styles?: string[];
   includeInitialDataScript?: boolean;
   scriptPlacement?: 'head' | 'body';
 }): string {
@@ -353,15 +354,24 @@ export function generateHTML(options: {
     initialData,
     scripts = [],
     preloadScripts = [],
+    styles = [],
     includeInitialDataScript = true,
     scriptPlacement = 'body',
   } = options;
 
-  const preloadTags = preloadScripts
+  const uniqueStyles = Array.from(new Set(styles));
+  const uniquePreloadScripts = Array.from(new Set(preloadScripts));
+  const uniqueScripts = Array.from(new Set(scripts));
+
+  const styleTags = uniqueStyles
+    .map((href) => `<link rel="stylesheet" href="${href}">`)
+    .join('\n    ');
+
+  const preloadTags = uniquePreloadScripts
     .map((href) => `<link rel="modulepreload" href="${href}">`)
     .join('\n    ');
 
-  const scriptTags = scripts
+  const scriptTags = uniqueScripts
     .map((src) => `<script type="module" src="${src}"></script>`)
     .join('\n    ');
 
@@ -371,7 +381,7 @@ export function generateHTML(options: {
     </script>`
     : '';
 
-  const headContent = [head, preloadTags, scriptPlacement === 'head' ? scriptTags : '']
+  const headContent = [head, styleTags, preloadTags, scriptPlacement === 'head' ? scriptTags : '']
     .filter(Boolean)
     .join('\n    ');
   const bodyScripts = scriptPlacement === 'body' ? scriptTags : '';

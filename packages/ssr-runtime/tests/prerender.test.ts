@@ -93,4 +93,24 @@ describe('prerender', () => {
 
     expect(docHtml).toContain('Doc guide/getting-started');
   });
+
+  it('injects stylesheet links from resolved assets', async () => {
+    const route = createMockRoute({
+      path: '/',
+      prerender: true,
+      component: (() => createElement('div', null, 'Home')) as RouteRecord['component'],
+    });
+
+    await prerender({
+      routes: [route],
+      outDir,
+      baseUrl: 'http://localhost',
+      resolveAssets: () => ({
+        styles: ['/client/assets/app.css'],
+      }),
+    });
+
+    const indexHtml = await readFile(join(outDir, 'index.html'), 'utf-8');
+    expect(indexHtml).toContain('<link rel="stylesheet" href="/client/assets/app.css">');
+  });
 });
