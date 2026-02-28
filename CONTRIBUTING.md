@@ -92,9 +92,11 @@ Usa mensajes claros y descriptivos:
 ## Pull Requests
 
 1. Asegura que todos los checks pasen (typecheck, build).
-2. Actualiza documentación si aplica.
-3. Agrega tests para funcionalidades nuevas.
-4. Referencia issues relacionados.
+2. Si cambias cualquier `package.json`, actualiza y commitea `pnpm-lock.yaml` ejecutando `pnpm install`.
+3. Valida lockfile con `pnpm install --frozen-lockfile` antes de abrir el PR.
+4. Actualiza documentación si aplica.
+5. Agrega tests para funcionalidades nuevas.
+6. Referencia issues relacionados.
 
 ## Versionado y Publicación
 

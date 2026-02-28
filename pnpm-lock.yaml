@@ -85,7 +85,7 @@ importers:
   packages/cli:
     dependencies:
       '@calumet/suamox':
-        specifier: ^0.1.0
+        specifier: ^0.1.1
         version: link:../ssr-runtime
     devDependencies:
       '@types/node':
