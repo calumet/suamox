@@ -3,7 +3,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import type { Context } from 'hono';
 import type { ViteDevServer } from 'vite';
 import pc from 'picocolors';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -34,48 +34,71 @@ export interface ProdHandlerOptions extends HonoAdapterOptions {
   staticDir?: string;
 }
 
-/**
- * Recorre el grafo de módulos de Vite recolectando todo el CSS importado
- * transitivamente desde los entry points dados.
- */
-async function collectDevCss(vite: ViteDevServer, entryUrls: string[]): Promise<string> {
-  const cssContents: string[] = [];
-  const visited = new Set<string>();
+const cssImportPattern =
+  /import\s+(?:[^'"]+\s+from\s+)?['"]([^'"]+\.css(?:\?[^'"]*)?)['"]/g;
 
-  const walk = async (mod: {
-    url: string;
-    type: string;
-    importedModules: Set<{ url: string; type: string; importedModules: Set<unknown> }>;
-  }): Promise<void> => {
-    if (visited.has(mod.url)) return;
-    visited.add(mod.url);
+const toPosixPath = (value: string): string => value.replace(/\\/g, '/');
 
-    if (mod.type === 'css' || mod.url.endsWith('.css')) {
-      try {
-        const m = (await vite.ssrLoadModule(mod.url)) as Record<string, unknown>;
-        const content = typeof m.default === 'string' ? m.default : '';
-        if (content) cssContents.push(content);
-      } catch {
-        // El modulo CSS no se pudo cargar, skip
+const splitQuery = (value: string): { path: string; query: string } => {
+  const queryIndex = value.indexOf('?');
+  if (queryIndex < 0) {
+    return { path: value, query: '' };
+  }
+  return {
+    path: value.slice(0, queryIndex),
+    query: value.slice(queryIndex),
+  };
+};
+
+const collectCssImportsFromEntryClient = async (
+  root: string,
+  vite?: ViteDevServer
+): Promise<string[]> => {
+  const entryClientPath = resolve(root, 'src', 'entry-client.tsx');
+  let entryClientSource = '';
+  try {
+    entryClientSource = await readFile(entryClientPath, 'utf-8');
+  } catch {
+    return [];
+  }
+
+  const links = new Set<string>();
+  for (const match of entryClientSource.matchAll(cssImportPattern)) {
+    const rawImport = match[1];
+    if (!rawImport) {
+      continue;
+    }
+
+    const { path, query } = splitQuery(rawImport);
+    let href: string | null = null;
+
+    if (path.startsWith('/')) {
+      href = `${path}${query}`;
+    } else if (path.startsWith('.')) {
+      const absoluteCssPath = resolve(dirname(entryClientPath), path);
+      const relativeCssPath = relative(root, absoluteCssPath);
+      if (!relativeCssPath.startsWith('..') && !isAbsolute(relativeCssPath)) {
+        href = `/${toPosixPath(relativeCssPath)}${query}`;
       }
     }
 
-    for (const imported of mod.importedModules) {
-      await walk(imported as typeof mod);
+    if (!href) {
+      continue;
     }
-  };
 
-  for (const url of entryUrls) {
-    try {
-      const mod = await vite.moduleGraph.getModuleByUrl(url, true);
-      if (mod) await walk(mod as unknown as Parameters<typeof walk>[0]);
-    } catch {
-      // No se pudo cargar el módulo de entrada, skip
+    if (typeof vite?.transformRequest === 'function') {
+      try {
+        await vite.transformRequest(href);
+      } catch {
+        continue;
+      }
     }
+
+    links.add(href);
   }
 
-  return cssContents.join('\n');
-}
+  return Array.from(links);
+};
 
 /**
  * Crea una app de Hono con soporte SSR
@@ -163,8 +186,9 @@ export async function createServer(options: CreateServerOptions): Promise<void> 
  * Crea el handler de desarrollo con integración de Vite
  */
 export function createDevHandler(options: DevHandlerOptions): Hono {
-  const { vite, onRequest, onBeforeRender, onAfterRender } = options;
+  const { vite, onRequest, onBeforeRender, onAfterRender, root = process.cwd() } = options;
   const app = createHonoApp(options);
+  const devCssLinksPromise = collectCssImportsFromEntryClient(root, vite);
 
   // Handler SSR para páginas (el middleware de Vite se maneja en createServer)
   app.use('*', async (c) => {
@@ -197,26 +221,10 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         result = await onAfterRender(result);
       }
 
-      // Cargar entry-client para poblar el grafo con CSS globales
-      try {
-        await vite.ssrLoadModule('/src/entry-client.tsx');
-      } catch {
-        // entry-client usa APIs del browser, el error es esperado
-      }
-
-      // Recolectar todo el CSS del grafo de módulos
-      let devCssTag = '';
-      try {
-        const cssContent = await collectDevCss(vite, [
-          '/src/entry-client.tsx',
-          'virtual:pages',
-        ]);
-        if (cssContent) {
-          devCssTag = `<style data-dev-css>${cssContent}</style>`;
-        }
-      } catch {
-        // Error recolectando CSS, se continuará sin estilos en dev
-      }
+      const devCssLinks = await devCssLinksPromise;
+      const devCssTags = devCssLinks
+        .map((href) => `<link rel="stylesheet" href="${href}">`)
+        .join('\n    ');
 
       // Leer y transformar index.html
       const template = await vite.transformIndexHtml(
@@ -226,7 +234,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    ${devCssTag}
+    ${devCssTags}
     ${result.head || ''}
     <link rel="modulepreload" href="/src/entry-client.tsx">
     <script type="module" src="/src/entry-client.tsx"></script>

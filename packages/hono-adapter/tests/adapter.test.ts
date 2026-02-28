@@ -39,7 +39,15 @@ describe('createDevHandler', () => {
     mocks.serializeData.mockClear();
   });
 
-  it('runs hooks and injects initial data with auto-collected CSS', async () => {
+  it('runs hooks and injects initial data with css links from entry-client', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'suamox-dev-'));
+    await mkdir(join(root, 'src', 'styles'), { recursive: true });
+    await writeFile(
+      join(root, 'src', 'entry-client.tsx'),
+      "import './styles/global.css';\nvoid Promise.resolve();\n"
+    );
+    await writeFile(join(root, 'src', 'styles', 'global.css'), 'body{color:red}');
+
     mocks.renderPage.mockResolvedValue({
       status: 200,
       html: '<div>Before</div>',
@@ -48,39 +56,13 @@ describe('createDevHandler', () => {
     });
 
     const routes: unknown[] = [];
-
-    const globalCssMod = {
-      url: '/src/styles/global.css',
-      type: 'css' as const,
-      importedModules: new Set(),
-    };
-    const entryClientMod = {
-      url: '/src/entry-client.tsx',
-      type: 'js' as const,
-      importedModules: new Set([globalCssMod]),
-    };
-    const virtualPagesMod = {
-      url: 'virtual:pages',
-      type: 'js' as const,
-      importedModules: new Set(),
-    };
-
-    const ssrLoadModule = vi.fn((id: string) => {
-      if (id === '/src/styles/global.css') return Promise.resolve({ default: 'body{color:red}' });
-      if (id === '/src/entry-client.tsx') return Promise.resolve({});
-      return Promise.resolve({ routes });
-    });
-    const getModuleByUrl = vi.fn((url: string) => {
-      if (url === '/src/entry-client.tsx') return Promise.resolve(entryClientMod);
-      if (url === 'virtual:pages') return Promise.resolve(virtualPagesMod);
-      return Promise.resolve(undefined);
-    });
+    const ssrLoadModule = vi.fn((_id: string) => Promise.resolve({ routes }));
     const transformIndexHtml = vi.fn((_url: string, html: string) => Promise.resolve(html));
     const vite = {
       ssrLoadModule,
       transformIndexHtml,
       ssrFixStacktrace: vi.fn(),
-      moduleGraph: { getModuleByUrl },
+      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: '' })),
     } as unknown as ViteDevServer;
 
     const onBeforeRender = vi.fn((ctx: RenderOptions) => ({ ...ctx, pathname: '/changed' }));
@@ -89,7 +71,7 @@ describe('createDevHandler', () => {
       html: '<div>After</div>',
     }));
 
-    const app = createDevHandler({ vite, onBeforeRender, onAfterRender });
+    const app = createDevHandler({ vite, onBeforeRender, onAfterRender, root });
     const response = await app.request('http://localhost/');
     const body = await response.text();
 
@@ -101,72 +83,50 @@ describe('createDevHandler', () => {
     expect(transformIndexHtml).toHaveBeenCalledTimes(1);
     expect(body).toContain('<div>After</div>');
     expect(body).toContain('window.__INITIAL_DATA__ = {"ok":true}');
-    expect(body).toContain('<style data-dev-css>body{color:red}</style>');
+    expect(body).toContain('<link rel="stylesheet" href="/src/styles/global.css">');
   });
 
-  it('collects CSS from multiple modules across the graph', async () => {
+  it('injects multiple css imports from entry-client', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'suamox-dev-'));
+    await mkdir(join(root, 'src', 'styles'), { recursive: true });
+    await writeFile(
+      join(root, 'src', 'entry-client.tsx'),
+      "import './styles/global.css';\nimport './styles/theme.css';\nvoid Promise.resolve();\n"
+    );
+    await writeFile(join(root, 'src', 'styles', 'global.css'), 'body{margin:0}');
+    await writeFile(join(root, 'src', 'styles', 'theme.css'), ':root{color-scheme:light}');
+
     mocks.renderPage.mockResolvedValue({
       status: 200,
       html: '<div>Page</div>',
       head: '',
       initialData: null,
     });
-
-    const pageCssMod = {
-      url: '/src/pages/index.module.css',
-      type: 'css' as const,
-      importedModules: new Set(),
-    };
-    const globalCssMod = {
-      url: '/src/styles/global.css',
-      type: 'css' as const,
-      importedModules: new Set(),
-    };
-    const pageComponentMod = {
-      url: '/src/pages/index.tsx',
-      type: 'js' as const,
-      importedModules: new Set([pageCssMod]),
-    };
-    const entryClientMod = {
-      url: '/src/entry-client.tsx',
-      type: 'js' as const,
-      importedModules: new Set([globalCssMod]),
-    };
-    const virtualPagesMod = {
-      url: 'virtual:pages',
-      type: 'js' as const,
-      importedModules: new Set([pageComponentMod]),
-    };
-
-    const ssrLoadModule = vi.fn((id: string) => {
-      if (id === '/src/styles/global.css') return Promise.resolve({ default: 'body{margin:0}' });
-      if (id === '/src/pages/index.module.css') return Promise.resolve({ default: '.root{color:blue}' });
-      if (id === '/src/entry-client.tsx') return Promise.resolve({});
-      return Promise.resolve({ routes: [] });
-    });
-    const getModuleByUrl = vi.fn((url: string) => {
-      if (url === '/src/entry-client.tsx') return Promise.resolve(entryClientMod);
-      if (url === 'virtual:pages') return Promise.resolve(virtualPagesMod);
-      return Promise.resolve(undefined);
-    });
+    const ssrLoadModule = vi.fn((_id: string) => Promise.resolve({ routes: [] }));
 
     const vite = {
       ssrLoadModule,
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
       ssrFixStacktrace: vi.fn(),
-      moduleGraph: { getModuleByUrl },
+      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: '' })),
     } as unknown as ViteDevServer;
 
-    const app = createDevHandler({ vite });
+    const app = createDevHandler({ vite, root });
     const response = await app.request('http://localhost/');
     const body = await response.text();
 
-    expect(body).toContain('body{margin:0}');
-    expect(body).toContain('.root{color:blue}');
-    expect(body).toContain('data-dev-css');
+    expect(body).toContain('<link rel="stylesheet" href="/src/styles/global.css">');
+    expect(body).toContain('<link rel="stylesheet" href="/src/styles/theme.css">');
   });
 
-  it('handles empty module graph gracefully', async () => {
+  it('skips missing css imports referenced by entry-client', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'suamox-dev-'));
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(
+      join(root, 'src', 'entry-client.tsx'),
+      "import './styles/missing.css';\nvoid Promise.resolve();\n"
+    );
+
     mocks.renderPage.mockResolvedValue({
       status: 200,
       html: '<div>Page</div>',
@@ -178,14 +138,14 @@ describe('createDevHandler', () => {
       ssrLoadModule: vi.fn(() => Promise.resolve({ routes: [] })),
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
       ssrFixStacktrace: vi.fn(),
-      moduleGraph: { getModuleByUrl: vi.fn(() => Promise.resolve(undefined)) },
+      transformRequest: vi.fn((_url: string) => Promise.reject(new Error('missing'))),
     } as unknown as ViteDevServer;
 
-    const app = createDevHandler({ vite });
+    const app = createDevHandler({ vite, root });
     const response = await app.request('http://localhost/');
     const body = await response.text();
 
-    expect(body).not.toContain('data-dev-css');
+    expect(body).not.toContain('<link rel="stylesheet"');
     expect(response.status).toBe(200);
   });
 });

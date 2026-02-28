@@ -73,18 +73,17 @@ El runtime genera HTML completo e inyecta:
 En `dev`, Vite inyecta CSS mediante HMR y puede haber un flash inicial sin estilos
 (FOUC) porque los estilos se cargan vía JavaScript.
 
-Para mitigar esto, Suamox recorre automáticamente el grafo de módulos de Vite después
-del render SSR y recolecta **todo el CSS** importado (global, por página, por componente)
-para inyectarlo inline como `<style data-dev-css>` en el HTML inicial.
+Para mitigarlo, Suamox detecta imports `.css` en `src/entry-client.tsx` e inyecta
+`<link rel="stylesheet">` en el HTML SSR inicial.
 
-Esto cubre:
+Ejemplo recomendado:
 
-- Estilos globales importados en `entry-client.tsx` (e.g., `import './styles/global.css'`)
-- CSS Modules importados en páginas y layouts
-- Cualquier CSS transitivamente importado por componentes
-- Tailwind, PostCSS y preprocesadores (se procesan a través del pipeline de Vite)
+```ts
+// src/entry-client.tsx
+import './styles/global.css';
+```
 
-No se requiere configuración. La recolección ocurre de forma automática en desarrollo.
+Si ese archivo existe y Vite lo resuelve, se enlaza automáticamente durante SSR dev.
 
 La referencia final de comportamiento visual sigue siendo
 `pnpm run build` + `pnpm run preview`.
