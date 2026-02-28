@@ -82,15 +82,42 @@ const scrollToLocation = (hash: string): void => {
   }
 };
 
-const ensureAdapter = async (adapter?: HydrationAdapter): Promise<HydrationAdapter> => {
-  if (adapter) {
-    return adapter;
+const asRecord = (value: unknown): Record<string, unknown> =>
+  (value ?? {}) as Record<string, unknown>;
+
+const normalizeAdapterLike = (value: unknown): HydrationAdapter | null => {
+  const source = asRecord(value);
+  const sourceDefault = asRecord(source.default);
+
+  const hydrateRoot =
+    (source.hydrateRoot as HydrationAdapter['hydrateRoot'] | undefined) ??
+    (sourceDefault.hydrateRoot as HydrationAdapter['hydrateRoot'] | undefined);
+  const createRoot =
+    (source.createRoot as HydrationAdapter['createRoot'] | undefined) ??
+    (sourceDefault.createRoot as HydrationAdapter['createRoot'] | undefined);
+
+  if (typeof hydrateRoot !== 'function' || typeof createRoot !== 'function') {
+    return null;
   }
+
+  return { hydrateRoot, createRoot };
+};
+
+const ensureAdapter = async (adapter?: HydrationAdapter): Promise<HydrationAdapter> => {
+  const normalizedAdapter = normalizeAdapterLike(adapter);
+  if (normalizedAdapter) {
+    return normalizedAdapter;
+  }
+
   const client = await import('react-dom/client');
-  return {
-    hydrateRoot: client.hydrateRoot,
-    createRoot: client.createRoot,
-  };
+  const normalizedClientAdapter = normalizeAdapterLike(client);
+  if (normalizedClientAdapter) {
+    return normalizedClientAdapter;
+  }
+
+  throw new TypeError(
+    '[suamox-router] Could not resolve react-dom/client hydration APIs (hydrateRoot/createRoot).'
+  );
 };
 
 export async function startRouter(options: RouterOptions): Promise<RouterInstance> {
