@@ -89,12 +89,6 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
         }
       });
 
-      server.watcher.on('change', (file) => {
-        if (file.startsWith(absolutePagesDir) && extensions.some((ext) => file.endsWith(ext))) {
-          // El contenido cambio pero la ruta es la misma: no hace falta regenerar rutas
-          // Se deja que el HMR normal de Vite lo maneje
-        }
-      });
     },
 
     async buildStart() {

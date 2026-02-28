@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { serveStatic } from '@hono/node-server/serve-static';
 import type { Context } from 'hono';
+import type { IncomingHttpHeaders, IncomingMessage } from 'node:http';
 import type { ViteDevServer } from 'vite';
 import pc from 'picocolors';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
@@ -38,6 +39,46 @@ const cssImportPattern =
   /import\s+(?:[^'"]+\s+from\s+)?['"]([^'"]+\.css(?:\?[^'"]*)?)['"]/g;
 
 const toPosixPath = (value: string): string => value.replace(/\\/g, '/');
+
+const toFetchHeaders = (headers: IncomingHttpHeaders): Headers => {
+  const mappedHeaders = new Headers();
+
+  for (const [key, value] of Object.entries(headers)) {
+    if (typeof value === 'string') {
+      mappedHeaders.set(key, value);
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      for (const headerValue of value) {
+        mappedHeaders.append(key, headerValue);
+      }
+    }
+  }
+
+  return mappedHeaders;
+};
+
+const methodSupportsRequestBody = (method: string): boolean => {
+  const normalizedMethod = method.toUpperCase();
+  return normalizedMethod !== 'GET' && normalizedMethod !== 'HEAD';
+};
+
+const toFetchRequest = (req: IncomingMessage): Request => {
+  const method = req.method ?? 'GET';
+  const requestUrl = `http://${req.headers.host || 'localhost'}${req.url || '/'}`;
+  const init: RequestInit & { duplex?: 'half'; body?: unknown } = {
+    method,
+    headers: toFetchHeaders(req.headers),
+  };
+
+  if (methodSupportsRequestBody(method)) {
+    init.body = req;
+    init.duplex = 'half';
+  }
+
+  return new Request(requestUrl, init as RequestInit);
+};
 
 const splitQuery = (value: string): { path: string; query: string } => {
   const queryIndex = value.indexOf('?');
@@ -144,17 +185,7 @@ export async function createServer(options: CreateServerOptions): Promise<void> 
       // Intentar primero el middleware de Vite
       vite.middlewares(req, res, async () => {
         // Si Vite no lo maneja, usar Hono
-        const headers: Record<string, string> = {};
-        for (const [key, value] of Object.entries(req.headers)) {
-          if (typeof value === 'string') {
-            headers[key] = value;
-          }
-        }
-
-        const request = new Request(`http://${req.headers.host || 'localhost'}${req.url || '/'}`, {
-          method: req.method,
-          headers,
-        });
+        const request = toFetchRequest(req);
 
         const response = await app.fetch(request);
         res.writeHead(response.status, Object.fromEntries(response.headers.entries()));
@@ -188,7 +219,6 @@ export async function createServer(options: CreateServerOptions): Promise<void> 
 export function createDevHandler(options: DevHandlerOptions): Hono {
   const { vite, onRequest, onBeforeRender, onAfterRender, root = process.cwd() } = options;
   const app = createHonoApp(options);
-  const devCssLinksPromise = collectCssImportsFromEntryClient(root, vite);
 
   // Handler SSR para páginas (el middleware de Vite se maneja en createServer)
   app.use('*', async (c) => {
@@ -221,7 +251,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         result = await onAfterRender(result);
       }
 
-      const devCssLinks = await devCssLinksPromise;
+      const devCssLinks = await collectCssImportsFromEntryClient(root, vite);
       const devCssTags = devCssLinks
         .map((href) => `<link rel="stylesheet" href="${href}">`)
         .join('\n    ');

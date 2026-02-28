@@ -148,6 +148,48 @@ describe('createDevHandler', () => {
     expect(body).not.toContain('<link rel="stylesheet"');
     expect(response.status).toBe(200);
   });
+
+  it('refreshes css links when entry-client imports change', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'suamox-dev-'));
+    await mkdir(join(root, 'src', 'styles'), { recursive: true });
+    await writeFile(
+      join(root, 'src', 'entry-client.tsx'),
+      "import './styles/first.css';\nvoid Promise.resolve();\n"
+    );
+    await writeFile(join(root, 'src', 'styles', 'first.css'), 'body{margin:0}');
+    await writeFile(join(root, 'src', 'styles', 'second.css'), 'body{padding:0}');
+
+    mocks.renderPage.mockResolvedValue({
+      status: 200,
+      html: '<div>Page</div>',
+      head: '',
+      initialData: null,
+    });
+
+    const vite = {
+      ssrLoadModule: vi.fn(() => Promise.resolve({ routes: [] })),
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+      ssrFixStacktrace: vi.fn(),
+      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: '' })),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite, root });
+
+    const firstResponse = await app.request('http://localhost/');
+    const firstBody = await firstResponse.text();
+    expect(firstBody).toContain('<link rel="stylesheet" href="/src/styles/first.css">');
+    expect(firstBody).not.toContain('<link rel="stylesheet" href="/src/styles/second.css">');
+
+    await writeFile(
+      join(root, 'src', 'entry-client.tsx'),
+      "import './styles/second.css';\nvoid Promise.resolve();\n"
+    );
+
+    const secondResponse = await app.request('http://localhost/');
+    const secondBody = await secondResponse.text();
+    expect(secondBody).toContain('<link rel="stylesheet" href="/src/styles/second.css">');
+    expect(secondBody).not.toContain('<link rel="stylesheet" href="/src/styles/first.css">');
+  });
 });
 
 describe('createProdHandler', () => {

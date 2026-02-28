@@ -1,8 +1,7 @@
 import { basename, dirname, resolve } from 'node:path';
-import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import fg from 'fast-glob';
 import { init, parse } from 'es-module-lexer';
-import { transformSync } from '@swc/wasm-typescript';
 import type { RouteRecord } from './types.js';
 import { parseRoute, sortRoutes, validateRoutes } from './parser.js';
 
@@ -113,46 +112,34 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     layoutMap.set(dirname(layoutFile), layoutFile);
   }
 
-  // Parsear cada archivo a una ruta
-  const routes: RouteRecord[] = [];
   const errors: string[] = [];
+  const routes = await Promise.all(
+    pageFiles.map(async (file): Promise<RouteRecord> => {
+      const { route, errors: parseErrors } = parseRoute(file, absolutePagesDir);
 
-  for (const file of pageFiles) {
-    const { route, errors: parseErrors } = parseRoute(file, absolutePagesDir);
+      if (parseErrors.length > 0) {
+        errors.push(...parseErrors.map((err) => `${file}: ${err}`));
+      }
 
-    if (parseErrors.length > 0) {
-      errors.push(...parseErrors.map((err) => `${file}: ${err}`));
-    }
+      route.layouts = collectLayoutsForFile(file, layoutMap, absolutePagesDir);
 
-    route.layouts = collectLayoutsForFile(file, layoutMap, absolutePagesDir);
+      // Verificar exports con es-module-lexer cuando el archivo sea parseable como ESM.
+      let content = '';
+      try {
+        content = await readFile(file, 'utf-8');
+        const [, exports] = parse(content);
+        route.hasLoader = exports.some((exp) => exp.n === 'loader');
+        route.hasGetStaticPaths = exports.some((exp) => exp.n === 'getStaticPaths');
+        route.hasPrerender = exports.some((exp) => exp.n === 'prerender');
+      } catch {
+        route.hasLoader = fallbackHasLoader(content);
+        route.hasGetStaticPaths = fallbackHasGetStaticPaths(content);
+        route.hasPrerender = fallbackHasPrerender(content);
+      }
 
-    // Verificar si el archivo exporta loader usando es-module-lexer
-    let content = '';
-    try {
-      content = readFileSync(file, 'utf-8');
-      // Quitar tipos TypeScript con SWC para compatibilidad con es-module-lexer
-      // Se preserva sintaxis JSX para un análisis correcto
-      const { code } = transformSync(content, {
-        mode: 'transform',
-        filename: file,
-        transform: {
-          jsx: {
-            transform: 'react-jsx',
-          },
-        },
-      });
-      const [, exports] = parse(code);
-      route.hasLoader = exports.some((exp) => exp.n === 'loader');
-      route.hasGetStaticPaths = exports.some((exp) => exp.n === 'getStaticPaths');
-      route.hasPrerender = exports.some((exp) => exp.n === 'prerender');
-    } catch {
-      route.hasLoader = fallbackHasLoader(content);
-      route.hasGetStaticPaths = fallbackHasGetStaticPaths(content);
-      route.hasPrerender = fallbackHasPrerender(content);
-    }
-
-    routes.push(route);
-  }
+      return route;
+    })
+  );
 
   // Validar rutas
   const validationErrors = validateRoutes(routes);

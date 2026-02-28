@@ -79,6 +79,12 @@ describe('serializeData', () => {
     expect(result).toBe('{}');
   });
 
+  it('should serialize top-level undefined as null', () => {
+    const result = serializeData(undefined);
+
+    expect(result).toBe('null');
+  });
+
   it('should handle numbers', () => {
     const data = { count: 42, price: 19.99 };
     const result = serializeData(data);

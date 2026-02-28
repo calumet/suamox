@@ -65,4 +65,35 @@ describe('scanRoutes layouts', () => {
     expect(routeFiles).not.toContain(blogLayout);
     expect(routeFiles).not.toContain(adminLayout);
   });
+
+  it('detects loader, getStaticPaths and prerender exports in tsx pages', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'suamox-pages-'));
+    const pagesDir = join(root, 'src', 'pages');
+    const blogPage = join(pagesDir, 'blog', '[slug].tsx');
+
+    await writeFileWithDirs(
+      blogPage,
+      `export const prerender: boolean = true;
+export async function getStaticPaths(): Promise<Array<{ params: { slug: string } }>> {
+  return [{ params: { slug: 'hello' } }];
+}
+export const loader = async (ctx: { params: { slug: string } }) => ({ slug: ctx.params.slug });
+export default function Page() {
+  return null;
+}
+`
+    );
+
+    const result = await scanRoutes({
+      pagesDir: 'src/pages',
+      extensions: ['.tsx'],
+      root,
+    });
+
+    const route = result.routes.find((item) => item.path === '/blog/:slug');
+    expect(route).toBeDefined();
+    expect(route?.hasLoader).toBe(true);
+    expect(route?.hasGetStaticPaths).toBe(true);
+    expect(route?.hasPrerender).toBe(true);
+  });
 });

@@ -329,7 +329,7 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
  * Serializa datos de forma segura para inyección en HTML
  */
 export function serializeData(data: unknown): string {
-  const json = JSON.stringify(data);
+  const json = JSON.stringify(data) ?? 'null';
   // Escapar entidades HTML para prevenir XSS
   // Solo se escapan <, > y & que pueden romper el contexto del script
   return json.replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
