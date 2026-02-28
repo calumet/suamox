@@ -74,6 +74,28 @@ describe('createDevHandler', () => {
     expect(transformIndexHtml).toHaveBeenCalledTimes(1);
     expect(body).toContain('<div>After</div>');
     expect(body).toContain('window.__INITIAL_DATA__ = {"ok":true}');
+    expect(body).toContain('<link rel="stylesheet" href="/src/styles/global.css">');
+  });
+
+  it('allows disabling dev global css link', async () => {
+    mocks.renderPage.mockResolvedValue({
+      status: 200,
+      html: '<div>Dev</div>',
+      head: '',
+      initialData: null,
+    });
+
+    const vite = {
+      ssrLoadModule: vi.fn(() => Promise.resolve({ routes: [] })),
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+      ssrFixStacktrace: vi.fn(),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite, devCssEntry: false });
+    const response = await app.request('http://localhost/');
+    const body = await response.text();
+
+    expect(body).not.toContain('<link rel="stylesheet" href="/src/styles/global.css">');
   });
 });
 

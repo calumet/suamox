@@ -65,3 +65,28 @@ El runtime genera HTML completo e inyecta:
 - `window.__INITIAL_DATA__` con datos serializados de `loader()`.
 - `<link rel="stylesheet">` para CSS resuelto desde manifest.
 - Scripts y preloads de cliente para hidratación.
+
+## Notas de desarrollo
+
+### FOUC en desarrollo
+
+En `dev`, Vite inyecta CSS mediante HMR y puede haber un flash inicial sin estilos (FOUC).
+
+Suamox mantiene en desarrollo el flujo estándar de Vite para priorizar velocidad
+de HMR (enfoque similar a Next.js en modo dev).
+
+Como mitigación ligera, en `dev` se inyecta por defecto:
+
+- `<link rel="stylesheet" href="/src/styles/global.css">`
+
+Puedes cambiarlo o desactivarlo:
+
+```ts
+await createServer({
+  port: 3000,
+  devCssEntry: '/src/styles/global.css', // o false para desactivar
+});
+```
+
+La referencia final de comportamiento visual sigue siendo
+`pnpm run build` + `pnpm run preview`.

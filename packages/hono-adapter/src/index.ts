@@ -14,6 +14,7 @@ export interface HonoAdapterOptions {
   onRequest?: (c: Context) => void | Promise<void>;
   onBeforeRender?: (ctx: RenderOptions) => RenderOptions | Promise<RenderOptions>;
   onAfterRender?: (result: RenderResult) => RenderResult | Promise<RenderResult>;
+  devCssEntry?: string | false;
 }
 
 export interface CreateServerOptions extends HonoAdapterOptions {
@@ -33,6 +34,14 @@ export interface ProdHandlerOptions extends HonoAdapterOptions {
   root?: string;
   staticDir?: string;
 }
+
+const resolveDevCssEntry = (entry?: string | false): string | null => {
+  if (entry === false) {
+    return null;
+  }
+  const value = entry ?? '/src/styles/global.css';
+  return value.trim().length > 0 ? value : null;
+};
 
 /**
  * Crea una app de Hono con soporte SSR
@@ -120,7 +129,7 @@ export async function createServer(options: CreateServerOptions): Promise<void> 
  * Crea el handler de desarrollo con integración de Vite
  */
 export function createDevHandler(options: DevHandlerOptions): Hono {
-  const { vite, onRequest, onBeforeRender, onAfterRender } = options;
+  const { vite, onRequest, onBeforeRender, onAfterRender, devCssEntry } = options;
   const app = createHonoApp(options);
 
   // Handler SSR para páginas (el middleware de Vite se maneja en createServer)
@@ -154,6 +163,9 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         result = await onAfterRender(result);
       }
 
+      const devCssHref = resolveDevCssEntry(devCssEntry);
+      const devCssLinkTag = devCssHref ? `<link rel="stylesheet" href="${devCssHref}">` : '';
+
       // Leer y transformar index.html
       const template = await vite.transformIndexHtml(
         url.pathname,
@@ -162,6 +174,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    ${devCssLinkTag}
     ${result.head || ''}
     <link rel="modulepreload" href="/src/entry-client.tsx">
     <script type="module" src="/src/entry-client.tsx"></script>
