@@ -164,7 +164,18 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       }
 
       const devCssHref = resolveDevCssEntry(devCssEntry);
-      const devCssLinkTag = devCssHref ? `<link rel="stylesheet" href="${devCssHref}">` : '';
+      let devCssTag = '';
+      if (devCssHref) {
+        try {
+          const cssModule = (await vite.ssrLoadModule(devCssHref)) as Record<string, unknown>;
+          const cssContent = typeof cssModule.default === 'string' ? cssModule.default : '';
+          if (cssContent) {
+            devCssTag = `<style data-dev-css>${cssContent}</style>`;
+          }
+        } catch {
+          // CSS file not found or processing error, skip silently
+        }
+      }
 
       // Leer y transformar index.html
       const template = await vite.transformIndexHtml(
@@ -174,7 +185,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    ${devCssLinkTag}
+    ${devCssTag}
     ${result.head || ''}
     <link rel="modulepreload" href="/src/entry-client.tsx">
     <script type="module" src="/src/entry-client.tsx"></script>

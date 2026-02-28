@@ -48,7 +48,12 @@ describe('createDevHandler', () => {
     });
 
     const routes: unknown[] = [];
-    const ssrLoadModule = vi.fn(() => Promise.resolve({ routes }));
+    const ssrLoadModule = vi.fn((id: string) => {
+      if (id === '/src/styles/global.css') {
+        return Promise.resolve({ default: 'body{color:red}' });
+      }
+      return Promise.resolve({ routes });
+    });
     const transformIndexHtml = vi.fn((_url: string, html: string) => Promise.resolve(html));
     const vite = {
       ssrLoadModule,
@@ -74,7 +79,7 @@ describe('createDevHandler', () => {
     expect(transformIndexHtml).toHaveBeenCalledTimes(1);
     expect(body).toContain('<div>After</div>');
     expect(body).toContain('window.__INITIAL_DATA__ = {"ok":true}');
-    expect(body).toContain('<link rel="stylesheet" href="/src/styles/global.css">');
+    expect(body).toContain('<style data-dev-css>body{color:red}</style>');
   });
 
   it('allows disabling dev global css link', async () => {
@@ -95,7 +100,7 @@ describe('createDevHandler', () => {
     const response = await app.request('http://localhost/');
     const body = await response.text();
 
-    expect(body).not.toContain('<link rel="stylesheet" href="/src/styles/global.css">');
+    expect(body).not.toContain('data-dev-css');
   });
 });
 
