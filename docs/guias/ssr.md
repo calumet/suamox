@@ -70,23 +70,21 @@ El runtime genera HTML completo e inyecta:
 
 ### FOUC en desarrollo
 
-En `dev`, Vite inyecta CSS mediante HMR y puede haber un flash inicial sin estilos (FOUC).
+En `dev`, Vite inyecta CSS mediante HMR y puede haber un flash inicial sin estilos
+(FOUC) porque los estilos se cargan vía JavaScript.
 
-Suamox mantiene en desarrollo el flujo estándar de Vite para priorizar velocidad
-de HMR (enfoque similar a Next.js en modo dev).
+Para mitigar esto, Suamox recorre automáticamente el grafo de módulos de Vite después
+del render SSR y recolecta **todo el CSS** importado (global, por página, por componente)
+para inyectarlo inline como `<style data-dev-css>` en el HTML inicial.
 
-Como mitigación ligera, en `dev` se inyecta por defecto:
+Esto cubre:
 
-- `<link rel="stylesheet" href="/src/styles/global.css">`
+- Estilos globales importados en `entry-client.tsx` (e.g., `import './styles/global.css'`)
+- CSS Modules importados en páginas y layouts
+- Cualquier CSS transitivamente importado por componentes
+- Tailwind, PostCSS y preprocesadores (se procesan a través del pipeline de Vite)
 
-Puedes cambiarlo o desactivarlo:
-
-```ts
-await createServer({
-  port: 3000,
-  devCssEntry: '/src/styles/global.css', // o false para desactivar
-});
-```
+No se requiere configuración. La recolección ocurre de forma automática en desarrollo.
 
 La referencia final de comportamiento visual sigue siendo
 `pnpm run build` + `pnpm run preview`.

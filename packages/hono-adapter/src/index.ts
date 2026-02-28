@@ -14,7 +14,6 @@ export interface HonoAdapterOptions {
   onRequest?: (c: Context) => void | Promise<void>;
   onBeforeRender?: (ctx: RenderOptions) => RenderOptions | Promise<RenderOptions>;
   onAfterRender?: (result: RenderResult) => RenderResult | Promise<RenderResult>;
-  devCssEntry?: string | false;
 }
 
 export interface CreateServerOptions extends HonoAdapterOptions {
@@ -35,13 +34,48 @@ export interface ProdHandlerOptions extends HonoAdapterOptions {
   staticDir?: string;
 }
 
-const resolveDevCssEntry = (entry?: string | false): string | null => {
-  if (entry === false) {
-    return null;
+/**
+ * Recorre el grafo de módulos de Vite recolectando todo el CSS importado
+ * transitivamente desde los entry points dados.
+ */
+async function collectDevCss(vite: ViteDevServer, entryUrls: string[]): Promise<string> {
+  const cssContents: string[] = [];
+  const visited = new Set<string>();
+
+  const walk = async (mod: {
+    url: string;
+    type: string;
+    importedModules: Set<{ url: string; type: string; importedModules: Set<unknown> }>;
+  }): Promise<void> => {
+    if (visited.has(mod.url)) return;
+    visited.add(mod.url);
+
+    if (mod.type === 'css' || mod.url.endsWith('.css')) {
+      try {
+        const m = (await vite.ssrLoadModule(mod.url)) as Record<string, unknown>;
+        const content = typeof m.default === 'string' ? m.default : '';
+        if (content) cssContents.push(content);
+      } catch {
+        // El modulo CSS no se pudo cargar, skip
+      }
+    }
+
+    for (const imported of mod.importedModules) {
+      await walk(imported as typeof mod);
+    }
+  };
+
+  for (const url of entryUrls) {
+    try {
+      const mod = await vite.moduleGraph.getModuleByUrl(url, true);
+      if (mod) await walk(mod as unknown as Parameters<typeof walk>[0]);
+    } catch {
+      // No se pudo cargar el módulo de entrada, skip
+    }
   }
-  const value = entry ?? '/src/styles/global.css';
-  return value.trim().length > 0 ? value : null;
-};
+
+  return cssContents.join('\n');
+}
 
 /**
  * Crea una app de Hono con soporte SSR
@@ -129,7 +163,7 @@ export async function createServer(options: CreateServerOptions): Promise<void> 
  * Crea el handler de desarrollo con integración de Vite
  */
 export function createDevHandler(options: DevHandlerOptions): Hono {
-  const { vite, onRequest, onBeforeRender, onAfterRender, devCssEntry } = options;
+  const { vite, onRequest, onBeforeRender, onAfterRender } = options;
   const app = createHonoApp(options);
 
   // Handler SSR para páginas (el middleware de Vite se maneja en createServer)
@@ -163,18 +197,25 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         result = await onAfterRender(result);
       }
 
-      const devCssHref = resolveDevCssEntry(devCssEntry);
+      // Cargar entry-client para poblar el grafo con CSS globales
+      try {
+        await vite.ssrLoadModule('/src/entry-client.tsx');
+      } catch {
+        // entry-client usa APIs del browser, el error es esperado
+      }
+
+      // Recolectar todo el CSS del grafo de módulos
       let devCssTag = '';
-      if (devCssHref) {
-        try {
-          const cssModule = (await vite.ssrLoadModule(devCssHref)) as Record<string, unknown>;
-          const cssContent = typeof cssModule.default === 'string' ? cssModule.default : '';
-          if (cssContent) {
-            devCssTag = `<style data-dev-css>${cssContent}</style>`;
-          }
-        } catch {
-          // CSS file not found or processing error, skip silently
+      try {
+        const cssContent = await collectDevCss(vite, [
+          '/src/entry-client.tsx',
+          'virtual:pages',
+        ]);
+        if (cssContent) {
+          devCssTag = `<style data-dev-css>${cssContent}</style>`;
         }
+      } catch {
+        // Error recolectando CSS, se continuará sin estilos en dev
       }
 
       // Leer y transformar index.html

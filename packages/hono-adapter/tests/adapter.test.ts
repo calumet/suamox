@@ -39,7 +39,7 @@ describe('createDevHandler', () => {
     mocks.serializeData.mockClear();
   });
 
-  it('runs hooks and injects initial data', async () => {
+  it('runs hooks and injects initial data with auto-collected CSS', async () => {
     mocks.renderPage.mockResolvedValue({
       status: 200,
       html: '<div>Before</div>',
@@ -48,17 +48,39 @@ describe('createDevHandler', () => {
     });
 
     const routes: unknown[] = [];
+
+    const globalCssMod = {
+      url: '/src/styles/global.css',
+      type: 'css' as const,
+      importedModules: new Set(),
+    };
+    const entryClientMod = {
+      url: '/src/entry-client.tsx',
+      type: 'js' as const,
+      importedModules: new Set([globalCssMod]),
+    };
+    const virtualPagesMod = {
+      url: 'virtual:pages',
+      type: 'js' as const,
+      importedModules: new Set(),
+    };
+
     const ssrLoadModule = vi.fn((id: string) => {
-      if (id === '/src/styles/global.css') {
-        return Promise.resolve({ default: 'body{color:red}' });
-      }
+      if (id === '/src/styles/global.css') return Promise.resolve({ default: 'body{color:red}' });
+      if (id === '/src/entry-client.tsx') return Promise.resolve({});
       return Promise.resolve({ routes });
+    });
+    const getModuleByUrl = vi.fn((url: string) => {
+      if (url === '/src/entry-client.tsx') return Promise.resolve(entryClientMod);
+      if (url === 'virtual:pages') return Promise.resolve(virtualPagesMod);
+      return Promise.resolve(undefined);
     });
     const transformIndexHtml = vi.fn((_url: string, html: string) => Promise.resolve(html));
     const vite = {
       ssrLoadModule,
       transformIndexHtml,
       ssrFixStacktrace: vi.fn(),
+      moduleGraph: { getModuleByUrl },
     } as unknown as ViteDevServer;
 
     const onBeforeRender = vi.fn((ctx: RenderOptions) => ({ ...ctx, pathname: '/changed' }));
@@ -82,10 +104,72 @@ describe('createDevHandler', () => {
     expect(body).toContain('<style data-dev-css>body{color:red}</style>');
   });
 
-  it('allows disabling dev global css link', async () => {
+  it('collects CSS from multiple modules across the graph', async () => {
     mocks.renderPage.mockResolvedValue({
       status: 200,
-      html: '<div>Dev</div>',
+      html: '<div>Page</div>',
+      head: '',
+      initialData: null,
+    });
+
+    const pageCssMod = {
+      url: '/src/pages/index.module.css',
+      type: 'css' as const,
+      importedModules: new Set(),
+    };
+    const globalCssMod = {
+      url: '/src/styles/global.css',
+      type: 'css' as const,
+      importedModules: new Set(),
+    };
+    const pageComponentMod = {
+      url: '/src/pages/index.tsx',
+      type: 'js' as const,
+      importedModules: new Set([pageCssMod]),
+    };
+    const entryClientMod = {
+      url: '/src/entry-client.tsx',
+      type: 'js' as const,
+      importedModules: new Set([globalCssMod]),
+    };
+    const virtualPagesMod = {
+      url: 'virtual:pages',
+      type: 'js' as const,
+      importedModules: new Set([pageComponentMod]),
+    };
+
+    const ssrLoadModule = vi.fn((id: string) => {
+      if (id === '/src/styles/global.css') return Promise.resolve({ default: 'body{margin:0}' });
+      if (id === '/src/pages/index.module.css') return Promise.resolve({ default: '.root{color:blue}' });
+      if (id === '/src/entry-client.tsx') return Promise.resolve({});
+      return Promise.resolve({ routes: [] });
+    });
+    const getModuleByUrl = vi.fn((url: string) => {
+      if (url === '/src/entry-client.tsx') return Promise.resolve(entryClientMod);
+      if (url === 'virtual:pages') return Promise.resolve(virtualPagesMod);
+      return Promise.resolve(undefined);
+    });
+
+    const vite = {
+      ssrLoadModule,
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+      ssrFixStacktrace: vi.fn(),
+      moduleGraph: { getModuleByUrl },
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite });
+    const response = await app.request('http://localhost/');
+    const body = await response.text();
+
+    expect(body).toContain('body{margin:0}');
+    expect(body).toContain('.root{color:blue}');
+    expect(body).toContain('data-dev-css');
+  });
+
+  it('handles empty module graph gracefully', async () => {
+    mocks.renderPage.mockResolvedValue({
+      status: 200,
+      html: '<div>Page</div>',
       head: '',
       initialData: null,
     });
@@ -94,13 +178,15 @@ describe('createDevHandler', () => {
       ssrLoadModule: vi.fn(() => Promise.resolve({ routes: [] })),
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
       ssrFixStacktrace: vi.fn(),
+      moduleGraph: { getModuleByUrl: vi.fn(() => Promise.resolve(undefined)) },
     } as unknown as ViteDevServer;
 
-    const app = createDevHandler({ vite, devCssEntry: false });
+    const app = createDevHandler({ vite });
     const response = await app.request('http://localhost/');
     const body = await response.text();
 
     expect(body).not.toContain('data-dev-css');
+    expect(response.status).toBe(200);
   });
 });
 
