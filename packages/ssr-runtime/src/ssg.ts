@@ -1,4 +1,4 @@
-import { cp, mkdir, rm, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { generateHTML, renderPage, resolveRouteModule } from './index';
@@ -163,8 +163,22 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
     }
   };
 
-  if (!(await pathExists(resolvedClientDir))) {
-    throw new Error('Client build output not found. Run the client build before SSG.');
+  let clientBuildDir = resolvedClientDir;
+  let isLegacyClientOutput = false;
+
+  if (!(await pathExists(clientBuildDir))) {
+    const legacyClientDir = resolvedDistDir;
+    const legacyManifest = resolve(legacyClientDir, '.vite', 'manifest.json');
+
+    if (!clientDir && (await pathExists(legacyManifest))) {
+      clientBuildDir = legacyClientDir;
+      isLegacyClientOutput = true;
+      console.warn(
+        '[suamox] Client build output detected in dist/. This layout is legacy; migrate to dist/client.'
+      );
+    } else {
+      throw new Error('Client build output not found. Run the client build before SSG.');
+    }
   }
 
   if (!(await pathExists(resolvedServerEntry))) {
@@ -189,7 +203,20 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
   });
 
   const staticClientDir = join(resolvedOutDir, 'client');
-  await cp(resolvedClientDir, staticClientDir, { recursive: true, force: true });
+  if (isLegacyClientOutput) {
+    await mkdir(staticClientDir, { recursive: true });
+    const entries = await readdir(clientBuildDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.name === 'server' || entry.name === 'static') {
+        continue;
+      }
+      const sourcePath = join(clientBuildDir, entry.name);
+      const targetPath = join(staticClientDir, entry.name);
+      await cp(sourcePath, targetPath, { recursive: true, force: true });
+    }
+  } else {
+    await cp(clientBuildDir, staticClientDir, { recursive: true, force: true });
+  }
 
   console.log(`SSG output written to ${resolvedOutDir}`);
 }

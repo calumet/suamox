@@ -89,7 +89,7 @@ const main = async () => {
       return;
     }
     case 'build': {
-      await runVite(['build']);
+      await runVite(['build', '--outDir', 'dist/client', '--manifest']);
       await runVite(['build', '--ssr', 'src/entry-server.tsx', '--outDir', 'dist/server']);
       await runSsg();
       return;
