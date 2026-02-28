@@ -1,9 +1,11 @@
-import { basename, dirname, resolve } from 'node:path';
-import { readFile } from 'node:fs/promises';
-import fg from 'fast-glob';
-import { init, parse } from 'es-module-lexer';
-import type { RouteRecord } from './types.js';
-import { parseRoute, sortRoutes, validateRoutes } from './parser.js';
+import { readFile } from "node:fs/promises";
+import { basename, dirname, resolve } from "node:path";
+
+import { init, parse } from "es-module-lexer";
+import fg from "fast-glob";
+
+import { parseRoute, sortRoutes, validateRoutes } from "./parser.js";
+import type { RouteRecord } from "./types.js";
 
 const loaderExportPatterns = [
   /\bexport\s+(async\s+)?function\s+loader\b/,
@@ -40,13 +42,13 @@ function isLayoutFile(filePath: string, extensions: string[]): boolean {
     return false;
   }
 
-  return basename(filePath, matchedExtension) === 'layout';
+  return basename(filePath, matchedExtension) === "layout";
 }
 
 function collectLayoutsForFile(
   filePath: string,
   layoutMap: Map<string, string>,
-  pagesDir: string
+  pagesDir: string,
 ): string[] {
   const layouts: string[] = [];
   let currentDir = dirname(filePath);
@@ -94,14 +96,14 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
   await init;
 
   // Construir patrón glob
-  const extPattern = extensions.length === 1 ? extensions[0] : `{${extensions.join(',')}}`;
+  const extPattern = extensions.length === 1 ? extensions[0] : `{${extensions.join(",")}}`;
   const pattern = `**/*${extPattern}`;
 
   // Escanear archivos
   const files = await fg(pattern, {
     cwd: absolutePagesDir,
     absolute: true,
-    ignore: ['**/node_modules/**', '**/.git/**'],
+    ignore: ["**/node_modules/**", "**/.git/**"],
   });
 
   const layoutFiles = files.filter((file) => isLayoutFile(file, extensions));
@@ -124,13 +126,13 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
       route.layouts = collectLayoutsForFile(file, layoutMap, absolutePagesDir);
 
       // Verificar exports con es-module-lexer cuando el archivo sea parseable como ESM.
-      let content = '';
+      let content = "";
       try {
-        content = await readFile(file, 'utf-8');
+        content = await readFile(file, "utf-8");
         const [, exports] = parse(content);
-        route.hasLoader = exports.some((exp) => exp.n === 'loader');
-        route.hasGetStaticPaths = exports.some((exp) => exp.n === 'getStaticPaths');
-        route.hasPrerender = exports.some((exp) => exp.n === 'prerender');
+        route.hasLoader = exports.some((exp) => exp.n === "loader");
+        route.hasGetStaticPaths = exports.some((exp) => exp.n === "getStaticPaths");
+        route.hasPrerender = exports.some((exp) => exp.n === "prerender");
       } catch {
         route.hasLoader = fallbackHasLoader(content);
         route.hasGetStaticPaths = fallbackHasGetStaticPaths(content);
@@ -138,7 +140,7 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
       }
 
       return route;
-    })
+    }),
   );
 
   // Validar rutas

@@ -1,10 +1,10 @@
-import { Head } from '@calumet/suamox-head';
+import { Head } from "@calumet/suamox-head";
 
 export const prerender = true;
 
 export default function HomePage() {
   return (
-    <div style={{ display: 'grid', gap: '0.75rem' }}>
+    <div style={{ display: "grid", gap: "0.75rem" }}>
       <Head>
         <title>Suamox</title>
         <meta name="description" content="Suamox starter." />

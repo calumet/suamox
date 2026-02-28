@@ -1,6 +1,6 @@
-import type { RouteRecord } from './types.js';
+import type { RouteRecord } from "./types.js";
 
-export type DefaultPageMode = 'ssr' | 'ssg' | 'csr';
+export type DefaultPageMode = "ssr" | "ssg" | "csr";
 
 export interface GenerateRoutesOptions {
   defaultMode?: DefaultPageMode;
@@ -11,11 +11,11 @@ export interface GenerateRoutesOptions {
  */
 export function generateRoutesModule(
   routes: RouteRecord[],
-  options: GenerateRoutesOptions = {}
+  options: GenerateRoutesOptions = {},
 ): string {
-  const { defaultMode = 'ssr' } = options;
-  const defaultPrerender = defaultMode === 'ssg';
-  const defaultCsr = defaultMode === 'csr';
+  const { defaultMode = "ssr" } = options;
+  const defaultPrerender = defaultMode === "ssg";
+  const defaultCsr = defaultMode === "csr";
   const declarations: string[] = [];
   const routeObjects: string[] = [];
 
@@ -23,7 +23,7 @@ export function generateRoutesModule(
     const loadPageName = `loadPage${index}`;
     const loadLayoutsName = `loadLayouts${index}`;
     const loadRouteName = `loadRoute${index}`;
-    const importPath = route.filePath.replace(/\\/g, '/');
+    const importPath = route.filePath.replace(/\\/g, "/");
     const layoutLoadCalls: string[] = [];
 
     declarations.push(`const ${loadPageName} = () => import('${importPath}');`);
@@ -31,7 +31,7 @@ export function generateRoutesModule(
     if (route.layouts) {
       route.layouts.forEach((layoutPath, layoutIndex) => {
         const layoutLoaderName = `loadLayout${index}_${layoutIndex}`;
-        const layoutImportPath = layoutPath.replace(/\\/g, '/');
+        const layoutImportPath = layoutPath.replace(/\\/g, "/");
 
         declarations.push(`const ${layoutLoaderName} = () => import('${layoutImportPath}');`);
         layoutLoadCalls.push(`${layoutLoaderName}()`);
@@ -40,8 +40,8 @@ export function generateRoutesModule(
 
     const layoutsValue =
       layoutLoadCalls.length > 0
-        ? `Promise.all([${layoutLoadCalls.join(', ')}]).then((modules) => modules.map((mod) => mod.default))`
-        : 'Promise.resolve([])';
+        ? `Promise.all([${layoutLoadCalls.join(", ")}]).then((modules) => modules.map((mod) => mod.default))`
+        : "Promise.resolve([])";
 
     declarations.push(`const ${loadLayoutsName} = () => ${layoutsValue};`);
 
@@ -51,7 +51,7 @@ export function generateRoutesModule(
   const _hasPrerender = 'prerender' in _module;
   const _hasCsr = 'csr' in _module;
   const _prerender = _hasPrerender ? _module.prerender === true : ${defaultPrerender};
-  const _csr = _hasCsr ? _module.csr === true : ${defaultCsr ? '!_prerender' : 'false'};
+  const _csr = _hasCsr ? _module.csr === true : ${defaultCsr ? "!_prerender" : "false"};
   return {
     component: _module.default,
     loader: _module.loader,
@@ -76,10 +76,10 @@ export function generateRoutesModule(
     routeObjects.push(routeObj);
   });
 
-  return `${declarations.join('\n')}
+  return `${declarations.join("\n")}
 
 export const routes = [
-${routeObjects.join(',\n')}
+${routeObjects.join(",\n")}
 ];
 
 export default routes;

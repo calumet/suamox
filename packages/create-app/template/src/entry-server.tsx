@@ -1,1 +1,1 @@
-export { routes } from 'virtual:pages';
+export { routes } from "virtual:pages";

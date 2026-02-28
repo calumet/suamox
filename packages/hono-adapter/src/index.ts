@@ -1,15 +1,16 @@
-import { Hono } from 'hono';
-import { serveStatic } from '@hono/node-server/serve-static';
-import type { Context } from 'hono';
-import type { IncomingHttpHeaders, IncomingMessage } from 'node:http';
-import type { ViteDevServer } from 'vite';
-import pc from 'picocolors';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { readFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
-import type { RenderOptions, RouteRecord, RenderResult } from '@calumet/suamox';
-import { generateHTML, matchRoute, renderPage, serializeData } from '@calumet/suamox';
+import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import type { IncomingHttpHeaders, IncomingMessage } from "node:http";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
+import type { RenderOptions, RouteRecord, RenderResult } from "@calumet/suamox";
+import { generateHTML, matchRoute, renderPage, serializeData } from "@calumet/suamox";
+import { serveStatic } from "@hono/node-server/serve-static";
+import type { Context } from "hono";
+import { Hono } from "hono";
+import pc from "picocolors";
+import type { ViteDevServer } from "vite";
 
 export interface HonoAdapterOptions {
   onRequest?: (c: Context) => void | Promise<void>;
@@ -35,16 +36,15 @@ export interface ProdHandlerOptions extends HonoAdapterOptions {
   staticDir?: string;
 }
 
-const cssImportPattern =
-  /import\s+(?:[^'"]+\s+from\s+)?['"]([^'"]+\.css(?:\?[^'"]*)?)['"]/g;
+const cssImportPattern = /import\s+(?:[^'"]+\s+from\s+)?['"]([^'"]+\.css(?:\?[^'"]*)?)['"]/g;
 
-const toPosixPath = (value: string): string => value.replace(/\\/g, '/');
+const toPosixPath = (value: string): string => value.replace(/\\/g, "/");
 
 const toFetchHeaders = (headers: IncomingHttpHeaders): Headers => {
   const mappedHeaders = new Headers();
 
   for (const [key, value] of Object.entries(headers)) {
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       mappedHeaders.set(key, value);
       continue;
     }
@@ -61,29 +61,29 @@ const toFetchHeaders = (headers: IncomingHttpHeaders): Headers => {
 
 const methodSupportsRequestBody = (method: string): boolean => {
   const normalizedMethod = method.toUpperCase();
-  return normalizedMethod !== 'GET' && normalizedMethod !== 'HEAD';
+  return normalizedMethod !== "GET" && normalizedMethod !== "HEAD";
 };
 
 const toFetchRequest = (req: IncomingMessage): Request => {
-  const method = req.method ?? 'GET';
-  const requestUrl = `http://${req.headers.host || 'localhost'}${req.url || '/'}`;
-  const init: RequestInit & { duplex?: 'half'; body?: unknown } = {
+  const method = req.method ?? "GET";
+  const requestUrl = `http://${req.headers.host || "localhost"}${req.url || "/"}`;
+  const init: RequestInit & { duplex?: "half"; body?: unknown } = {
     method,
     headers: toFetchHeaders(req.headers),
   };
 
   if (methodSupportsRequestBody(method)) {
     init.body = req;
-    init.duplex = 'half';
+    init.duplex = "half";
   }
 
   return new Request(requestUrl, init as RequestInit);
 };
 
 const splitQuery = (value: string): { path: string; query: string } => {
-  const queryIndex = value.indexOf('?');
+  const queryIndex = value.indexOf("?");
   if (queryIndex < 0) {
-    return { path: value, query: '' };
+    return { path: value, query: "" };
   }
   return {
     path: value.slice(0, queryIndex),
@@ -93,12 +93,12 @@ const splitQuery = (value: string): { path: string; query: string } => {
 
 const collectCssImportsFromEntryClient = async (
   root: string,
-  vite?: ViteDevServer
+  vite?: ViteDevServer,
 ): Promise<string[]> => {
-  const entryClientPath = resolve(root, 'src', 'entry-client.tsx');
-  let entryClientSource = '';
+  const entryClientPath = resolve(root, "src", "entry-client.tsx");
+  let entryClientSource = "";
   try {
-    entryClientSource = await readFile(entryClientPath, 'utf-8');
+    entryClientSource = await readFile(entryClientPath, "utf-8");
   } catch {
     return [];
   }
@@ -113,12 +113,12 @@ const collectCssImportsFromEntryClient = async (
     const { path, query } = splitQuery(rawImport);
     let href: string | null = null;
 
-    if (path.startsWith('/')) {
+    if (path.startsWith("/")) {
       href = `${path}${query}`;
-    } else if (path.startsWith('.')) {
+    } else if (path.startsWith(".")) {
       const absoluteCssPath = resolve(dirname(entryClientPath), path);
       const relativeCssPath = relative(root, absoluteCssPath);
-      if (!relativeCssPath.startsWith('..') && !isAbsolute(relativeCssPath)) {
+      if (!relativeCssPath.startsWith("..") && !isAbsolute(relativeCssPath)) {
         href = `/${toPosixPath(relativeCssPath)}${query}`;
       }
     }
@@ -127,7 +127,7 @@ const collectCssImportsFromEntryClient = async (
       continue;
     }
 
-    if (typeof vite?.transformRequest === 'function') {
+    if (typeof vite?.transformRequest === "function") {
       try {
         await vite.transformRequest(href);
       } catch {
@@ -148,8 +148,8 @@ export function createHonoApp(_options: HonoAdapterOptions = {}): Hono {
   const app = new Hono();
 
   // Endpoint de health check
-  app.get('/health', (c) => {
-    return c.json({ status: 'ok' });
+  app.get("/health", (c) => {
+    return c.json({ status: "ok" });
   });
 
   return app;
@@ -160,22 +160,22 @@ export function createHonoApp(_options: HonoAdapterOptions = {}): Hono {
  */
 export async function createServer(options: CreateServerOptions): Promise<void> {
   const { port = 3000, ...adapterOptions } = options;
-  const isProd = process.env.NODE_ENV === 'production';
+  const isProd = process.env.NODE_ENV === "production";
 
   if (isProd) {
     // Modo producción: usar serve estándar
-    const { serve } = await import('@hono/node-server');
+    const { serve } = await import("@hono/node-server");
     const app = createProdHandler(adapterOptions);
     console.log(`Production server running at http://localhost:${port}`);
     serve({ fetch: app.fetch, port });
   } else {
     // Modo desarrollo: integrar middleware de Vite
-    const { createServer: createViteServer } = await import('vite');
-    const { createServer: createNodeServer } = await import('node:http');
+    const { createServer: createViteServer } = await import("vite");
+    const { createServer: createNodeServer } = await import("node:http");
 
     const vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: 'custom',
+      appType: "custom",
     });
 
     const app = createDevHandler({ vite, ...adapterOptions });
@@ -221,7 +221,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
   const app = createHonoApp(options);
 
   // Handler SSR para páginas (el middleware de Vite se maneja en createServer)
-  app.use('*', async (c) => {
+  app.use("*", async (c) => {
     const url = new URL(c.req.url);
 
     try {
@@ -232,7 +232,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       }
 
       // Cargar módulo virtual:pages
-      const routesModule = (await vite.ssrLoadModule('virtual:pages')) as {
+      const routesModule = (await vite.ssrLoadModule("virtual:pages")) as {
         routes: RouteRecord[];
       };
       const routes = routesModule.routes;
@@ -254,7 +254,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       const devCssLinks = await collectCssImportsFromEntryClient(root, vite);
       const devCssTags = devCssLinks
         .map((href) => `<link rel="stylesheet" href="${href}">`)
-        .join('\n    ');
+        .join("\n    ");
 
       // Leer y transformar index.html
       const template = await vite.transformIndexHtml(
@@ -265,30 +265,30 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     ${devCssTags}
-    ${result.head || ''}
+    ${result.head || ""}
     <link rel="modulepreload" href="/src/entry-client.tsx">
     <script type="module" src="/src/entry-client.tsx"></script>
   </head>
   <body>
     <div id="root">${result.html}</div>
   </body>
-</html>`
+</html>`,
       );
 
       // Inyectar datos iniciales
       const serializedData = serializeData(result.initialData ?? null);
       const finalHtml = template.replace(
-        '</body>',
-        `<script>window.__INITIAL_DATA__ = ${serializedData};</script></body>`
+        "</body>",
+        `<script>window.__INITIAL_DATA__ = ${serializedData};</script></body>`,
       );
 
       return c.html(finalHtml, result.status as 200 | 404 | 500);
     } catch (error) {
       // Dejar que Vite maneje errores con stack trace
       vite.ssrFixStacktrace(error as Error);
-      console.error(pc.red('[SSR Error]'), error);
+      console.error(pc.red("[SSR Error]"), error);
 
-      return c.html('<h1>500 - Internal Server Error</h1>', 500);
+      return c.html("<h1>500 - Internal Server Error</h1>", 500);
     }
   });
 
@@ -300,13 +300,13 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
  */
 export function createProdHandler(options: ProdHandlerOptions): Hono {
   const {
-    clientDir = 'dist/client',
-    serverEntry = 'dist/server/entry-server.js',
+    clientDir = "dist/client",
+    serverEntry = "dist/server/entry-server.js",
     onRequest,
     onBeforeRender,
     onAfterRender,
     root = process.cwd(),
-    staticDir = 'dist/static',
+    staticDir = "dist/static",
   } = options;
 
   const app = createHonoApp(options);
@@ -319,7 +319,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   const staticFallbackEnabled = staticRoot.length > 0;
 
   // Leer el manifest de Vite para obtener nombres de assets con hash
-  const manifestPath = resolve(root, clientDir, '.vite/manifest.json');
+  const manifestPath = resolve(root, clientDir, ".vite/manifest.json");
   type ManifestEntry = {
     file: string;
     css?: string[];
@@ -329,31 +329,31 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   type Manifest = Record<string, ManifestEntry>;
   let manifest: Manifest = {};
   try {
-    manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as Manifest;
+    manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as Manifest;
   } catch {
-    console.warn('[Hono Adapter] Could not read Vite manifest, client assets may not load');
+    console.warn("[Hono Adapter] Could not read Vite manifest, client assets may not load");
   }
 
   // Obtener script de entrada del cliente desde el manifest
-  const entryClientScript = manifest['index.html']?.file
-    ? `/${manifest['index.html'].file}`
-    : '/assets/index.js';
+  const entryClientScript = manifest["index.html"]?.file
+    ? `/${manifest["index.html"].file}`
+    : "/assets/index.js";
 
   const toManifestKey = (filePath: string): string | null => {
-    const relativePath = relative(root, filePath).replace(/\\/g, '/');
-    if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    const relativePath = relative(root, filePath).replace(/\\/g, "/");
+    if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
       return null;
     }
     return relativePath;
   };
 
   const isScriptAsset = (filePath: string): boolean => {
-    return filePath.endsWith('.js') || filePath.endsWith('.mjs');
+    return filePath.endsWith(".js") || filePath.endsWith(".mjs");
   };
 
   const collectManifestAssets = (
     routes: RouteRecord[],
-    pathname: string
+    pathname: string,
   ): { preloadScripts: string[]; styles: string[] } => {
     const preloadScripts = new Set<string>();
     const styles = new Set<string>();
@@ -393,7 +393,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       }
     };
 
-    visit('index.html');
+    visit("index.html");
 
     const matched = matchRoute(routes, pathname);
     const routeKey = matched?.route?.filePath ? toManifestKey(matched.route.filePath) : null;
@@ -410,31 +410,31 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   // Servir assets estáticos desde el directorio de build del cliente
   const assetHandler = serveStatic({ root: clientDir }) as (
     c: Context,
-    next: () => Promise<void>
+    next: () => Promise<void>,
   ) => Promise<Response | void>;
-  app.use('/assets/*', async (c, next) => {
+  app.use("/assets/*", async (c, next) => {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     const response = await assetHandler(c, next);
     const headers = response?.headers;
     if (
       headers &&
-      typeof headers.set === 'function' &&
+      typeof headers.set === "function" &&
       /^\/assets\/(index|client|jsx-runtime)-[^/]+\.js$/.test(c.req.path)
     ) {
-      headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+      headers.set("Cache-Control", "public, max-age=31536000, immutable");
     }
     return response;
   });
   if (staticFallbackEnabled) {
-    app.use('/client/*', serveStatic({ root: staticDir }));
+    app.use("/client/*", serveStatic({ root: staticDir }));
   }
 
   const resolveStaticHtmlPath = (pathname: string): string | null => {
-    const normalizedPath = pathname === '/' ? '' : pathname;
-    const candidatePath = resolve(staticRoot, `.${normalizedPath}`, 'index.html');
+    const normalizedPath = pathname === "/" ? "" : pathname;
+    const candidatePath = resolve(staticRoot, `.${normalizedPath}`, "index.html");
     const relativePath = relative(staticRoot, candidatePath);
 
-    if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
       return null;
     }
 
@@ -452,23 +452,23 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     }
 
     try {
-      return await readFile(filePath, 'utf-8');
+      return await readFile(filePath, "utf-8");
     } catch {
       return null;
     }
   };
 
   // Handler SSR: solo para rutas que no son assets
-  app.use('*', async (c) => {
+  app.use("*", async (c) => {
     // Omitir si está solicitando un archivo de assets
-    if (c.req.path.startsWith('/assets/')) {
+    if (c.req.path.startsWith("/assets/")) {
       return c.notFound();
     }
     const url = new URL(c.req.url);
 
     const staticHtml = await readStaticHtml(url.pathname);
     if (staticHtml) {
-      const status = url.pathname === '/404' ? 404 : 200;
+      const status = url.pathname === "/404" ? 404 : 200;
       return c.html(staticHtml, status);
     }
 
@@ -486,7 +486,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       const routes = serverModule.routes as RouteRecord[];
 
       if (!routes) {
-        throw new Error('Server entry must export routes');
+        throw new Error("Server entry must export routes");
       }
 
       // Ejecutar hook onBeforeRender
@@ -512,16 +512,16 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         scripts: [entryClientScript],
         preloadScripts,
         styles,
-        scriptPlacement: 'head',
+        scriptPlacement: "head",
       });
 
       return c.html(html, result.status as 200 | 404 | 500);
     } catch (error) {
-      console.error(pc.red('[SSR Error]'), error);
+      console.error(pc.red("[SSR Error]"), error);
 
       const errorHtml = generateHTML({
         html: '<div id="root"><h1>500 - Internal Server Error</h1></div>',
-        head: '<title>Error</title>',
+        head: "<title>Error</title>",
       });
 
       return c.html(errorHtml, 500);
@@ -532,5 +532,5 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 }
 
 // Exportar tipos
-export type { Context } from 'hono';
-export type { ViteDevServer } from 'vite';
+export type { Context } from "hono";
+export type { ViteDevServer } from "vite";

@@ -16,7 +16,7 @@ export interface RouteRecord {
 }
 
 export interface RouteSegment {
-  type: 'static' | 'param' | 'catchAll';
+  type: "static" | "param" | "catchAll";
   value: string;
   paramName?: string;
 }

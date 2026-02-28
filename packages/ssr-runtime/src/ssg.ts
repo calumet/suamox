@@ -1,8 +1,9 @@
-import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { isAbsolute, join, relative, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { generateHTML, renderPage, resolveRouteModule } from './index';
-import type { RouteRecord } from './index';
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { isAbsolute, join, relative, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
+import { generateHTML, renderPage, resolveRouteModule } from "./index";
+import type { RouteRecord } from "./index";
 
 interface PrerenderAssets {
   scripts?: string[];
@@ -34,15 +35,15 @@ export interface RunSsgOptions {
 }
 
 function isDynamicRoute(route: RouteRecord): boolean {
-  return route.path.includes(':') || route.path.includes('*');
+  return route.path.includes(":") || route.path.includes("*");
 }
 
 function encodeCatchAll(value: string): string {
   return value
-    .split('/')
+    .split("/")
     .filter(Boolean)
     .map((segment) => encodeURIComponent(segment))
-    .join('/');
+    .join("/");
 }
 
 function resolvePrerenderPath(route: RouteRecord, params: Record<string, string>): string {
@@ -59,7 +60,7 @@ function resolvePrerenderPath(route: RouteRecord, params: Record<string, string>
     const basePath = route.path.slice(0, -2);
 
     if (!basePath) {
-      return encoded ? `/${encoded}` : '/';
+      return encoded ? `/${encoded}` : "/";
     }
 
     return encoded ? `${basePath}/${encoded}` : basePath;
@@ -72,7 +73,7 @@ function resolvePrerenderPath(route: RouteRecord, params: Record<string, string>
       throw new Error(`Missing param "${paramName}" for route ${route.path}`);
     }
     const encoded = encodeURIComponent(String(rawValue));
-    resolvedPath = resolvedPath.replace(new RegExp(`:${paramName}(?=/|$)`, 'g'), encoded);
+    resolvedPath = resolvedPath.replace(new RegExp(`:${paramName}(?=/|$)`, "g"), encoded);
   }
 
   return resolvedPath;
@@ -88,20 +89,20 @@ type ManifestEntry = {
 type Manifest = Record<string, ManifestEntry>;
 
 function toManifestKey(rootDir: string, filePath: string): string | null {
-  const relativePath = relative(rootDir, filePath).replace(/\\/g, '/');
-  if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
+  const relativePath = relative(rootDir, filePath).replace(/\\/g, "/");
+  if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
     return null;
   }
   return relativePath;
 }
 
-function collectStylesFromManifest(manifest: Manifest, keys: string[], prefix = ''): string[] {
+function collectStylesFromManifest(manifest: Manifest, keys: string[], prefix = ""): string[] {
   const resolvedStyles = new Set<string>();
   const visited = new Set<string>();
-  const resolvedPrefix = prefix.replace(/\/+$/, '');
+  const resolvedPrefix = prefix.replace(/\/+$/, "");
 
   const toHref = (path: string): string => {
-    const normalizedPath = path.replace(/^\/+/, '');
+    const normalizedPath = path.replace(/^\/+/, "");
     return resolvedPrefix ? `${resolvedPrefix}/${normalizedPath}` : `/${normalizedPath}`;
   };
 
@@ -140,7 +141,7 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
   const {
     routes,
     outDir,
-    baseUrl = 'http://localhost',
+    baseUrl = "http://localhost",
     scripts = [],
     styles = [],
     preloadScripts = [],
@@ -149,19 +150,19 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
   } = options;
 
   const getOutputPath = (pathname: string): { dir: string; filePath: string } => {
-    const normalizedPath = pathname === '' ? '/' : pathname;
-    const parts = normalizedPath.split('/').filter(Boolean);
+    const normalizedPath = pathname === "" ? "/" : pathname;
+    const parts = normalizedPath.split("/").filter(Boolean);
     const dir = parts.length === 0 ? outDir : join(outDir, ...parts);
     return {
       dir,
-      filePath: join(dir, 'index.html'),
+      filePath: join(dir, "index.html"),
     };
   };
 
   await mkdir(outDir, { recursive: true });
 
   const renderRoute = async (pathname: string, route: RouteRecord): Promise<void> => {
-    const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`;
+    const normalizedPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
     const url = new URL(normalizedPath, baseUrl);
     const result = await renderPage({
       pathname: normalizedPath,
@@ -204,7 +205,7 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
     if (isDynamicRoute(resolvedRoute)) {
       if (!resolvedRoute.getStaticPaths) {
         throw new Error(
-          `Route ${resolvedRoute.path} is dynamic but does not export getStaticPaths`
+          `Route ${resolvedRoute.path} is dynamic but does not export getStaticPaths`,
         );
       }
 
@@ -227,13 +228,13 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
     clientDir,
     serverEntry,
     outDir,
-    baseUrl = 'http://localhost',
+    baseUrl = "http://localhost",
   } = options;
 
-  const resolvedDistDir = distDir ?? resolve(rootDir, 'dist');
-  const resolvedClientDir = clientDir ?? resolve(resolvedDistDir, 'client');
-  const resolvedServerEntry = serverEntry ?? resolve(resolvedDistDir, 'server', 'entry-server.js');
-  const resolvedOutDir = outDir ?? resolve(resolvedDistDir, 'static');
+  const resolvedDistDir = distDir ?? resolve(rootDir, "dist");
+  const resolvedClientDir = clientDir ?? resolve(resolvedDistDir, "client");
+  const resolvedServerEntry = serverEntry ?? resolve(resolvedDistDir, "server", "entry-server.js");
+  const resolvedOutDir = outDir ?? resolve(resolvedDistDir, "static");
 
   const pathExists = async (path: string): Promise<boolean> => {
     try {
@@ -249,21 +250,21 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
 
   if (!(await pathExists(clientBuildDir))) {
     const legacyClientDir = resolvedDistDir;
-    const legacyManifest = resolve(legacyClientDir, '.vite', 'manifest.json');
+    const legacyManifest = resolve(legacyClientDir, ".vite", "manifest.json");
 
     if (!clientDir && (await pathExists(legacyManifest))) {
       clientBuildDir = legacyClientDir;
       isLegacyClientOutput = true;
       console.warn(
-        '[suamox] Client build output detected in dist/. This layout is legacy; migrate to dist/client.'
+        "[suamox] Client build output detected in dist/. This layout is legacy; migrate to dist/client.",
       );
     } else {
-      throw new Error('Client build output not found. Run the client build before SSG.');
+      throw new Error("Client build output not found. Run the client build before SSG.");
     }
   }
 
   if (!(await pathExists(resolvedServerEntry))) {
-    throw new Error('SSR build output not found. Run the server build before SSG.');
+    throw new Error("SSR build output not found. Run the server build before SSG.");
   }
 
   const serverModule = (await import(pathToFileURL(resolvedServerEntry).href)) as {
@@ -271,20 +272,20 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
   };
 
   if (!serverModule.routes) {
-    throw new Error('SSR entry must export routes.');
+    throw new Error("SSR entry must export routes.");
   }
 
-  const manifestPath = resolve(clientBuildDir, '.vite', 'manifest.json');
+  const manifestPath = resolve(clientBuildDir, ".vite", "manifest.json");
   let manifest: Manifest = {};
   if (await pathExists(manifestPath)) {
     try {
-      const rawManifest = await readFile(manifestPath, 'utf-8');
+      const rawManifest = await readFile(manifestPath, "utf-8");
       manifest = JSON.parse(rawManifest) as Manifest;
     } catch {
-      console.warn('[suamox] Could not read Vite manifest. Static HTML may miss CSS links.');
+      console.warn("[suamox] Could not read Vite manifest. Static HTML may miss CSS links.");
     }
   } else {
-    console.warn('[suamox] Vite manifest not found. Static HTML may miss CSS links.');
+    console.warn("[suamox] Vite manifest not found. Static HTML may miss CSS links.");
   }
 
   const resolveRouteStyles = (route: RouteRecord): string[] => {
@@ -293,12 +294,12 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
     }
 
     const routeKey = route.filePath ? toManifestKey(rootDir, route.filePath) : null;
-    const keys = ['index.html'];
+    const keys = ["index.html"];
     if (routeKey) {
       keys.push(routeKey);
     }
 
-    return collectStylesFromManifest(manifest, keys, '/client');
+    return collectStylesFromManifest(manifest, keys, "/client");
   };
 
   await rm(resolvedOutDir, { recursive: true, force: true });
@@ -313,12 +314,12 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
     }),
   });
 
-  const staticClientDir = join(resolvedOutDir, 'client');
+  const staticClientDir = join(resolvedOutDir, "client");
   if (isLegacyClientOutput) {
     await mkdir(staticClientDir, { recursive: true });
     const entries = await readdir(clientBuildDir, { withFileTypes: true });
     for (const entry of entries) {
-      if (entry.name === 'server' || entry.name === 'static') {
+      if (entry.name === "server" || entry.name === "static") {
         continue;
       }
       const sourcePath = join(clientBuildDir, entry.name);

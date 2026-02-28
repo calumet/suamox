@@ -1,4 +1,4 @@
-import { Head } from '@calumet/suamox-head';
+import { Head } from "@calumet/suamox-head";
 
 export const prerender = true;
 

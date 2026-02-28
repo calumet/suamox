@@ -25,14 +25,14 @@ pnpm add @calumet/suamox-vite-plugin-pages
 
 ```ts
 // vite.config.ts
-import { defineConfig } from 'vite';
-import { suamoxPages } from '@calumet/suamox-vite-plugin-pages';
+import { defineConfig } from "vite";
+import { suamoxPages } from "@calumet/suamox-vite-plugin-pages";
 
 export default defineConfig({
   plugins: [
     suamoxPages({
-      pagesDir: 'src/pages', // por defecto
-      extensions: ['.tsx', '.ts'], // por defecto
+      pagesDir: "src/pages", // por defecto
+      extensions: [".tsx", ".ts"], // por defecto
     }),
   ],
 });
@@ -55,7 +55,7 @@ src/pages/
 ### 3. Importa rutas
 
 ```ts
-import { routes } from 'virtual:pages';
+import { routes } from "virtual:pages";
 
 // routes es un arreglo de objetos RouteRecord:
 // {
@@ -111,7 +111,7 @@ Usa `[...param]` para rutas catch-all:
 ```tsx
 // src/pages/docs/[...path].tsx
 export default function DocsPage({ params }: { params: { path: string[] } }) {
-  return <p>Path: {params.path.join('/')}</p>;
+  return <p>Path: {params.path.join("/")}</p>;
 }
 ```
 
@@ -160,8 +160,8 @@ Agrega esto a tu `vite-env.d.ts`:
 O crea `virtual-pages.d.ts`:
 
 ```ts
-declare module 'virtual:pages' {
-  import type { RouteRecord } from '@calumet/suamox-vite-plugin-pages';
+declare module "virtual:pages" {
+  import type { RouteRecord } from "@calumet/suamox-vite-plugin-pages";
   export const routes: RouteRecord[];
   export default routes;
 }

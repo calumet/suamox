@@ -1,16 +1,18 @@
-import { beforeEach, afterEach, describe, expect, it } from 'vitest';
-import { createElement } from 'react';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { prerender } from '../src/ssg';
-import type { RouteRecord } from '../src/index';
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { createElement } from "react";
+import { beforeEach, afterEach, describe, expect, it } from "vitest";
+
+import type { RouteRecord } from "../src/index";
+import { prerender } from "../src/ssg";
 
 function createMockRoute(overrides: Partial<RouteRecord>): RouteRecord {
   return {
-    path: '/',
-    filePath: '/pages/index.tsx',
-    component: (() => createElement('div', null, 'Home')) as RouteRecord['component'],
+    path: "/",
+    filePath: "/pages/index.tsx",
+    component: (() => createElement("div", null, "Home")) as RouteRecord["component"],
     layouts: [],
     params: [],
     isCatchAll: false,
@@ -20,97 +22,97 @@ function createMockRoute(overrides: Partial<RouteRecord>): RouteRecord {
   };
 }
 
-describe('prerender', () => {
+describe("prerender", () => {
   let outDir: string;
 
   beforeEach(async () => {
-    outDir = await mkdtemp(join(tmpdir(), 'suamox-prerender-'));
+    outDir = await mkdtemp(join(tmpdir(), "suamox-prerender-"));
   });
 
   afterEach(async () => {
     await rm(outDir, { recursive: true, force: true });
   });
 
-  it('writes static and dynamic routes', async () => {
+  it("writes static and dynamic routes", async () => {
     const routes: RouteRecord[] = [
       createMockRoute({
-        path: '/',
+        path: "/",
         prerender: true,
-        component: (() => createElement('div', null, 'Home')) as RouteRecord['component'],
+        component: (() => createElement("div", null, "Home")) as RouteRecord["component"],
       }),
       createMockRoute({
-        path: '/blog/:slug',
-        params: ['slug'],
+        path: "/blog/:slug",
+        params: ["slug"],
         isIndex: false,
         prerender: true,
-        getStaticPaths: () => Promise.resolve([{ params: { slug: 'hello-world' } }]),
+        getStaticPaths: () => Promise.resolve([{ params: { slug: "hello-world" } }]),
         loader: ({ params }) => Promise.resolve({ slug: params.slug }),
         component: (({ data }: { data: { slug: string } }) =>
-          createElement('div', null, `Post ${data.slug}`)) as RouteRecord['component'],
+          createElement("div", null, `Post ${data.slug}`)) as RouteRecord["component"],
       }),
     ];
 
     await prerender({
       routes,
       outDir,
-      baseUrl: 'http://localhost',
+      baseUrl: "http://localhost",
     });
 
-    const indexHtml = await readFile(join(outDir, 'index.html'), 'utf-8');
-    expect(indexHtml).toContain('Home');
-    expect(indexHtml).not.toContain('window.__INITIAL_DATA__');
+    const indexHtml = await readFile(join(outDir, "index.html"), "utf-8");
+    expect(indexHtml).toContain("Home");
+    expect(indexHtml).not.toContain("window.__INITIAL_DATA__");
     expect(indexHtml).not.toContain('<script type="module"');
 
-    const blogHtml = await readFile(join(outDir, 'blog', 'hello-world', 'index.html'), 'utf-8');
-    expect(blogHtml).toContain('Post hello-world');
+    const blogHtml = await readFile(join(outDir, "blog", "hello-world", "index.html"), "utf-8");
+    expect(blogHtml).toContain("Post hello-world");
   });
 
-  it('renders catch-all static paths', async () => {
+  it("renders catch-all static paths", async () => {
     const routes: RouteRecord[] = [
       createMockRoute({
-        path: '/docs/*',
-        params: ['path'],
+        path: "/docs/*",
+        params: ["path"],
         isCatchAll: true,
         isIndex: false,
         prerender: true,
-        getStaticPaths: () => Promise.resolve([{ params: { path: 'guide/getting-started' } }]),
+        getStaticPaths: () => Promise.resolve([{ params: { path: "guide/getting-started" } }]),
         loader: ({ params }) => Promise.resolve({ path: params.path }),
         component: (({ data }: { data: { path: string } }) =>
-          createElement('div', null, `Doc ${data.path}`)) as RouteRecord['component'],
+          createElement("div", null, `Doc ${data.path}`)) as RouteRecord["component"],
       }),
     ];
 
     await prerender({
       routes,
       outDir,
-      baseUrl: 'http://localhost',
+      baseUrl: "http://localhost",
     });
 
     const docHtml = await readFile(
-      join(outDir, 'docs', 'guide', 'getting-started', 'index.html'),
-      'utf-8'
+      join(outDir, "docs", "guide", "getting-started", "index.html"),
+      "utf-8",
     );
 
-    expect(docHtml).toContain('Doc guide/getting-started');
+    expect(docHtml).toContain("Doc guide/getting-started");
   });
 
-  it('injects stylesheet links from resolved assets', async () => {
+  it("injects stylesheet links from resolved assets", async () => {
     const route = createMockRoute({
-      path: '/',
+      path: "/",
       prerender: true,
-      component: (() => createElement('div', null, 'Home')) as RouteRecord['component'],
+      component: (() => createElement("div", null, "Home")) as RouteRecord["component"],
     });
 
     await prerender({
       routes: [route],
       outDir,
-      baseUrl: 'http://localhost',
+      baseUrl: "http://localhost",
       resolveAssets: () => ({
-        styles: ['/client/assets/app.css'],
+        styles: ["/client/assets/app.css"],
       }),
     });
 
-    const indexHtml = await readFile(join(outDir, 'index.html'), 'utf-8');
+    const indexHtml = await readFile(join(outDir, "index.html"), "utf-8");
     expect(indexHtml).toContain('<link rel="stylesheet" href="/client/assets/app.css">');
   });
 });

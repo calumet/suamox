@@ -32,7 +32,7 @@ El resultado del loader se inyecta como `data` en el componente.
 ```tsx
 export async function loader({ params, query }) {
   const slug = params.slug;
-  const draft = query.get('draft') === 'true';
+  const draft = query.get("draft") === "true";
   return { slug, draft };
 }
 
@@ -49,10 +49,7 @@ En rutas dinámicas con `prerender = true`, debes exportar `getStaticPaths()`:
 export const prerender = true;
 
 export async function getStaticPaths() {
-  return [
-    { params: { slug: 'hola' } },
-    { params: { slug: 'mundo' } },
-  ];
+  return [{ params: { slug: "hola" } }, { params: { slug: "mundo" } }];
 }
 ```
 

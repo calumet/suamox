@@ -9,7 +9,7 @@ Suamox usa Hono como servidor y Vite para el flujo de desarrollo.
 En `server.ts`:
 
 ```ts
-import { createServer } from '@calumet/suamox-hono-adapter';
+import { createServer } from "@calumet/suamox-hono-adapter";
 
 await createServer({ port: 3000 });
 ```
@@ -80,7 +80,7 @@ Ejemplo recomendado:
 
 ```ts
 // src/entry-client.tsx
-import './styles/global.css';
+import "./styles/global.css";
 ```
 
 Si ese archivo existe y Vite lo resuelve, se enlaza automáticamente durante SSR dev.

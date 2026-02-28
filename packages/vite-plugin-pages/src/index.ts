@@ -1,9 +1,11 @@
-import { resolve } from 'node:path';
-import type { Plugin, ViteDevServer } from 'vite';
-import pc from 'picocolors';
-import { scanRoutes } from './scanner.js';
-import { generateRoutesModule, type DefaultPageMode } from './codegen.js';
-import type { RouteRecord } from './types.js';
+import { resolve } from "node:path";
+
+import pc from "picocolors";
+import type { Plugin, ViteDevServer } from "vite";
+
+import { generateRoutesModule, type DefaultPageMode } from "./codegen.js";
+import { scanRoutes } from "./scanner.js";
+import type { RouteRecord } from "./types.js";
 
 export interface SuamoxPagesOptions {
   pagesDir?: string;
@@ -11,20 +13,16 @@ export interface SuamoxPagesOptions {
   defaultMode?: DefaultPageMode;
 }
 
-export type { RouteRecord, RouteSegment, ParsedRoute } from './types.js';
+export type { RouteRecord, RouteSegment, ParsedRoute } from "./types.js";
 
-const VIRTUAL_MODULE_ID = 'virtual:pages';
-const RESOLVED_VIRTUAL_MODULE_ID = '\0' + VIRTUAL_MODULE_ID;
+const VIRTUAL_MODULE_ID = "virtual:pages";
+const RESOLVED_VIRTUAL_MODULE_ID = "\0" + VIRTUAL_MODULE_ID;
 
-const VIRTUAL_SERVER_MODULE_ID = 'virtual:pages/server';
-const RESOLVED_VIRTUAL_SERVER_MODULE_ID = '\0' + VIRTUAL_SERVER_MODULE_ID;
+const VIRTUAL_SERVER_MODULE_ID = "virtual:pages/server";
+const RESOLVED_VIRTUAL_SERVER_MODULE_ID = "\0" + VIRTUAL_SERVER_MODULE_ID;
 
 export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
-  const {
-    pagesDir = 'src/pages',
-    extensions = ['.tsx', '.ts'],
-    defaultMode = 'ssr',
-  } = options;
+  const { pagesDir = "src/pages", extensions = [".tsx", ".ts"], defaultMode = "ssr" } = options;
 
   let server: ViteDevServer | undefined;
   let root: string;
@@ -42,7 +40,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     moduleCode = generateRoutesModule(result.routes, { defaultMode });
 
     if (logErrors && result.errors.length > 0) {
-      console.error(pc.red('\n[suamox:pages] Route errors:'));
+      console.error(pc.red("\n[suamox:pages] Route errors:"));
       result.errors.forEach((err) => {
         console.error(pc.red(`  - ${err}`));
       });
@@ -53,15 +51,15 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       if (module) {
         server.moduleGraph.invalidateModule(module);
         server.ws.send({
-          type: 'full-reload',
-          path: '*',
+          type: "full-reload",
+          path: "*",
         });
       }
     }
   }
 
   return {
-    name: 'suamox:pages',
+    name: "suamox:pages",
 
     configResolved(config) {
       root = config.root;
@@ -75,20 +73,19 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
 
       server.watcher.add(absolutePagesDir);
 
-      server.watcher.on('add', (file) => {
+      server.watcher.on("add", (file) => {
         if (file.startsWith(absolutePagesDir) && extensions.some((ext) => file.endsWith(ext))) {
           console.log(pc.green(`[suamox:pages] Page added: ${file}`));
           void updateRoutes();
         }
       });
 
-      server.watcher.on('unlink', (file) => {
+      server.watcher.on("unlink", (file) => {
         if (file.startsWith(absolutePagesDir) && extensions.some((ext) => file.endsWith(ext))) {
           console.log(pc.yellow(`[suamox:pages] Page removed: ${file}`));
           void updateRoutes();
         }
       });
-
     },
 
     async buildStart() {
@@ -97,7 +94,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       if (routesCache) {
         console.log(pc.cyan(`[suamox:pages] Found ${routesCache.length} route(s)`));
         routesCache.forEach((route) => {
-          const loaderInfo = route.hasLoader ? pc.green(' [has loader]') : '';
+          const loaderInfo = route.hasLoader ? pc.green(" [has loader]") : "";
           console.log(pc.dim(`  ${route.path} -> ${route.filePath}${loaderInfo}`));
         });
       }

@@ -20,7 +20,7 @@ Si una ruta dinámica usa prerender, debe exportar `getStaticPaths()`:
 export const prerender = true;
 
 export async function getStaticPaths() {
-  return [{ params: { slug: 'mi-post' } }];
+  return [{ params: { slug: "mi-post" } }];
 }
 ```
 

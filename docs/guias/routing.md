@@ -59,17 +59,17 @@ No necesitas ordenar archivos manualmente.
 En `vite.config.ts`:
 
 ```ts
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import suamoxPages from '@calumet/suamox-vite-plugin-pages';
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import suamoxPages from "@calumet/suamox-vite-plugin-pages";
 
 export default defineConfig({
   plugins: [
     react(),
     suamoxPages({
-      pagesDir: 'src/pages',
-      extensions: ['.tsx', '.ts'],
-      defaultMode: 'ssr', // 'ssr' | 'ssg' | 'csr'
+      pagesDir: "src/pages",
+      extensions: [".tsx", ".ts"],
+      defaultMode: "ssr", // 'ssr' | 'ssg' | 'csr'
     }),
   ],
 });

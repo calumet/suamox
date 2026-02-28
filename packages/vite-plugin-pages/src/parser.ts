@@ -1,5 +1,6 @@
-import { relative, sep } from 'node:path';
-import type { RouteRecord, RouteSegment, ParsedRoute } from './types.js';
+import { relative, sep } from "node:path";
+
+import type { RouteRecord, RouteSegment, ParsedRoute } from "./types.js";
 
 /**
  * Parsea la ruta de un archivo a un registro de ruta
@@ -12,7 +13,7 @@ export function parseRoute(filePath: string, pagesDir: string): ParsedRoute {
   const relativePath = relative(pagesDir, filePath);
 
   // Quitar extensión
-  const withoutExt = relativePath.replace(/\.(tsx?|jsx?)$/, '');
+  const withoutExt = relativePath.replace(/\.(tsx?|jsx?)$/, "");
 
   // Separar en segmentos
   const parts = withoutExt.split(sep).filter(Boolean);
@@ -28,18 +29,18 @@ export function parseRoute(filePath: string, pagesDir: string): ParsedRoute {
     const part = parts[i]!;
 
     // Quitar grupos de rutas (admin) -> no se agregan al path
-    if (part.startsWith('(') && part.endsWith(')')) {
+    if (part.startsWith("(") && part.endsWith(")")) {
       continue;
     }
 
     // Manejar archivos index
-    if (part === 'index') {
+    if (part === "index") {
       isIndex = true;
       continue;
     }
 
     // Manejar catch-all [...param]
-    if (part.startsWith('[...') && part.endsWith(']')) {
+    if (part.startsWith("[...") && part.endsWith("]")) {
       const paramName = part.slice(4, -1);
       if (!paramName) {
         errors.push(`Invalid catch-all segment: ${part}`);
@@ -47,23 +48,23 @@ export function parseRoute(filePath: string, pagesDir: string): ParsedRoute {
       }
 
       segments.push({
-        type: 'catchAll',
-        value: '*',
+        type: "catchAll",
+        value: "*",
         paramName,
       });
       params.push(paramName);
-      pathParts.push('*');
+      pathParts.push("*");
       isCatchAll = true;
 
       // Catch-all debe ser el ultimo segmento
       if (i !== parts.length - 1) {
-        errors.push('Catch-all parameter must be the last segment');
+        errors.push("Catch-all parameter must be the last segment");
       }
       continue;
     }
 
     // Manejar parámetros dinámicos [param]
-    if (part.startsWith('[') && part.endsWith(']')) {
+    if (part.startsWith("[") && part.endsWith("]")) {
       const paramName = part.slice(1, -1);
       if (!paramName) {
         errors.push(`Invalid parameter segment: ${part}`);
@@ -71,7 +72,7 @@ export function parseRoute(filePath: string, pagesDir: string): ParsedRoute {
       }
 
       segments.push({
-        type: 'param',
+        type: "param",
         value: `:${paramName}`,
         paramName,
       });
@@ -82,14 +83,14 @@ export function parseRoute(filePath: string, pagesDir: string): ParsedRoute {
 
     // Segmento estático
     segments.push({
-      type: 'static',
+      type: "static",
       value: part,
     });
     pathParts.push(part);
   }
 
   // Construir path final
-  const path = '/' + pathParts.join('/');
+  const path = "/" + pathParts.join("/");
 
   // Calcular prioridad (más alta = se evalúa primero)
   // Segmentos estáticos tienen más prioridad, luego params, luego catch-all
@@ -124,11 +125,11 @@ function calculatePriority(segments: RouteSegment[]): number {
 
   // Segmentos estáticos agregan más prioridad
   for (const segment of segments) {
-    if (segment.type === 'static') {
+    if (segment.type === "static") {
       priority += 10;
-    } else if (segment.type === 'param') {
+    } else if (segment.type === "param") {
       priority += 5;
-    } else if (segment.type === 'catchAll') {
+    } else if (segment.type === "catchAll") {
       hasCatchAll = true;
       // Catch-all reduce la prioridad de forma importante
       priority -= 1000;
@@ -177,7 +178,7 @@ export function validateRoutes(routes: RouteRecord[]): string[] {
       errors.push(
         `Duplicate route path: ${route.path}\n` +
           `  - ${existing.filePath}\n` +
-          `  - ${route.filePath}`
+          `  - ${route.filePath}`,
       );
     } else {
       pathMap.set(route.path, route);

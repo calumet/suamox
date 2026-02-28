@@ -1,8 +1,8 @@
-import { Head } from '@calumet/suamox-head';
+import { Head } from "@calumet/suamox-head";
 
 export default function NotFoundPage() {
   return (
-    <div style={{ padding: '2rem' }}>
+    <div style={{ padding: "2rem" }}>
       <Head>
         <title>Suamox - 404</title>
         <meta name="description" content="Page not found." />

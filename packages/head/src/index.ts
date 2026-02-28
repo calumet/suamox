@@ -1,4 +1,4 @@
-import type React from 'react';
+import type React from "react";
 import {
   createContext,
   createElement,
@@ -7,9 +7,9 @@ import {
   useContext,
   useEffect,
   useRef,
-} from 'react';
+} from "react";
 
-export type HeadManagerMode = 'server' | 'client';
+export type HeadManagerMode = "server" | "client";
 
 export interface HeadManager {
   mode: HeadManagerMode;
@@ -19,21 +19,21 @@ export interface HeadManager {
   subscribe: (listener: () => void) => () => void;
 }
 
-export const headMarkerAttribute = 'data-suamox-head';
-export const headMarkerStartValue = 'start';
-export const headMarkerEndValue = 'end';
+export const headMarkerAttribute = "data-suamox-head";
+export const headMarkerStartValue = "start";
+export const headMarkerEndValue = "end";
 
 const headMarkerStartSelector = `meta[${headMarkerAttribute}="${headMarkerStartValue}"]`;
 const headMarkerEndSelector = `meta[${headMarkerAttribute}="${headMarkerEndValue}"]`;
 
-const canUseDOM = (): boolean => typeof window !== 'undefined' && typeof document !== 'undefined';
+const canUseDOM = (): boolean => typeof window !== "undefined" && typeof document !== "undefined";
 
 export const createHeadManager = (mode: HeadManagerMode): HeadManager => {
   const entries = new Map<symbol, React.ReactNode>();
   const listeners = new Set<() => void>();
 
   const notify = (): void => {
-    if (mode !== 'client') {
+    if (mode !== "client") {
       return;
     }
     for (const listener of listeners) {
@@ -55,7 +55,7 @@ export const createHeadManager = (mode: HeadManagerMode): HeadManager => {
       return Array.from(entries.values());
     },
     subscribe(listener) {
-      if (mode !== 'client') {
+      if (mode !== "client") {
         return () => {};
       }
       listeners.add(listener);
@@ -66,7 +66,7 @@ export const createHeadManager = (mode: HeadManagerMode): HeadManager => {
   };
 };
 
-const globalContextKey = '__SUAMOX_HEAD_CONTEXT__';
+const globalContextKey = "__SUAMOX_HEAD_CONTEXT__";
 type HeadContextType = React.Context<HeadManager | null>;
 const globalHeadContext = globalThis as typeof globalThis & {
   [globalContextKey]?: HeadContextType;
@@ -87,13 +87,13 @@ const ensureHeadMarkers = (): { start: Element; end: Element } => {
   let end = head.querySelector(headMarkerEndSelector);
 
   if (!start) {
-    start = document.createElement('meta');
+    start = document.createElement("meta");
     start.setAttribute(headMarkerAttribute, headMarkerStartValue);
     head.appendChild(start);
   }
 
   if (!end) {
-    end = document.createElement('meta');
+    end = document.createElement("meta");
     end.setAttribute(headMarkerAttribute, headMarkerEndValue);
     head.appendChild(end);
   }
@@ -106,11 +106,11 @@ const ensureHeadMarkers = (): { start: Element; end: Element } => {
 };
 
 const renderHeadDom = (node: React.ReactNode, target: Document): Node[] => {
-  if (node === null || node === undefined || typeof node === 'boolean') {
+  if (node === null || node === undefined || typeof node === "boolean") {
     return [];
   }
 
-  if (typeof node === 'string' || typeof node === 'number') {
+  if (typeof node === "string" || typeof node === "number") {
     return [target.createTextNode(String(node))];
   }
 
@@ -129,7 +129,7 @@ const renderHeadDom = (node: React.ReactNode, target: Document): Node[] => {
     return renderHeadDom(elementNode.props.children as React.ReactNode, target);
   }
 
-  if (typeof elementNode.type !== 'string') {
+  if (typeof elementNode.type !== "string") {
     return [];
   }
 
@@ -137,37 +137,37 @@ const renderHeadDom = (node: React.ReactNode, target: Document): Node[] => {
   const props = elementNode.props;
 
   for (const [key, value] of Object.entries(props)) {
-    if (key === 'children' || key === 'dangerouslySetInnerHTML' || key === 'ref' || key === 'key') {
+    if (key === "children" || key === "dangerouslySetInnerHTML" || key === "ref" || key === "key") {
       continue;
     }
 
-    if (key === 'className') {
-      if (typeof value === 'string') {
-        element.setAttribute('class', value);
+    if (key === "className") {
+      if (typeof value === "string") {
+        element.setAttribute("class", value);
       }
       continue;
     }
 
-    if (key === 'htmlFor') {
-      if (typeof value === 'string') {
-        element.setAttribute('for', value);
+    if (key === "htmlFor") {
+      if (typeof value === "string") {
+        element.setAttribute("for", value);
       }
       continue;
     }
 
-    if (key === 'style' && value && typeof value === 'object') {
+    if (key === "style" && value && typeof value === "object") {
       const styleEntries = Object.entries(value as Record<string, string | number>);
       const styleValue = styleEntries
         .map(([styleKey, styleVal]) => `${toKebabCase(styleKey)}:${String(styleVal)}`)
-        .join(';');
+        .join(";");
       if (styleValue) {
-        element.setAttribute('style', styleValue);
+        element.setAttribute("style", styleValue);
       }
       continue;
     }
 
     if (value === true) {
-      element.setAttribute(key, '');
+      element.setAttribute(key, "");
       continue;
     }
 
@@ -175,7 +175,7 @@ const renderHeadDom = (node: React.ReactNode, target: Document): Node[] => {
       continue;
     }
 
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint') {
+    if (typeof value === "string" || typeof value === "number" || typeof value === "bigint") {
       element.setAttribute(key, String(value));
     }
   }
@@ -227,13 +227,13 @@ export function HeadProvider({
 }): React.ReactElement {
   const managerRef = useRef<HeadManager | null>(null);
   if (!managerRef.current) {
-    managerRef.current = manager ?? createHeadManager(canUseDOM() ? 'client' : 'server');
+    managerRef.current = manager ?? createHeadManager(canUseDOM() ? "client" : "server");
   }
 
   const activeManager = manager ?? managerRef.current;
 
   useEffect(() => {
-    if (activeManager.mode !== 'client') {
+    if (activeManager.mode !== "client") {
       return;
     }
     const apply = () => {
@@ -251,12 +251,12 @@ export function Head({ children }: { children: React.ReactNode }): null {
   const idRef = useRef<symbol | null>(null);
 
   if (!idRef.current) {
-    idRef.current = Symbol('head');
+    idRef.current = Symbol("head");
   }
 
   const id = idRef.current;
 
-  if (manager && manager.mode === 'server') {
+  if (manager && manager.mode === "server") {
     manager.register(id, children);
     return null;
   }

@@ -5,7 +5,7 @@ Suamox incluye `@calumet/suamox-head` para manejar metadatos del documento en SS
 ## Uso básico
 
 ```tsx
-import { Head } from '@calumet/suamox-head';
+import { Head } from "@calumet/suamox-head";
 
 export default function HomePage() {
   return (

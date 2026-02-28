@@ -1,22 +1,22 @@
-import { Head } from '@calumet/suamox-head';
-import type { LoaderContext } from '@calumet/suamox';
+﻿import type { LoaderContext } from "@calumet/suamox";
+import { Head } from "@calumet/suamox-head";
 
 // Base de datos simulada de posts del blog
 const blogPosts = {
-  'hello-world': {
-    title: 'Hello World',
-    content: 'This is my first blog post!',
-    date: '2026-01-15',
+  "hello-world": {
+    title: "Hello World",
+    content: "This is my first blog post!",
+    date: "2026-01-15",
   },
-  'react-ssr': {
-    title: 'React Server-Side Rendering',
-    content: 'Learn how SSR works with React and Vite.',
-    date: '2026-01-16',
+  "react-ssr": {
+    title: "React Server-Side Rendering",
+    content: "Learn how SSR works with React and Vite.",
+    date: "2026-01-16",
   },
-  'suamox-framework': {
-    title: 'Introducing Suamox Framework',
-    content: 'A modern meta-framework for React with SSR and SSG support.',
-    date: '2026-01-18',
+  "suamox-framework": {
+    title: "Introducing Suamox Framework",
+    content: "A modern meta-framework for React with SSR and SSG support.",
+    date: "2026-01-18",
   },
 };
 
@@ -50,13 +50,13 @@ interface BlogPostData {
 export default function BlogPostPage({ data }: { data: BlogPostData | null }) {
   if (!data || data.notFound) {
     return (
-      <div style={{ padding: '2rem' }}>
+      <div style={{ padding: "2rem" }}>
         <Head>
           <title>Post Not Found</title>
           <meta name="description" content="Blog post not found." />
         </Head>
         <h1>Post Not Found</h1>
-        <p>The blog post you're looking for doesn't exist.</p>
+        <p>The blog post you&apos;re looking for doesn&apos;t exist.</p>
         <a href="/">Back to home</a>
       </div>
     );
@@ -66,7 +66,7 @@ export default function BlogPostPage({ data }: { data: BlogPostData | null }) {
 
   if (!post) {
     return (
-      <div style={{ padding: '2rem' }}>
+      <div style={{ padding: "2rem" }}>
         <Head>
           <title>Blog Error</title>
           <meta name="description" content="Unable to load post data." />
@@ -79,7 +79,7 @@ export default function BlogPostPage({ data }: { data: BlogPostData | null }) {
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
+    <div style={{ padding: "2rem", maxWidth: "800px", margin: "0 auto" }}>
       <Head>
         <title>{post.title}</title>
         <meta name="description" content={post.content} />
@@ -87,14 +87,14 @@ export default function BlogPostPage({ data }: { data: BlogPostData | null }) {
       <article>
         <header>
           <h1>{post.title}</h1>
-          <time style={{ color: '#666' }}>{post.date}</time>
+          <time style={{ color: "#666" }}>{post.date}</time>
         </header>
-        <div style={{ marginTop: '2rem', lineHeight: '1.6' }}>
+        <div style={{ marginTop: "2rem", lineHeight: "1.6" }}>
           <p>{post.content}</p>
         </div>
       </article>
-      <footer style={{ marginTop: '2rem', paddingTop: '2rem', borderTop: '1px solid #eee' }}>
-        <a href="/">← Back to home</a>
+      <footer style={{ marginTop: "2rem", paddingTop: "2rem", borderTop: "1px solid #eee" }}>
+        <a href="/">&larr; Back to home</a>
       </footer>
     </div>
   );

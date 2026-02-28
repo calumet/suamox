@@ -1,13 +1,13 @@
-import type React from 'react';
-import { createElement, Fragment } from 'react';
-import { renderToStaticMarkup, renderToString } from 'react-dom/server';
 import {
   HeadProvider,
   createHeadManager,
   headMarkerAttribute,
   headMarkerEndValue,
   headMarkerStartValue,
-} from '@calumet/suamox-head';
+} from "@calumet/suamox-head";
+import type React from "react";
+import { createElement, Fragment } from "react";
+import { renderToStaticMarkup, renderToString } from "react-dom/server";
 
 export interface RouteRecord {
   path: string;
@@ -69,8 +69,8 @@ export interface RenderResult {
 }
 
 export interface HydrationAdapter {
-  hydrateRoot: typeof import('react-dom/client').hydrateRoot;
-  createRoot: typeof import('react-dom/client').createRoot;
+  hydrateRoot: typeof import("react-dom/client").hydrateRoot;
+  createRoot: typeof import("react-dom/client").createRoot;
 }
 
 const renderHeadToString = (nodes: React.ReactNode[]): string => {
@@ -78,9 +78,9 @@ const renderHeadToString = (nodes: React.ReactNode[]): string => {
   const endTag = `<meta ${headMarkerAttribute}="${headMarkerEndValue}">`;
   const content = nodes
     .map((node) => renderToStaticMarkup(createElement(Fragment, null, node)))
-    .join('\n');
+    .join("\n");
 
-  return [startTag, content, endTag].filter(Boolean).join('\n');
+  return [startTag, content, endTag].filter(Boolean).join("\n");
 };
 
 /**
@@ -88,7 +88,7 @@ const renderHeadToString = (nodes: React.ReactNode[]): string => {
  */
 export function matchRoute(routes: RouteRecord[], pathname: string): MatchResult | null {
   // Normalizar pathname
-  const normalizedPath = pathname === '' ? '/' : pathname;
+  const normalizedPath = pathname === "" ? "/" : pathname;
 
   for (const route of routes) {
     const match = matchPattern(route, normalizedPath);
@@ -108,21 +108,21 @@ export function matchRoute(routes: RouteRecord[], pathname: string): MatchResult
  */
 function matchPattern(
   route: RouteRecord,
-  pathname: string
+  pathname: string,
 ): { params: Record<string, string> } | null {
   const pattern = route.path;
   // Manejar match exacto para rutas estáticas
-  if (!pattern.includes(':') && !pattern.includes('*')) {
+  if (!pattern.includes(":") && !pattern.includes("*")) {
     return pattern === pathname ? { params: {} } : null;
   }
 
-  const patternParts = pattern.split('/').filter(Boolean);
-  const pathParts = pathname.split('/').filter(Boolean);
+  const patternParts = pattern.split("/").filter(Boolean);
+  const pathParts = pathname.split("/").filter(Boolean);
 
   // Ruta catch-all
-  if (pattern.endsWith('/*')) {
+  if (pattern.endsWith("/*")) {
     const basePattern = pattern.slice(0, -2);
-    const baseParts = basePattern.split('/').filter(Boolean);
+    const baseParts = basePattern.split("/").filter(Boolean);
 
     // Verificar si coincide la base
     for (let i = 0; i < baseParts.length; i++) {
@@ -133,7 +133,7 @@ function matchPattern(
         return null;
       }
 
-      if (patternPart.startsWith(':')) {
+      if (patternPart.startsWith(":")) {
         continue;
       }
 
@@ -144,11 +144,11 @@ function matchPattern(
 
     // Extraer parámetro catch-all
     const catchAllParts = pathParts.slice(baseParts.length);
-    const paramName = route.params[0] ?? 'all';
+    const paramName = route.params[0] ?? "all";
 
     return {
       params: {
-        [paramName]: catchAllParts.join('/'),
+        [paramName]: catchAllParts.join("/"),
       },
     };
   }
@@ -164,7 +164,7 @@ function matchPattern(
     const patternPart = patternParts[i]!;
     const pathPart = pathParts[i]!;
 
-    if (patternPart.startsWith(':')) {
+    if (patternPart.startsWith(":")) {
       // Parámetro dinámico
       const paramName = patternPart.slice(1);
       params[paramName] = pathPart;
@@ -189,7 +189,7 @@ export function createPageElement(route: RouteRecord, data: unknown): React.Reac
 
   return layouts.reduceRight<React.ReactElement>(
     (child, Layout) => createElement(Layout, null, child),
-    pageElement
+    pageElement,
   );
 }
 
@@ -214,7 +214,7 @@ export async function resolveRouteModule(route: RouteRecord): Promise<RouteRecor
 }
 
 export async function hydrateApp(routes: RouteRecord[], adapter?: HydrationAdapter): Promise<void> {
-  const rootElement = document.getElementById('root');
+  const rootElement = document.getElementById("root");
   if (!rootElement) {
     return;
   }
@@ -232,7 +232,7 @@ export async function hydrateApp(routes: RouteRecord[], adapter?: HydrationAdapt
   let hydrateRoot = adapter?.hydrateRoot;
   let createRoot = adapter?.createRoot;
   if (!hydrateRoot || !createRoot) {
-    const client = await import('react-dom/client');
+    const client = await import("react-dom/client");
     hydrateRoot = client.hydrateRoot;
     createRoot = client.createRoot;
   }
@@ -253,25 +253,25 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
 
   // Hacer match de ruta
   const match = matchRoute(routes, pathname);
-  const notFoundRoute = routes.find((route) => route.path === '/404');
+  const notFoundRoute = routes.find((route) => route.path === "/404");
 
   if (!match && !notFoundRoute) {
     return {
       status: 404,
-      html: '<h1>404 - Page Not Found</h1>',
+      html: "<h1>404 - Page Not Found</h1>",
     };
   }
 
   const resolvedMatch = match ?? { route: notFoundRoute!, params: {} };
   const { route, params } = resolvedMatch;
-  const status = !match || route.path === '/404' ? 404 : 200;
+  const status = !match || route.path === "/404" ? 404 : 200;
   const resolvedRoute = await resolveRouteModule(route);
   const url = new URL(request.url);
 
   if (resolvedRoute.csr) {
     return {
       status,
-      html: '',
+      html: "",
       head: renderHeadToString([]),
       initialData: null,
     };
@@ -291,21 +291,21 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
     try {
       data = await resolvedRoute.loader(loaderContext);
     } catch (error) {
-      console.error('Loader error:', error);
+      console.error("Loader error:", error);
       return {
         status: 500,
-        html: '<h1>500 - Internal Server Error</h1>',
+        html: "<h1>500 - Internal Server Error</h1>",
       };
     }
   }
 
   // Renderizar componente con React SSR
   try {
-    const headManager = createHeadManager('server');
+    const headManager = createHeadManager("server");
     const element = createElement(
       HeadProvider,
       { manager: headManager },
-      createPageElement(resolvedRoute, data)
+      createPageElement(resolvedRoute, data),
     );
     const html = renderToString(element);
     const head = renderHeadToString(headManager.getSnapshot());
@@ -317,10 +317,10 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
       initialData: data,
     };
   } catch (error) {
-    console.error('Render error:', error);
+    console.error("Render error:", error);
     return {
       status: 500,
-      html: '<h1>500 - Internal Server Error</h1>',
+      html: "<h1>500 - Internal Server Error</h1>",
     };
   }
 }
@@ -329,10 +329,10 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
  * Serializa datos de forma segura para inyección en HTML
  */
 export function serializeData(data: unknown): string {
-  const json = JSON.stringify(data) ?? 'null';
+  const json = JSON.stringify(data) ?? "null";
   // Escapar entidades HTML para prevenir XSS
   // Solo se escapan <, > y & que pueden romper el contexto del script
-  return json.replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
+  return json.replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
 }
 
 /**
@@ -346,17 +346,17 @@ export function generateHTML(options: {
   preloadScripts?: string[];
   styles?: string[];
   includeInitialDataScript?: boolean;
-  scriptPlacement?: 'head' | 'body';
+  scriptPlacement?: "head" | "body";
 }): string {
   const {
     html,
-    head = '',
+    head = "",
     initialData,
     scripts = [],
     preloadScripts = [],
     styles = [],
     includeInitialDataScript = true,
-    scriptPlacement = 'body',
+    scriptPlacement = "body",
   } = options;
 
   const uniqueStyles = Array.from(new Set(styles));
@@ -365,27 +365,27 @@ export function generateHTML(options: {
 
   const styleTags = uniqueStyles
     .map((href) => `<link rel="stylesheet" href="${href}">`)
-    .join('\n    ');
+    .join("\n    ");
 
   const preloadTags = uniquePreloadScripts
     .map((href) => `<link rel="modulepreload" href="${href}">`)
-    .join('\n    ');
+    .join("\n    ");
 
   const scriptTags = uniqueScripts
     .map((src) => `<script type="module" src="${src}"></script>`)
-    .join('\n    ');
+    .join("\n    ");
 
   const dataScript = includeInitialDataScript
     ? `<script>
-      window.__INITIAL_DATA__ = ${initialData !== undefined ? serializeData(initialData) : 'null'};
+      window.__INITIAL_DATA__ = ${initialData !== undefined ? serializeData(initialData) : "null"};
     </script>`
-    : '';
+    : "";
 
-  const headContent = [head, styleTags, preloadTags, scriptPlacement === 'head' ? scriptTags : '']
+  const headContent = [head, styleTags, preloadTags, scriptPlacement === "head" ? scriptTags : ""]
     .filter(Boolean)
-    .join('\n    ');
-  const bodyScripts = scriptPlacement === 'body' ? scriptTags : '';
-  const bodyContent = [html, dataScript, bodyScripts].filter(Boolean).join('\n    ');
+    .join("\n    ");
+  const bodyScripts = scriptPlacement === "body" ? scriptTags : "";
+  const bodyContent = [html, dataScript, bodyScripts].filter(Boolean).join("\n    ");
 
   return `<!DOCTYPE html>
 <html lang="en">

@@ -1,15 +1,16 @@
-import { spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { runSsg } from '@calumet/suamox/ssg';
+import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
-const pnpmCmd = 'pnpm';
+import { runSsg } from "@calumet/suamox/ssg";
+
+const pnpmCmd = "pnpm";
 
 const readPackageVersion = (): string => {
-  const packageJsonPath = new URL('../package.json', import.meta.url);
-  const raw = readFileSync(packageJsonPath, 'utf-8');
+  const packageJsonPath = new URL("../package.json", import.meta.url);
+  const raw = readFileSync(packageJsonPath, "utf-8");
   const parsed = JSON.parse(raw) as { version?: string };
-  return parsed.version ?? '0.0.0';
+  return parsed.version ?? "0.0.0";
 };
 
 const usage = `
@@ -27,15 +28,15 @@ Commands:
 const run = async (command: string, args: string[], options: { env?: NodeJS.ProcessEnv } = {}) => {
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const child = spawn(command, args, {
-      stdio: 'inherit',
+      stdio: "inherit",
       // En Windows puede fallar con EINVAL al ejecutar comandos .cmd sin shell.
-      shell: process.platform === 'win32',
+      shell: process.platform === "win32",
       env: { ...process.env, ...options.env },
     });
-    child.on('error', rejectPromise);
-    child.on('close', (code) => {
+    child.on("error", rejectPromise);
+    child.on("close", (code) => {
       if (code && code !== 0) {
-        const exitCode = String(code ?? 'unknown');
+        const exitCode = String(code ?? "unknown");
         rejectPromise(new Error(`${command} exited with code ${exitCode}`));
         return;
       }
@@ -52,45 +53,45 @@ const ensureFile = (filePath: string, label: string): void => {
 };
 
 const runVite = async (args: string[]) => {
-  await run(pnpmCmd, ['exec', 'vite', ...args]);
+  await run(pnpmCmd, ["exec", "vite", ...args]);
 };
 
 const runTsx = async (args: string[], env?: NodeJS.ProcessEnv) => {
-  await run(pnpmCmd, ['exec', 'tsx', ...args], { env });
+  await run(pnpmCmd, ["exec", "tsx", ...args], { env });
 };
 
 const main = async () => {
   const args = process.argv.slice(2);
-  const command = args[0] ?? 'help';
+  const command = args[0] ?? "help";
 
   switch (command) {
-    case 'version': {
+    case "version": {
       console.log(readPackageVersion());
       return;
     }
-    case 'help': {
+    case "help": {
       console.log(usage.trim());
       return;
     }
-    case 'dev': {
-      const serverPath = resolve(process.cwd(), 'server.ts');
-      ensureFile(serverPath, 'server.ts');
-      await runTsx(['server.ts']);
+    case "dev": {
+      const serverPath = resolve(process.cwd(), "server.ts");
+      ensureFile(serverPath, "server.ts");
+      await runTsx(["server.ts"]);
       return;
     }
-    case 'preview': {
-      const serverPath = resolve(process.cwd(), 'server.ts');
-      ensureFile(serverPath, 'server.ts');
-      await runTsx(['server.ts'], { NODE_ENV: 'production' });
+    case "preview": {
+      const serverPath = resolve(process.cwd(), "server.ts");
+      ensureFile(serverPath, "server.ts");
+      await runTsx(["server.ts"], { NODE_ENV: "production" });
       return;
     }
-    case 'ssg': {
+    case "ssg": {
       await runSsg();
       return;
     }
-    case 'build': {
-      await runVite(['build', '--outDir', 'dist/client', '--manifest']);
-      await runVite(['build', '--ssr', 'src/entry-server.tsx', '--outDir', 'dist/server']);
+    case "build": {
+      await runVite(["build", "--outDir", "dist/client", "--manifest"]);
+      await runVite(["build", "--ssr", "src/entry-server.tsx", "--outDir", "dist/server"]);
       await runSsg();
       return;
     }

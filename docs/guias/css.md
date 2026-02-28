@@ -7,7 +7,7 @@ Suamox usa el pipeline nativo de Vite para manejar CSS en desarrollo, SSR y SSG.
 Importa tu archivo global en `src/entry-client.tsx`:
 
 ```ts
-import './styles/global.css';
+import "./styles/global.css";
 ```
 
 ## CSS Modules
@@ -15,7 +15,7 @@ import './styles/global.css';
 Puedes usar `*.module.css` en páginas, layouts o componentes:
 
 ```tsx
-import styles from './button.module.css';
+import styles from "./button.module.css";
 
 export function Button() {
   return <button className={styles.root}>Enviar</button>;

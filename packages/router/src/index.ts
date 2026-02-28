@@ -1,6 +1,3 @@
-import { createElement } from 'react';
-import type { Root } from 'react-dom/client';
-import { HeadProvider } from '@calumet/suamox-head';
 import {
   createPageElement,
   matchRoute,
@@ -8,7 +5,10 @@ import {
   type HydrationAdapter,
   type LoaderContext,
   type RouteRecord,
-} from '@calumet/suamox';
+} from "@calumet/suamox";
+import { HeadProvider } from "@calumet/suamox-head";
+import { createElement } from "react";
+import type { Root } from "react-dom/client";
 
 export interface RouterOptions {
   routes: RouteRecord[];
@@ -30,18 +30,18 @@ export interface RouterInstance {
 
 type ResolvedMatch = { route: RouteRecord; params: Record<string, string> };
 
-const canUseDOM = (): boolean => typeof window !== 'undefined' && typeof document !== 'undefined';
+const canUseDOM = (): boolean => typeof window !== "undefined" && typeof document !== "undefined";
 
 const isModifiedEvent = (event: MouseEvent): boolean =>
   event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
 
 const shouldIgnoreAnchor = (anchor: HTMLAnchorElement): boolean => {
-  const rel = anchor.getAttribute('rel');
+  const rel = anchor.getAttribute("rel");
   return (
-    anchor.hasAttribute('download') ||
-    (anchor.target && anchor.target !== '_self') ||
-    anchor.getAttribute('data-suamox-router') === 'false' ||
-    (rel ? rel.split(' ').includes('external') : false)
+    anchor.hasAttribute("download") ||
+    (anchor.target && anchor.target !== "_self") ||
+    anchor.getAttribute("data-suamox-router") === "false" ||
+    (rel ? rel.split(" ").includes("external") : false)
   );
 };
 
@@ -57,7 +57,7 @@ const resolveMatch = (routes: RouteRecord[], pathname: string): ResolvedMatch | 
   if (match) {
     return match;
   }
-  const notFoundRoute = routes.find((route) => route.path === '/404');
+  const notFoundRoute = routes.find((route) => route.path === "/404");
   if (!notFoundRoute) {
     return null;
   }
@@ -90,13 +90,13 @@ const normalizeAdapterLike = (value: unknown): HydrationAdapter | null => {
   const sourceDefault = asRecord(source.default);
 
   const hydrateRoot =
-    (source.hydrateRoot as HydrationAdapter['hydrateRoot'] | undefined) ??
-    (sourceDefault.hydrateRoot as HydrationAdapter['hydrateRoot'] | undefined);
+    (source.hydrateRoot as HydrationAdapter["hydrateRoot"] | undefined) ??
+    (sourceDefault.hydrateRoot as HydrationAdapter["hydrateRoot"] | undefined);
   const createRoot =
-    (source.createRoot as HydrationAdapter['createRoot'] | undefined) ??
-    (sourceDefault.createRoot as HydrationAdapter['createRoot'] | undefined);
+    (source.createRoot as HydrationAdapter["createRoot"] | undefined) ??
+    (sourceDefault.createRoot as HydrationAdapter["createRoot"] | undefined);
 
-  if (typeof hydrateRoot !== 'function' || typeof createRoot !== 'function') {
+  if (typeof hydrateRoot !== "function" || typeof createRoot !== "function") {
     return null;
   }
 
@@ -109,19 +109,19 @@ const ensureAdapter = async (adapter?: HydrationAdapter): Promise<HydrationAdapt
     return normalizedAdapter;
   }
 
-  const client = await import('react-dom/client');
+  const client = await import("react-dom/client");
   const normalizedClientAdapter = normalizeAdapterLike(client);
   if (normalizedClientAdapter) {
     return normalizedClientAdapter;
   }
 
   throw new TypeError(
-    '[suamox-router] Could not resolve react-dom/client hydration APIs (hydrateRoot/createRoot).'
+    "[suamox-router] Could not resolve react-dom/client hydration APIs (hydrateRoot/createRoot).",
   );
 };
 
 export async function startRouter(options: RouterOptions): Promise<RouterInstance> {
-  const { routes, adapter, rootElementId = 'root', baseUrl, prefetch = true } = options;
+  const { routes, adapter, rootElementId = "root", baseUrl, prefetch = true } = options;
 
   if (!canUseDOM()) {
     return {
@@ -147,7 +147,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
 
   const renderLocation = async (
     url: URL,
-    { scroll = true, useInitialData = false }: { scroll?: boolean; useInitialData?: boolean }
+    { scroll = true, useInitialData = false }: { scroll?: boolean; useInitialData?: boolean },
   ): Promise<void> => {
     const activeId = ++navigationId;
     const match = resolveMatch(routes, url.pathname);
@@ -226,13 +226,13 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
       return;
     }
 
-    const anchor = target.closest('a');
+    const anchor = target.closest("a");
     if (!anchor || shouldIgnoreAnchor(anchor)) {
       return;
     }
 
-    const href = anchor.getAttribute('href');
-    if (!href || href.startsWith('mailto:') || href.startsWith('tel:')) {
+    const href = anchor.getAttribute("href");
+    if (!href || href.startsWith("mailto:") || href.startsWith("tel:")) {
       return;
     }
 
@@ -255,13 +255,13 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
       return;
     }
 
-    const anchor = target.closest('a');
+    const anchor = target.closest("a");
     if (!anchor || shouldIgnoreAnchor(anchor)) {
       return;
     }
 
-    const href = anchor.getAttribute('href');
-    if (!href || href.startsWith('mailto:') || href.startsWith('tel:')) {
+    const href = anchor.getAttribute("href");
+    if (!href || href.startsWith("mailto:") || href.startsWith("tel:")) {
       return;
     }
 
@@ -273,12 +273,12 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     void renderLocation(new URL(window.location.href), { scroll: false });
   };
 
-  document.addEventListener('click', onClick);
-  window.addEventListener('popstate', onPopState);
+  document.addEventListener("click", onClick);
+  window.addEventListener("popstate", onPopState);
   if (prefetch) {
-    document.addEventListener('mouseover', onPrefetch, true);
-    document.addEventListener('focusin', onPrefetch, true);
-    document.addEventListener('touchstart', onPrefetch, { passive: true, capture: true });
+    document.addEventListener("mouseover", onPrefetch, true);
+    document.addEventListener("focusin", onPrefetch, true);
+    document.addEventListener("touchstart", onPrefetch, { passive: true, capture: true });
   }
 
   const navigate = async (to: string, options?: NavigateOptions): Promise<void> => {
@@ -291,9 +291,9 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
 
     const nextUrl = `${url.pathname}${url.search}${url.hash}`;
     if (options?.replace) {
-      window.history.replaceState({}, '', nextUrl);
+      window.history.replaceState({}, "", nextUrl);
     } else {
-      window.history.pushState({}, '', nextUrl);
+      window.history.pushState({}, "", nextUrl);
     }
 
     await renderLocation(url, { scroll: options?.scroll ?? true });
@@ -302,12 +302,12 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
   return {
     navigate,
     dispose: () => {
-      document.removeEventListener('click', onClick);
-      window.removeEventListener('popstate', onPopState);
+      document.removeEventListener("click", onClick);
+      window.removeEventListener("popstate", onPopState);
       if (prefetch) {
-        document.removeEventListener('mouseover', onPrefetch, true);
-        document.removeEventListener('focusin', onPrefetch, true);
-        document.removeEventListener('touchstart', onPrefetch, true);
+        document.removeEventListener("mouseover", onPrefetch, true);
+        document.removeEventListener("focusin", onPrefetch, true);
+        document.removeEventListener("touchstart", onPrefetch, true);
       }
     },
   };

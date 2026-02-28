@@ -1,16 +1,16 @@
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const usage = `
 create-suamox <project-name>
 `;
 
-const templateRoot = fileURLToPath(new URL('../template', import.meta.url));
+const templateRoot = fileURLToPath(new URL("../template", import.meta.url));
 
 const resolveTemplateEntryName = (name: string): string => {
-  if (name === '_npmrc') {
-    return '.npmrc';
+  if (name === "_npmrc") {
+    return ".npmrc";
   }
   return name;
 };
@@ -46,7 +46,7 @@ const copyTemplate = async (srcDir: string, destDir: string, name: string): Prom
       await copyTemplate(srcPath, destPath, name);
       continue;
     }
-    const content = await readFile(srcPath, 'utf-8');
+    const content = await readFile(srcPath, "utf-8");
     const output = content.replace(/__NAME__/g, name);
     await writeFile(destPath, output);
   }
@@ -67,9 +67,7 @@ const main = async () => {
   console.log(`Suamox app created at ${targetDir}`);
   console.log(`Next steps:`);
   console.log(`  cd ${name}`);
-  console.log(
-    `  # add auth in ~/.npmrc: //npm.pkg.github.com/:_authToken=\${GITHUB_TOKEN}`
-  );
+  console.log(`  # add auth in ~/.npmrc: //npm.pkg.github.com/:_authToken=\${GITHUB_TOKEN}`);
   console.log(`  pnpm install`);
   console.log(`  pnpm run dev`);
 };

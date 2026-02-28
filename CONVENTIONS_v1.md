@@ -99,7 +99,7 @@ export async function loader(ctx: LoaderContext) {
 
 ```tsx
 export async function getStaticPaths() {
-  return [{ params: { slug: 'hola' } }, { params: { slug: 'mundo' } }];
+  return [{ params: { slug: "hola" } }, { params: { slug: "mundo" } }];
 }
 ```
 
@@ -343,9 +343,9 @@ Ejemplo:
 ```ts
 function safeSerialize(data: any): string {
   return JSON.stringify(data)
-    .replace(/</g, '\\u003c')
-    .replace(/>/g, '\\u003e')
-    .replace(/&/g, '\\u0026');
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026");
 }
 ```
 

@@ -7,8 +7,8 @@ Suamox usa `@calumet/suamox-router` como router del cliente para navegación SPA
 En `src/entry-client.tsx`:
 
 ```tsx
-import { startRouter } from '@calumet/suamox-router';
-import { routes } from 'virtual:pages';
+import { startRouter } from "@calumet/suamox-router";
+import { routes } from "virtual:pages";
 
 void startRouter({ routes });
 ```
@@ -43,8 +43,8 @@ startRouter(options): Promise<RouterInstance>
 
 ```ts
 const router = await startRouter({ routes });
-await router.navigate('/blog/hola');
-await router.navigate('/perfil', { replace: true, scroll: false });
+await router.navigate("/blog/hola");
+await router.navigate("/perfil", { replace: true, scroll: false });
 ```
 
 `NavigateOptions`:
