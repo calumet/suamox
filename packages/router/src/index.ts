@@ -153,10 +153,6 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     const match = resolveMatch(routes, url.pathname);
 
     if (!match) {
-      if (url.origin === window.location.origin && url.pathname === window.location.pathname) {
-        return;
-      }
-      window.location.assign(url.toString());
       return;
     }
 
@@ -295,6 +291,12 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     const url = new URL(to, origin);
 
     if (url.origin !== window.location.origin) {
+      window.location.assign(url.toString());
+      return;
+    }
+
+    const match = resolveMatch(routes, url.pathname);
+    if (!match) {
       window.location.assign(url.toString());
       return;
     }
