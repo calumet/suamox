@@ -165,7 +165,14 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
         initialData = undefined;
       } else if (resolvedRoute.loader) {
         const loaderContext = createLoaderContext(url, match.params);
-        data = await resolvedRoute.loader(loaderContext);
+        try {
+          data = await resolvedRoute.loader(loaderContext);
+        } catch (err) {
+          if (activeId !== navigationId) {
+            return;
+          }
+          throw err;
+        }
       }
     }
 
