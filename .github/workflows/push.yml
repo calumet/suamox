@@ -11,6 +11,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v5
 
@@ -28,5 +30,3 @@ jobs:
       - run: pnpm -r test
 
       - run: pnpm -r --filter "@calumet/suamox*" publish --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
