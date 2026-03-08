@@ -1,8 +1,8 @@
-import { createElement } from "react";
+import { createElement, useContext } from "react";
 import type { ReactNode } from "react";
 import { describe, it, expect, vi } from "vitest";
 
-import { renderPage } from "../src/index";
+import { renderPage, createPageElement, useLoaderData } from "../src/index";
 import type { RouteRecord, LoaderContext } from "../src/index";
 
 function createMockRoute(overrides: Partial<RouteRecord>): RouteRecord {
@@ -309,5 +309,122 @@ describe("renderPage", () => {
 
     expect(result.status).toBe(200);
     expect(result.html).toContain('<div id="root">');
+  });
+});
+
+describe("useLoaderData", () => {
+  it("should provide loader data to child components via context", async () => {
+    const ChildComponent = () => {
+      const data = useLoaderData<{ title: string }>();
+      return createElement("span", null, data.title);
+    };
+
+    const Page = () => createElement("div", null, createElement(ChildComponent));
+
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/context",
+        component: Page,
+        // eslint-disable-next-line @typescript-eslint/require-await
+        loader: async () => ({ title: "From Context" }),
+      }),
+    ];
+    const request = createMockRequest("http://localhost:3000/context");
+
+    const result = await renderPage({
+      pathname: "/context",
+      request,
+      routes,
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.html).toContain("From Context");
+  });
+
+  it("should provide loader data through layouts", async () => {
+    const ChildComponent = () => {
+      const data = useLoaderData<{ message: string }>();
+      return createElement("p", null, data.message);
+    };
+
+    const Layout = ({ children }: { children: ReactNode }) =>
+      createElement("div", { id: "layout" }, children);
+
+    const Page = () => createElement("main", null, createElement(ChildComponent));
+
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/with-layout",
+        component: Page,
+        layouts: [Layout],
+        // eslint-disable-next-line @typescript-eslint/require-await
+        loader: async () => ({ message: "Through Layout" }),
+      }),
+    ];
+    const request = createMockRequest("http://localhost:3000/with-layout");
+
+    const result = await renderPage({
+      pathname: "/with-layout",
+      request,
+      routes,
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.html).toContain("layout");
+    expect(result.html).toContain("Through Layout");
+  });
+
+  it("should return null when no loader is defined", async () => {
+    let capturedData: unknown = "not-set";
+
+    const ChildComponent = () => {
+      capturedData = useLoaderData();
+      return createElement("span", null, "no data");
+    };
+
+    const Page = () => createElement("div", null, createElement(ChildComponent));
+
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/no-loader",
+        component: Page,
+      }),
+    ];
+    const request = createMockRequest("http://localhost:3000/no-loader");
+
+    await renderPage({ pathname: "/no-loader", request, routes });
+
+    expect(capturedData).toBeNull();
+  });
+
+  it("should provide loader data to deeply nested components", async () => {
+    const DeepChild = () => {
+      const data = useLoaderData<{ items: string[] }>();
+      return createElement("ul", null, ...data.items.map((item) => createElement("li", { key: item }, item)));
+    };
+
+    const MiddleComponent = () => createElement("section", null, createElement(DeepChild));
+    const Page = () => createElement("div", null, createElement(MiddleComponent));
+
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/deep",
+        component: Page,
+        // eslint-disable-next-line @typescript-eslint/require-await
+        loader: async () => ({ items: ["alpha", "beta", "gamma"] }),
+      }),
+    ];
+    const request = createMockRequest("http://localhost:3000/deep");
+
+    const result = await renderPage({
+      pathname: "/deep",
+      request,
+      routes,
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.html).toContain("alpha");
+    expect(result.html).toContain("beta");
+    expect(result.html).toContain("gamma");
   });
 });

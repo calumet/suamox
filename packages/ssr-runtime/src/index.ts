@@ -6,7 +6,7 @@ import {
   headMarkerStartValue,
 } from "@calumet/suamox-head";
 import type React from "react";
-import { createElement, Fragment } from "react";
+import { createContext, createElement, Fragment, useContext } from "react";
 import { renderToStaticMarkup, renderToString } from "react-dom/server";
 
 export interface RouteRecord {
@@ -49,6 +49,13 @@ export interface RouteModule {
 }
 
 export type RouteModuleLoader = () => Promise<RouteModule>;
+
+const LoaderDataContext = createContext<unknown>(null);
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function useLoaderData<T = any>(): T {
+  return useContext(LoaderDataContext) as T;
+}
 
 export interface MatchResult {
   route: RouteRecord;
@@ -183,14 +190,15 @@ export function createPageElement(route: RouteRecord, data: unknown): React.Reac
   }
   const pageElement = createElement(route.component, { data });
   const layouts = route.layouts ?? [];
-  if (layouts.length === 0) {
-    return pageElement;
-  }
+  const withLayouts =
+    layouts.length === 0
+      ? pageElement
+      : layouts.reduceRight<React.ReactElement>(
+          (child, Layout) => createElement(Layout, null, child),
+          pageElement,
+        );
 
-  return layouts.reduceRight<React.ReactElement>(
-    (child, Layout) => createElement(Layout, null, child),
-    pageElement,
-  );
+  return createElement(LoaderDataContext.Provider, { value: data }, withLayouts);
 }
 
 export async function resolveRouteModule(route: RouteRecord): Promise<RouteRecord> {

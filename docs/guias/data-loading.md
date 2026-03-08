@@ -65,6 +65,44 @@ Comportamiento por defecto:
 - `prerender`: `false` (modo `defaultMode: 'ssr'`).
 - `csr`: `false` (modo `defaultMode: 'ssr'`).
 
+## `useLoaderData()` — acceder a datos sin prop drilling
+
+Cualquier componente hijo (dentro de una página o layout) puede acceder a los datos del loader sin recibirlos por props:
+
+```tsx
+import { useLoaderData } from "@calumet/suamox";
+
+function Header() {
+  const { menus } = useLoaderData<{ menus: Menu[] }>();
+  return <nav>{menus.map((m) => <a key={m.id} href={m.href}>{m.label}</a>)}</nav>;
+}
+```
+
+El hook funciona en cualquier nivel de profundidad del árbol de componentes, incluyendo layouts:
+
+```tsx
+// src/pages/[lang]/index.tsx
+export async function loader({ params }: LoaderContext) {
+  const menus = await fetchMenus(params.lang);
+  return { menus, lang: params.lang };
+}
+
+export default function HomePage() {
+  return (
+    <main>
+      <Header />        {/* usa useLoaderData() internamente */}
+      <Sidebar />       {/* también puede usarlo */}
+    </main>
+  );
+}
+```
+
+### Comportamiento
+
+- Si la página tiene `loader`, `useLoaderData()` retorna lo que el loader devolvió.
+- Si la página no tiene `loader`, retorna `null`.
+- Funciona en SSR, SSG y navegación cliente por igual.
+
 ## Errores en loaders
 
 Si un loader lanza error durante SSR, la respuesta es 500.
