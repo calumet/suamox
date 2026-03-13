@@ -251,6 +251,10 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         result = await onAfterRender(result);
       }
 
+      if (result.redirectTo) {
+        return c.redirect(result.redirectTo, result.status as 301 | 302 | 303 | 307 | 308);
+      }
+
       const devCssLinks = await collectCssImportsFromEntryClient(root, vite);
       const devCssTags = devCssLinks
         .map((href) => `<link rel="stylesheet" href="${href}">`)
@@ -501,6 +505,10 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       // Ejecutar hook onAfterRender
       if (onAfterRender) {
         result = await onAfterRender(result);
+      }
+
+      if (result.redirectTo) {
+        return c.redirect(result.redirectTo, result.status as 301 | 302 | 303 | 307 | 308);
       }
 
       // Generar HTML completo

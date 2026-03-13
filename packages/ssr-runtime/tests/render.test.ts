@@ -1,8 +1,8 @@
-import { createElement, useContext } from "react";
+import { createElement } from "react";
 import type { ReactNode } from "react";
 import { describe, it, expect, vi } from "vitest";
 
-import { renderPage, createPageElement, useLoaderData } from "../src/index";
+import { renderPage, useLoaderData, redirect } from "../src/index";
 import type { RouteRecord, LoaderContext } from "../src/index";
 
 function createMockRoute(overrides: Partial<RouteRecord>): RouteRecord {
@@ -400,7 +400,11 @@ describe("useLoaderData", () => {
   it("should provide loader data to deeply nested components", async () => {
     const DeepChild = () => {
       const data = useLoaderData<{ items: string[] }>();
-      return createElement("ul", null, ...data.items.map((item) => createElement("li", { key: item }, item)));
+      return createElement(
+        "ul",
+        null,
+        ...data.items.map((item) => createElement("li", { key: item }, item)),
+      );
     };
 
     const MiddleComponent = () => createElement("section", null, createElement(DeepChild));
@@ -501,5 +505,94 @@ describe("useLoaderData", () => {
     expect(result.status).toBe(200);
     expect(result.html).toContain("es &gt; guias/inicio");
     expect(result.html).toContain("Página: guias/inicio (es)");
+  });
+});
+
+describe("redirect", () => {
+  it("should return a redirect result with default 302 status", async () => {
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/old",
+        // eslint-disable-next-line @typescript-eslint/require-await
+        loader: async () => {
+          redirect("/new");
+        },
+      }),
+    ];
+    const request = createMockRequest("http://localhost:3000/old");
+
+    const result = await renderPage({ pathname: "/old", request, routes });
+
+    expect(result.status).toBe(302);
+    expect(result.redirectTo).toBe("/new");
+    expect(result.html).toBe("");
+  });
+
+  it("should support custom redirect status codes", async () => {
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/moved",
+        // eslint-disable-next-line @typescript-eslint/require-await
+        loader: async () => {
+          redirect("/permanent", 301);
+        },
+      }),
+    ];
+    const request = createMockRequest("http://localhost:3000/moved");
+
+    const result = await renderPage({ pathname: "/moved", request, routes });
+
+    expect(result.status).toBe(301);
+    expect(result.redirectTo).toBe("/permanent");
+  });
+
+  it("should redirect conditionally based on params", async () => {
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/:lang",
+        params: ["lang"],
+        // eslint-disable-next-line @typescript-eslint/require-await
+        loader: async ({ params }: LoaderContext) => {
+          if (params.lang === "old") {
+            redirect("/es", 301);
+          }
+          return { lang: params.lang };
+        },
+      }),
+    ];
+
+    const redirectResult = await renderPage({
+      pathname: "/old",
+      request: createMockRequest("http://localhost:3000/old"),
+      routes,
+    });
+    expect(redirectResult.status).toBe(301);
+    expect(redirectResult.redirectTo).toBe("/es");
+
+    const normalResult = await renderPage({
+      pathname: "/es",
+      request: createMockRequest("http://localhost:3000/es"),
+      routes,
+    });
+    expect(normalResult.status).toBe(200);
+    expect(normalResult.redirectTo).toBeUndefined();
+  });
+
+  it("should redirect to external URLs", async () => {
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/external",
+        // eslint-disable-next-line @typescript-eslint/require-await
+        loader: async () => {
+          redirect("https://example.com");
+        },
+      }),
+    ];
+    const request = createMockRequest("http://localhost:3000/external");
+
+    const result = await renderPage({ pathname: "/external", request, routes });
+
+    expect(result.status).toBe(302);
+    expect(result.redirectTo).toBe("https://example.com");
   });
 });

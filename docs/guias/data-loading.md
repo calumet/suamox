@@ -74,7 +74,15 @@ import { useLoaderData } from "@calumet/suamox";
 
 function Header() {
   const { menus } = useLoaderData<{ menus: Menu[] }>();
-  return <nav>{menus.map((m) => <a key={m.id} href={m.href}>{m.label}</a>)}</nav>;
+  return (
+    <nav>
+      {menus.map((m) => (
+        <a key={m.id} href={m.href}>
+          {m.label}
+        </a>
+      ))}
+    </nav>
+  );
 }
 ```
 
@@ -90,8 +98,8 @@ export async function loader({ params }: LoaderContext) {
 export default function HomePage() {
   return (
     <main>
-      <Header />        {/* usa useLoaderData() internamente */}
-      <Sidebar />       {/* también puede usarlo */}
+      <Header /> {/* usa useLoaderData() internamente */}
+      <Sidebar /> {/* también puede usarlo */}
     </main>
   );
 }
@@ -102,6 +110,42 @@ export default function HomePage() {
 - Si la página tiene `loader`, `useLoaderData()` retorna lo que el loader devolvió.
 - Si la página no tiene `loader`, retorna `null`.
 - Funciona en SSR, SSG y navegación cliente por igual.
+
+## `redirect()` — redirecciones server-side
+
+Puedes redirigir desde un loader usando `redirect()`:
+
+```tsx
+import { redirect, type LoaderContext } from "@calumet/suamox";
+
+export async function loader({ params }: LoaderContext) {
+  if (!params.lang) {
+    redirect("/es"); // 302 por defecto
+  }
+
+  if (params.lang === "old") {
+    redirect("/es", 301); // redirect permanente
+  }
+
+  return { lang: params.lang };
+}
+```
+
+### Códigos de estado soportados
+
+| Código | Uso                                         |
+| ------ | ------------------------------------------- |
+| `301`  | Redirect permanente (SEO)                   |
+| `302`  | Redirect temporal (por defecto)             |
+| `303`  | Redirect después de POST                    |
+| `307`  | Redirect temporal preservando método HTTP   |
+| `308`  | Redirect permanente preservando método HTTP |
+
+### Notas
+
+- `redirect()` funciona solo dentro de loaders, en el servidor (SSR).
+- Puede redirigir a rutas internas (`/es`) o URLs externas (`https://example.com`).
+- La función nunca retorna — internamente lanza una excepción que el framework captura.
 
 ## Errores en loaders
 

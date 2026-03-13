@@ -57,6 +57,22 @@ export function useLoaderData<T = any>(): T {
   return useContext(LoaderDataContext) as T;
 }
 
+export class RedirectResponse extends Error {
+  readonly location: string;
+  readonly status: number;
+
+  constructor(location: string, status: number = 302) {
+    super(`Redirect to ${location}`);
+    this.name = "RedirectResponse";
+    this.location = location;
+    this.status = status;
+  }
+}
+
+export function redirect(location: string, status: number = 302): never {
+  throw new RedirectResponse(location, status);
+}
+
 export interface MatchResult {
   route: RouteRecord;
   params: Record<string, string>;
@@ -73,6 +89,7 @@ export interface RenderResult {
   html: string;
   head?: string;
   initialData?: unknown;
+  redirectTo?: string;
 }
 
 export interface HydrationAdapter {
@@ -299,6 +316,13 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
     try {
       data = await resolvedRoute.loader(loaderContext);
     } catch (error) {
+      if (error instanceof RedirectResponse) {
+        return {
+          status: error.status,
+          html: "",
+          redirectTo: error.location,
+        };
+      }
       console.error("Loader error:", error);
       return {
         status: 500,
