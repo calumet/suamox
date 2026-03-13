@@ -26,4 +26,9 @@ export interface ParsedRoute {
   errors: string[];
 }
 
-export type GetStaticPaths = () => Promise<Array<{ params: Record<string, string> }>>;
+export interface StaticPathEntry {
+  params: Record<string, string>;
+  props?: Record<string, unknown>;
+}
+
+export type GetStaticPaths = () => Promise<StaticPathEntry[]>;

@@ -2,7 +2,7 @@ import { createElement } from "react";
 import type { ReactNode } from "react";
 import { describe, it, expect, vi } from "vitest";
 
-import { renderPage, useLoaderData, redirect } from "../src/index";
+import { renderPage, useLoaderData, useStaticProps, redirect } from "../src/index";
 import type { RouteRecord, LoaderContext } from "../src/index";
 
 function createMockRoute(overrides: Partial<RouteRecord>): RouteRecord {
@@ -505,6 +505,39 @@ describe("useLoaderData", () => {
     expect(result.status).toBe(200);
     expect(result.html).toContain("es &gt; guias/inicio");
     expect(result.html).toContain("Página: guias/inicio (es)");
+  });
+
+  it("should provide static props via useStaticProps when props are passed", async () => {
+    const Page = () => {
+      const props = useStaticProps<{ title: string }>();
+      const data = useLoaderData<{ lang: string }>();
+      return createElement("div", null, `${data.lang}: ${props.title}`);
+    };
+
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/:lang/contenido/*",
+        params: ["lang", "slug"],
+        isCatchAll: true,
+        component: Page,
+        // eslint-disable-next-line @typescript-eslint/require-await
+        loader: async ({ params }: LoaderContext) => ({
+          lang: params.lang,
+        }),
+      }),
+    ];
+    const request = createMockRequest("http://localhost:3000/es/contenido/mision");
+
+    const result = await renderPage({
+      pathname: "/es/contenido/mision",
+      request,
+      routes,
+      props: { title: "Nuestra Misión" },
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.html).toContain("es: Nuestra Misión");
+    expect(result.staticProps).toEqual({ title: "Nuestra Misión" });
   });
 });
 

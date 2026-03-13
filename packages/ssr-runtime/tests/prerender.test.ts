@@ -96,6 +96,47 @@ describe("prerender", () => {
     expect(docHtml).toContain("Doc guide/getting-started");
   });
 
+  it("passes static props from getStaticPaths to useStaticProps", async () => {
+    const { useStaticProps } = await import("../src/index");
+
+    const ContentPage = (() => {
+      const props = useStaticProps<{ title: string }>();
+      return createElement("div", null, `Title: ${props.title}`);
+    }) as RouteRecord["component"];
+
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/:lang/contenido/*",
+        params: ["lang", "slug"],
+        isCatchAll: true,
+        isIndex: false,
+        prerender: true,
+        getStaticPaths: () =>
+          Promise.resolve([
+            {
+              params: { lang: "es", slug: "quienes-somos" },
+              props: { title: "Quiénes Somos" },
+            },
+          ]),
+        loader: ({ params }) => Promise.resolve({ lang: params.lang }),
+        component: ContentPage,
+      }),
+    ];
+
+    await prerender({
+      routes,
+      outDir,
+      baseUrl: "http://localhost",
+    });
+
+    const html = await readFile(
+      join(outDir, "es", "contenido", "quienes-somos", "index.html"),
+      "utf-8",
+    );
+
+    expect(html).toContain("Title: Quiénes Somos");
+  });
+
   it("injects stylesheet links from resolved assets", async () => {
     const route = createMockRoute({
       path: "/",

@@ -147,6 +147,51 @@ export async function loader({ params }: LoaderContext) {
 - Puede redirigir a rutas internas (`/es`) o URLs externas (`https://example.com`).
 - La función nunca retorna — internamente lanza una excepción que el framework captura.
 
+## `useStaticProps()` — acceder a props de `getStaticPaths`
+
+Cuando usas `getStaticPaths()`, cada entrada puede devolver `props` además de `params`. Estos props están disponibles en el componente mediante `useStaticProps()`:
+
+```tsx
+import { useLoaderData, useStaticProps } from "@calumet/suamox";
+import type { LoaderContext } from "@calumet/suamox";
+
+export const prerender = true;
+
+export async function getStaticPaths() {
+  const posts = await fetchPosts();
+  return posts.map((post) => ({
+    params: { slug: post.slug },
+    props: { title: post.title, content: post.content },
+  }));
+}
+
+export async function loader({ params }: LoaderContext) {
+  return { slug: params.slug };
+}
+
+export default function PostPage() {
+  const { slug } = useLoaderData<{ slug: string }>();
+  const { title, content } = useStaticProps<{ title: string; content: string }>();
+
+  return (
+    <article>
+      <h1>{title}</h1>
+      <p>{content}</p>
+    </article>
+  );
+}
+```
+
+### Diferencia entre `useLoaderData` y `useStaticProps`
+
+| Hook              | Fuente                        | Disponible en     |
+| ----------------- | ----------------------------- | ----------------- |
+| `useLoaderData()` | Retorno de `loader()`         | SSR, SSG, cliente |
+| `useStaticProps()` | `props` de `getStaticPaths()` | Solo SSG          |
+
+- `useStaticProps()` retorna `{}` si la página no tiene `getStaticPaths` o si la entrada no incluye `props`.
+- Los props se serializan y se hidratan en el cliente, por lo que deben ser serializables (no funciones, no clases).
+
 ## Errores en loaders
 
 Si un loader lanza error durante SSR, la respuesta es 500.

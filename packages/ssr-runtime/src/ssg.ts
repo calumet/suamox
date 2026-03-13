@@ -48,16 +48,29 @@ function encodeCatchAll(value: string): string {
 
 function resolvePrerenderPath(route: RouteRecord, params: Record<string, string>): string {
   if (route.isCatchAll) {
-    const paramName = route.params[0];
-    if (!paramName) {
+    const catchAllParam = route.params[route.params.length - 1];
+    if (!catchAllParam) {
       throw new Error(`Catch-all route ${route.path} is missing a param name`);
     }
-    const rawValue = params[paramName];
+    const rawValue = params[catchAllParam];
     if (rawValue === undefined) {
-      throw new Error(`Missing param "${paramName}" for route ${route.path}`);
+      throw new Error(`Missing param "${catchAllParam}" for route ${route.path}`);
     }
     const encoded = encodeCatchAll(String(rawValue));
-    const basePath = route.path.slice(0, -2);
+    let basePath = route.path.slice(0, -2);
+
+    // Resolver params dinámicos en la base (e.g. /:lang/contenido/*)
+    for (const paramName of route.params) {
+      if (paramName === catchAllParam) continue;
+      const paramValue = params[paramName];
+      if (paramValue === undefined) {
+        throw new Error(`Missing param "${paramName}" for route ${route.path}`);
+      }
+      basePath = basePath.replace(
+        new RegExp(`:${paramName}(?=/|$)`, "g"),
+        encodeURIComponent(paramValue),
+      );
+    }
 
     if (!basePath) {
       return encoded ? `/${encoded}` : "/";
@@ -161,13 +174,18 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
 
   await mkdir(outDir, { recursive: true });
 
-  const renderRoute = async (pathname: string, route: RouteRecord): Promise<void> => {
+  const renderRoute = async (
+    pathname: string,
+    route: RouteRecord,
+    props?: Record<string, unknown>,
+  ): Promise<void> => {
     const normalizedPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
     const url = new URL(normalizedPath, baseUrl);
     const result = await renderPage({
       pathname: normalizedPath,
       request: new Request(url),
       routes,
+      props,
     });
     const resolvedAssets = resolveAssets
       ? await resolveAssets({ pathname: normalizedPath, route })
@@ -180,6 +198,7 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
       html: `<div id="root">${result.html}</div>`,
       head: result.head,
       initialData: result.initialData,
+      staticProps: result.staticProps,
       includeInitialDataScript,
       scripts: routeScripts,
       styles: routeStyles,
@@ -212,7 +231,7 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
       const staticPaths = await resolvedRoute.getStaticPaths();
       for (const entry of staticPaths) {
         const pathname = resolvePrerenderPath(resolvedRoute, entry.params ?? {});
-        await renderRoute(pathname, resolvedRoute);
+        await renderRoute(pathname, resolvedRoute, entry.props);
       }
       continue;
     }

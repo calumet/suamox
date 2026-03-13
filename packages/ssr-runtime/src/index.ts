@@ -37,7 +37,12 @@ export interface PageProps<T = any> {
   data: T;
 }
 
-export type GetStaticPaths = () => Promise<Array<{ params: Record<string, string> }>>;
+export interface StaticPathEntry {
+  params: Record<string, string>;
+  props?: Record<string, unknown>;
+}
+
+export type GetStaticPaths = () => Promise<StaticPathEntry[]>;
 
 export interface RouteModule {
   component: React.ComponentType<PageProps>;
@@ -51,10 +56,15 @@ export interface RouteModule {
 export type RouteModuleLoader = () => Promise<RouteModule>;
 
 const LoaderDataContext = createContext<unknown>(null);
+const StaticPropsContext = createContext<Record<string, unknown>>({});
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useLoaderData<T = any>(): T {
   return useContext(LoaderDataContext) as T;
+}
+
+export function useStaticProps<T = Record<string, unknown>>(): T {
+  return useContext(StaticPropsContext) as T;
 }
 
 export class RedirectResponse extends Error {
@@ -82,6 +92,7 @@ export interface RenderOptions {
   pathname: string;
   request: Request;
   routes: RouteRecord[];
+  props?: Record<string, unknown>;
 }
 
 export interface RenderResult {
@@ -89,6 +100,7 @@ export interface RenderResult {
   html: string;
   head?: string;
   initialData?: unknown;
+  staticProps?: Record<string, unknown>;
   redirectTo?: string;
 }
 
@@ -201,7 +213,11 @@ function matchPattern(
   return { params };
 }
 
-export function createPageElement(route: RouteRecord, data: unknown): React.ReactElement {
+export function createPageElement(
+  route: RouteRecord,
+  data: unknown,
+  staticProps?: Record<string, unknown>,
+): React.ReactElement {
   if (!route.component) {
     throw new Error(`Route component not resolved for ${route.path}`);
   }
@@ -215,7 +231,13 @@ export function createPageElement(route: RouteRecord, data: unknown): React.Reac
           pageElement,
         );
 
-  return createElement(LoaderDataContext.Provider, { value: data }, withLayouts);
+  const withLoaderData = createElement(LoaderDataContext.Provider, { value: data }, withLayouts);
+
+  if (staticProps) {
+    return createElement(StaticPropsContext.Provider, { value: staticProps }, withLoaderData);
+  }
+
+  return withLoaderData;
 }
 
 export async function resolveRouteModule(route: RouteRecord): Promise<RouteRecord> {
@@ -250,8 +272,11 @@ export async function hydrateApp(routes: RouteRecord[], adapter?: HydrationAdapt
   }
 
   const initialData = (window as Window & { __INITIAL_DATA__?: unknown }).__INITIAL_DATA__ ?? null;
+  const staticProps =
+    (window as Window & { __STATIC_PROPS__?: Record<string, unknown> }).__STATIC_PROPS__ ??
+    undefined;
   const resolvedRoute = await resolveRouteModule(match.route);
-  const pageElement = createPageElement(resolvedRoute, initialData);
+  const pageElement = createPageElement(resolvedRoute, initialData, staticProps);
   const element = createElement(HeadProvider, null, pageElement);
 
   let hydrateRoot = adapter?.hydrateRoot;
@@ -274,7 +299,7 @@ export async function hydrateApp(routes: RouteRecord[], adapter?: HydrationAdapt
  * Renderiza una página con SSR
  */
 export async function renderPage(options: RenderOptions): Promise<RenderResult> {
-  const { pathname, request, routes } = options;
+  const { pathname, request, routes, props = {} } = options;
 
   // Hacer match de ruta
   const match = matchRoute(routes, pathname);
@@ -337,16 +362,19 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
     const element = createElement(
       HeadProvider,
       { manager: headManager },
-      createPageElement(resolvedRoute, data),
+      createPageElement(resolvedRoute, data, props),
     );
     const html = renderToString(element);
     const head = renderHeadToString(headManager.getSnapshot());
+
+    const hasStaticProps = props && Object.keys(props).length > 0;
 
     return {
       status,
       html,
       head,
       initialData: data,
+      ...(hasStaticProps ? { staticProps: props } : {}),
     };
   } catch (error) {
     console.error("Render error:", error);
@@ -374,6 +402,7 @@ export function generateHTML(options: {
   html: string;
   head?: string;
   initialData?: unknown;
+  staticProps?: Record<string, unknown>;
   scripts?: string[];
   preloadScripts?: string[];
   styles?: string[];
@@ -384,6 +413,7 @@ export function generateHTML(options: {
     html,
     head = "",
     initialData,
+    staticProps,
     scripts = [],
     preloadScripts = [],
     styles = [],
@@ -407,9 +437,15 @@ export function generateHTML(options: {
     .map((src) => `<script type="module" src="${src}"></script>`)
     .join("\n    ");
 
+  const staticPropsScript =
+    staticProps && Object.keys(staticProps).length > 0
+      ? `window.__STATIC_PROPS__ = ${serializeData(staticProps)};`
+      : "";
+
   const dataScript = includeInitialDataScript
     ? `<script>
       window.__INITIAL_DATA__ = ${initialData !== undefined ? serializeData(initialData) : "null"};
+      ${staticPropsScript}
     </script>`
     : "";
 
