@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   generateHTML: vi.fn(),
   serializeData: vi.fn((data: unknown) => JSON.stringify(data)),
   matchRoute: vi.fn(() => null),
+  resolveRouteModule: vi.fn((route: unknown) => Promise.resolve(route)),
 }));
 
 vi.mock("@calumet/suamox", () => ({
@@ -18,6 +19,7 @@ vi.mock("@calumet/suamox", () => ({
   generateHTML: mocks.generateHTML,
   serializeData: mocks.serializeData,
   matchRoute: mocks.matchRoute,
+  resolveRouteModule: mocks.resolveRouteModule,
 }));
 
 import { createDevHandler, createHonoApp, createProdHandler } from "../src/index";
@@ -38,6 +40,10 @@ describe("createDevHandler", () => {
     mocks.renderPage.mockReset();
     mocks.generateHTML.mockReset();
     mocks.serializeData.mockClear();
+    mocks.matchRoute.mockReset();
+    mocks.matchRoute.mockReturnValue(null);
+    mocks.resolveRouteModule.mockReset();
+    mocks.resolveRouteModule.mockImplementation((route: unknown) => Promise.resolve(route));
   });
 
   it("runs hooks and injects initial data with css links from entry-client", async () => {
@@ -190,6 +196,85 @@ describe("createDevHandler", () => {
     const secondBody = await secondResponse.text();
     expect(secondBody).toContain('<link rel="stylesheet" href="/src/styles/second.css">');
     expect(secondBody).not.toContain('<link rel="stylesheet" href="/src/styles/first.css">');
+  });
+
+  it("resolves getStaticPaths props and passes them to renderPage", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-dev-"));
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "entry-client.tsx"), "void 0;\n");
+
+    const route = {
+      path: "/:lang/contenido/*",
+      params: ["lang", "slug"],
+      getStaticPaths: () =>
+        Promise.resolve([
+          { params: { lang: "es", slug: "mision" }, props: { contenido: "<p>Misión</p>" } },
+          { params: { lang: "en", slug: "mission" }, props: { contenido: "<p>Mission</p>" } },
+        ]),
+    };
+
+    mocks.matchRoute.mockReturnValue({
+      route,
+      params: { lang: "es", slug: "mision" },
+    });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    mocks.renderPage.mockResolvedValue({
+      status: 200,
+      html: "<div>Page</div>",
+      head: "",
+      initialData: null,
+    });
+
+    const vite = {
+      ssrLoadModule: vi.fn(() => Promise.resolve({ routes: [route] })),
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+      ssrFixStacktrace: vi.fn(),
+      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite, root });
+    await app.request("http://localhost/es/contenido/mision");
+
+    expect(mocks.renderPage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        props: { contenido: "<p>Misión</p>" },
+      }),
+    );
+  });
+
+  it("does not pass props when route has no getStaticPaths", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-dev-"));
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "entry-client.tsx"), "void 0;\n");
+
+    const route = { path: "/about", params: [] };
+
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    mocks.renderPage.mockResolvedValue({
+      status: 200,
+      html: "<div>About</div>",
+      head: "",
+      initialData: null,
+    });
+
+    const vite = {
+      ssrLoadModule: vi.fn(() => Promise.resolve({ routes: [route] })),
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+      ssrFixStacktrace: vi.fn(),
+      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite, root });
+    await app.request("http://localhost/about");
+
+    expect(mocks.renderPage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        props: undefined,
+      }),
+    );
   });
 });
 

@@ -64,6 +64,9 @@ export function useLoaderData<T = any>(): T {
 }
 
 export function useStaticProps<T = Record<string, unknown>>(): T {
+  if (typeof window !== "undefined") {
+    throw new Error("useStaticProps() is server-only. Use useLoaderData() on the client instead.");
+  }
   return useContext(StaticPropsContext) as T;
 }
 
@@ -100,7 +103,6 @@ export interface RenderResult {
   html: string;
   head?: string;
   initialData?: unknown;
-  staticProps?: Record<string, unknown>;
   redirectTo?: string;
 }
 
@@ -272,11 +274,8 @@ export async function hydrateApp(routes: RouteRecord[], adapter?: HydrationAdapt
   }
 
   const initialData = (window as Window & { __INITIAL_DATA__?: unknown }).__INITIAL_DATA__ ?? null;
-  const staticProps =
-    (window as Window & { __STATIC_PROPS__?: Record<string, unknown> }).__STATIC_PROPS__ ??
-    undefined;
   const resolvedRoute = await resolveRouteModule(match.route);
-  const pageElement = createPageElement(resolvedRoute, initialData, staticProps);
+  const pageElement = createPageElement(resolvedRoute, initialData);
   const element = createElement(HeadProvider, null, pageElement);
 
   let hydrateRoot = adapter?.hydrateRoot;
@@ -367,14 +366,11 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
     const html = renderToString(element);
     const head = renderHeadToString(headManager.getSnapshot());
 
-    const hasStaticProps = props && Object.keys(props).length > 0;
-
     return {
       status,
       html,
       head,
       initialData: data,
-      ...(hasStaticProps ? { staticProps: props } : {}),
     };
   } catch (error) {
     console.error("Render error:", error);
@@ -402,7 +398,6 @@ export function generateHTML(options: {
   html: string;
   head?: string;
   initialData?: unknown;
-  staticProps?: Record<string, unknown>;
   scripts?: string[];
   preloadScripts?: string[];
   styles?: string[];
@@ -413,7 +408,6 @@ export function generateHTML(options: {
     html,
     head = "",
     initialData,
-    staticProps,
     scripts = [],
     preloadScripts = [],
     styles = [],
@@ -437,15 +431,9 @@ export function generateHTML(options: {
     .map((src) => `<script type="module" src="${src}"></script>`)
     .join("\n    ");
 
-  const staticPropsScript =
-    staticProps && Object.keys(staticProps).length > 0
-      ? `window.__STATIC_PROPS__ = ${serializeData(staticProps)};`
-      : "";
-
   const dataScript = includeInitialDataScript
     ? `<script>
       window.__INITIAL_DATA__ = ${initialData !== undefined ? serializeData(initialData) : "null"};
-      ${staticPropsScript}
     </script>`
     : "";
 

@@ -5,7 +5,13 @@ import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import type { RenderOptions, RouteRecord, RenderResult } from "@calumet/suamox";
-import { generateHTML, matchRoute, renderPage, serializeData } from "@calumet/suamox";
+import {
+  generateHTML,
+  matchRoute,
+  renderPage,
+  resolveRouteModule,
+  serializeData,
+} from "@calumet/suamox";
 import { serveStatic } from "@hono/node-server/serve-static";
 import type { Context } from "hono";
 import { Hono } from "hono";
@@ -237,8 +243,29 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       };
       const routes = routesModule.routes;
 
+      // Resolver props de getStaticPaths en dev (en prod se resuelven en build time)
+      let staticProps: Record<string, unknown> | undefined;
+      const match = matchRoute(routes, url.pathname);
+      if (match) {
+        const resolved = await resolveRouteModule(match.route);
+        if (resolved.getStaticPaths) {
+          const entries = await resolved.getStaticPaths();
+          const entry = entries.find((e) =>
+            Object.entries(match.params).every(([k, v]) => e.params[k] === v),
+          );
+          if (entry?.props) {
+            staticProps = entry.props;
+          }
+        }
+      }
+
       // Ejecutar hook onBeforeRender
-      let renderContext: RenderOptions = { pathname: url.pathname, request: c.req.raw, routes };
+      let renderContext: RenderOptions = {
+        pathname: url.pathname,
+        request: c.req.raw,
+        routes,
+        props: staticProps,
+      };
       if (onBeforeRender) {
         renderContext = await onBeforeRender(renderContext);
       }

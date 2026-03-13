@@ -198,7 +198,6 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
       html: `<div id="root">${result.html}</div>`,
       head: result.head,
       initialData: result.initialData,
-      staticProps: result.staticProps,
       includeInitialDataScript,
       scripts: routeScripts,
       styles: routeStyles,
