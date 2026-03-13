@@ -427,4 +427,79 @@ describe("useLoaderData", () => {
     expect(result.html).toContain("beta");
     expect(result.html).toContain("gamma");
   });
+
+  it("should provide loader data in catch-all routes", async () => {
+    const ChildComponent = () => {
+      const data = useLoaderData<{ slug: string; content: string }>();
+      return createElement("div", null, `${data.slug}: ${data.content}`);
+    };
+
+    const Page = () => createElement("article", null, createElement(ChildComponent));
+
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/*",
+        params: ["slug"],
+        isCatchAll: true,
+        component: Page,
+        // eslint-disable-next-line @typescript-eslint/require-await
+        loader: async ({ params }: LoaderContext) => ({
+          slug: params.slug,
+          content: `Content for ${params.slug}`,
+        }),
+      }),
+    ];
+    const request = createMockRequest("http://localhost:3000/docs/getting-started");
+
+    const result = await renderPage({
+      pathname: "/docs/getting-started",
+      request,
+      routes,
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.html).toContain("docs/getting-started");
+    expect(result.html).toContain("Content for docs/getting-started");
+  });
+
+  it("should provide loader data in nested dynamic + catch-all routes like /[lang]/contenido/[...slug]", async () => {
+    const Breadcrumb = () => {
+      const data = useLoaderData<{ lang: string; slug: string }>();
+      return createElement("nav", null, `${data.lang} > ${data.slug}`);
+    };
+
+    const PageContent = () => {
+      const data = useLoaderData<{ lang: string; slug: string; title: string }>();
+      return createElement("h1", null, data.title);
+    };
+
+    const Page = () =>
+      createElement("div", null, createElement(Breadcrumb), createElement(PageContent));
+
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/:lang/contenido/*",
+        params: ["lang", "slug"],
+        isCatchAll: true,
+        component: Page,
+        // eslint-disable-next-line @typescript-eslint/require-await
+        loader: async ({ params }: LoaderContext) => ({
+          lang: params.lang,
+          slug: params.slug,
+          title: `Página: ${params.slug} (${params.lang})`,
+        }),
+      }),
+    ];
+    const request = createMockRequest("http://localhost:3000/es/contenido/guias/inicio");
+
+    const result = await renderPage({
+      pathname: "/es/contenido/guias/inicio",
+      request,
+      routes,
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.html).toContain("es &gt; guias/inicio");
+    expect(result.html).toContain("Página: guias/inicio (es)");
+  });
 });

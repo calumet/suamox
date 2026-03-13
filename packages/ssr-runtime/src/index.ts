@@ -131,7 +131,9 @@ function matchPattern(
     const basePattern = pattern.slice(0, -2);
     const baseParts = basePattern.split("/").filter(Boolean);
 
-    // Verificar si coincide la base
+    const params: Record<string, string> = {};
+
+    // Verificar si coincide la base y extraer params dinámicos
     for (let i = 0; i < baseParts.length; i++) {
       const patternPart = baseParts[i];
       const pathPart = pathParts[i];
@@ -141,6 +143,7 @@ function matchPattern(
       }
 
       if (patternPart.startsWith(":")) {
+        params[patternPart.slice(1)] = pathPart;
         continue;
       }
 
@@ -151,13 +154,10 @@ function matchPattern(
 
     // Extraer parámetro catch-all
     const catchAllParts = pathParts.slice(baseParts.length);
-    const paramName = route.params[0] ?? "all";
+    const catchAllParamName = route.params[route.params.length - 1] ?? "all";
+    params[catchAllParamName] = catchAllParts.join("/");
 
-    return {
-      params: {
-        [paramName]: catchAllParts.join("/"),
-      },
-    };
+    return { params };
   }
 
   // Match de rutas dinámicas

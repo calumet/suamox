@@ -159,6 +159,38 @@ describe("matchRoute", () => {
 
       expect(match).toBeNull();
     });
+
+    it("should extract dynamic params in catch-all base path", () => {
+      const routes = [
+        createMockRoute({
+          path: "/:lang/contenido/*",
+          isCatchAll: true,
+          params: ["lang", "slug"],
+          priority: 201,
+        }),
+      ];
+
+      const match = matchRoute(routes, "/es/contenido/guias/inicio");
+
+      expect(match).toBeTruthy();
+      expect(match?.params).toEqual({ lang: "es", slug: "guias/inicio" });
+    });
+
+    it("should extract dynamic params in catch-all with single segment remainder", () => {
+      const routes = [
+        createMockRoute({
+          path: "/:lang/contenido/*",
+          isCatchAll: true,
+          params: ["lang", "slug"],
+          priority: 201,
+        }),
+      ];
+
+      const match = matchRoute(routes, "/en/contenido/about");
+
+      expect(match).toBeTruthy();
+      expect(match?.params).toEqual({ lang: "en", slug: "about" });
+    });
   });
 
   describe("route priority", () => {
