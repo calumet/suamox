@@ -22,7 +22,6 @@ export interface PrerenderOptions {
     route: RouteRecord;
     pathname: string;
   }) => PrerenderAssets | Promise<PrerenderAssets>;
-  includeInitialDataScript?: boolean;
 }
 
 export interface RunSsgOptions {
@@ -159,7 +158,6 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
     styles = [],
     preloadScripts = [],
     resolveAssets,
-    includeInitialDataScript = false,
   } = options;
 
   const getOutputPath = (pathname: string): { dir: string; filePath: string } => {
@@ -197,8 +195,7 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
     const html = generateHTML({
       html: `<div id="root">${result.html}</div>`,
       head: result.head,
-      initialData: result.initialData,
-      includeInitialDataScript,
+      includeInitialDataScript: false,
       scripts: routeScripts,
       styles: routeStyles,
       preloadScripts: routePreloadScripts,
@@ -326,7 +323,6 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
     routes: serverModule.routes,
     outDir: resolvedOutDir,
     baseUrl,
-    includeInitialDataScript: false,
     resolveAssets: ({ route }) => ({
       styles: resolveRouteStyles(route),
     }),

@@ -243,11 +243,13 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       };
       const routes = routesModule.routes;
 
-      // Resolver props de getStaticPaths en dev (en prod se resuelven en build time)
+      // Resolver módulo de ruta para detectar prerender y getStaticPaths
       let staticProps: Record<string, unknown> | undefined;
+      let isPrerender = false;
       const match = matchRoute(routes, url.pathname);
       if (match) {
         const resolved = await resolveRouteModule(match.route);
+        isPrerender = resolved.prerender === true;
         if (resolved.getStaticPaths) {
           const entries = await resolved.getStaticPaths();
           const entry = entries.find((e) =>
@@ -287,6 +289,12 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         .map((href) => `<link rel="stylesheet" href="${href}">`)
         .join("\n    ");
 
+      // Scripts de cliente: solo para rutas que no son prerender
+      const clientScripts = isPrerender
+        ? ""
+        : `<link rel="modulepreload" href="/src/entry-client.tsx">
+    <script type="module" src="/src/entry-client.tsx"></script>`;
+
       // Leer y transformar index.html
       const template = await vite.transformIndexHtml(
         url.pathname,
@@ -297,8 +305,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     ${devCssTags}
     ${result.head || ""}
-    <link rel="modulepreload" href="/src/entry-client.tsx">
-    <script type="module" src="/src/entry-client.tsx"></script>
+    ${clientScripts}
   </head>
   <body>
     <div id="root">${result.html}</div>
@@ -306,12 +313,15 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
 </html>`,
       );
 
-      // Inyectar datos iniciales
-      const serializedData = serializeData(result.initialData ?? null);
-      const finalHtml = template.replace(
-        "</body>",
-        `<script>window.__INITIAL_DATA__ = ${serializedData};</script></body>`,
-      );
+      // Inyectar datos iniciales solo para rutas con hidratación
+      let finalHtml = template;
+      if (!isPrerender) {
+        const serializedData = serializeData(result.initialData ?? null);
+        finalHtml = template.replace(
+          "</body>",
+          `<script>window.__INITIAL_DATA__ = ${serializedData};</script></body>`,
+        );
+      }
 
       return c.html(finalHtml, result.status as 200 | 404 | 500);
     } catch (error) {
