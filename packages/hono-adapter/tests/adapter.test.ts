@@ -14,13 +14,17 @@ const mocks = vi.hoisted(() => ({
   resolveRouteModule: vi.fn((route: unknown) => Promise.resolve(route)),
 }));
 
-vi.mock("@calumet/suamox", () => ({
-  renderPage: mocks.renderPage,
-  generateHTML: mocks.generateHTML,
-  serializeData: mocks.serializeData,
-  matchRoute: mocks.matchRoute,
-  resolveRouteModule: mocks.resolveRouteModule,
-}));
+vi.mock("@calumet/suamox", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@calumet/suamox")>();
+  return {
+    renderPage: mocks.renderPage,
+    generateHTML: mocks.generateHTML,
+    serializeData: mocks.serializeData,
+    matchRoute: mocks.matchRoute,
+    resolveRouteModule: mocks.resolveRouteModule,
+    stripBase: actual.stripBase,
+  };
+});
 
 import { createDevHandler, createHonoApp, createProdHandler } from "../src/index";
 

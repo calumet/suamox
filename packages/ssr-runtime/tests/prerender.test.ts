@@ -137,6 +137,80 @@ describe("prerender", () => {
     expect(html).toContain("Title: Quiénes Somos");
   });
 
+  it("outputs files under base path", async () => {
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/",
+        prerender: true,
+        component: (() => createElement("div", null, "Home")) as RouteRecord["component"],
+      }),
+      createMockRoute({
+        path: "/about",
+        isIndex: false,
+        prerender: true,
+        component: (() => createElement("div", null, "About")) as RouteRecord["component"],
+      }),
+    ];
+
+    await prerender({
+      routes,
+      outDir,
+      baseUrl: "http://localhost",
+      base: "/app",
+    });
+
+    const indexHtml = await readFile(join(outDir, "app", "index.html"), "utf-8");
+    expect(indexHtml).toContain("Home");
+
+    const aboutHtml = await readFile(join(outDir, "app", "about", "index.html"), "utf-8");
+    expect(aboutHtml).toContain("About");
+  });
+
+  it("outputs dynamic routes under base path", async () => {
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/blog/:slug",
+        params: ["slug"],
+        isIndex: false,
+        prerender: true,
+        getStaticPaths: () => Promise.resolve([{ params: { slug: "first" } }]),
+        loader: ({ params }) => Promise.resolve({ slug: params.slug }),
+        component: (({ data }: { data: { slug: string } }) =>
+          createElement("div", null, `Post ${data.slug}`)) as RouteRecord["component"],
+      }),
+    ];
+
+    await prerender({
+      routes,
+      outDir,
+      baseUrl: "http://localhost",
+      base: "/blog-app",
+    });
+
+    const html = await readFile(join(outDir, "blog-app", "blog", "first", "index.html"), "utf-8");
+    expect(html).toContain("Post first");
+  });
+
+  it("outputs files at root when base is /", async () => {
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/",
+        prerender: true,
+        component: (() => createElement("div", null, "Root")) as RouteRecord["component"],
+      }),
+    ];
+
+    await prerender({
+      routes,
+      outDir,
+      baseUrl: "http://localhost",
+      base: "/",
+    });
+
+    const html = await readFile(join(outDir, "index.html"), "utf-8");
+    expect(html).toContain("Root");
+  });
+
   it("injects stylesheet links from resolved assets", async () => {
     const route = createMockRoute({
       path: "/",

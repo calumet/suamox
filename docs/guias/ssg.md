@@ -79,6 +79,20 @@ Esto aplica tanto en build (`suamox ssg`) como en desarrollo (`suamox dev`). En 
 
 Si necesitas interactividad en una página SSG, considera usar una página SSR (`prerender = false`) en su lugar.
 
+## Base path
+
+Si tu app usa `base` en Vite (e.g. `base: "/grupos/"`), los archivos SSG se generan con el prefijo correspondiente:
+
+```txt
+dist/static/
+  grupos/
+    index.html
+    about/
+      index.html
+```
+
+Los paths de CSS también incluyen el prefijo base automáticamente.
+
 ## Comportamiento en producción
 
 Al usar `suamox preview`:

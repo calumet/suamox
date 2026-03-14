@@ -31,6 +31,7 @@ startRouter(options): Promise<RouterInstance>
 
 - `routes`: rutas generadas por `virtual:pages` (obligatorio).
 - `rootElementId`: id del contenedor raíz (`root` por defecto).
+- `base`: prefijo de ruta (e.g. `"/grupos"`). Se lee automáticamente de `virtual:pages`. Usado para strip antes de resolver rutas.
 - `baseUrl`: base para `navigate()` (por defecto `window.location.origin`).
 - `prefetch`: habilita/deshabilita prefetch automático (`true` por defecto).
 

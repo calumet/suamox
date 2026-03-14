@@ -11,6 +11,7 @@ import {
   renderPage,
   resolveRouteModule,
   serializeData,
+  stripBase,
 } from "@calumet/suamox";
 import { serveStatic } from "@hono/node-server/serve-static";
 import type { Context } from "hono";
@@ -40,6 +41,7 @@ export interface ProdHandlerOptions extends HonoAdapterOptions {
   serverEntry?: string;
   root?: string;
   staticDir?: string;
+  base?: string;
 }
 
 const cssImportPattern = /import\s+(?:[^'"]+\s+from\s+)?['"]([^'"]+\.css(?:\?[^'"]*)?)['"]/g;
@@ -240,13 +242,16 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       // Cargar módulo virtual:pages
       const routesModule = (await vite.ssrLoadModule("virtual:pages")) as {
         routes: RouteRecord[];
+        base?: string;
       };
       const routes = routesModule.routes;
+      const base = routesModule.base ?? "/";
+      const strippedPathname = stripBase(url.pathname, base);
 
       // Resolver módulo de ruta para detectar prerender y getStaticPaths
       let staticProps: Record<string, unknown> | undefined;
       let isPrerender = false;
-      const match = matchRoute(routes, url.pathname);
+      const match = matchRoute(routes, strippedPathname);
       if (match) {
         const resolved = await resolveRouteModule(match.route);
         isPrerender = resolved.prerender === true;
@@ -263,7 +268,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
 
       // Ejecutar hook onBeforeRender
       let renderContext: RenderOptions = {
-        pathname: url.pathname,
+        pathname: strippedPathname,
         request: c.req.raw,
         routes,
         props: staticProps,
@@ -348,6 +353,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     onAfterRender,
     root = process.cwd(),
     staticDir = "dist/static",
+    base = "/",
   } = options;
 
   const app = createHonoApp(options);
@@ -530,8 +536,14 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         throw new Error("Server entry must export routes");
       }
 
+      const strippedPathname = stripBase(url.pathname, base);
+
       // Ejecutar hook onBeforeRender
-      let renderContext: RenderOptions = { pathname: url.pathname, request: c.req.raw, routes };
+      let renderContext: RenderOptions = {
+        pathname: strippedPathname,
+        request: c.req.raw,
+        routes,
+      };
       if (onBeforeRender) {
         renderContext = await onBeforeRender(renderContext);
       }
@@ -549,12 +561,12 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       }
 
       // Detectar si la ruta es prerender
-      const matched = matchRoute(routes, url.pathname);
+      const matched = matchRoute(routes, strippedPathname);
       const resolvedMatch = matched ? await resolveRouteModule(matched.route) : null;
       const isPrerender = resolvedMatch?.prerender === true;
 
       // Generar HTML completo (sin hidratación para rutas prerender)
-      const { preloadScripts, styles } = collectManifestAssets(routes, url.pathname);
+      const { preloadScripts, styles } = collectManifestAssets(routes, strippedPathname);
       const html = generateHTML({
         html: `<div id="root">${result.html}</div>`,
         head: result.head,

@@ -70,6 +70,15 @@ export function useStaticProps<T = Record<string, unknown>>(): T {
   return useContext(StaticPropsContext) as T;
 }
 
+export function stripBase(pathname: string, base: string): string {
+  if (base === "/" || base === "") return pathname;
+  if (pathname.startsWith(base)) {
+    const stripped = pathname.slice(base.length);
+    return stripped === "" ? "/" : stripped;
+  }
+  return pathname;
+}
+
 export class RedirectResponse extends Error {
   readonly location: string;
   readonly status: number;
@@ -262,13 +271,17 @@ export async function resolveRouteModule(route: RouteRecord): Promise<RouteRecor
   return route;
 }
 
-export async function hydrateApp(routes: RouteRecord[], adapter?: HydrationAdapter): Promise<void> {
+export async function hydrateApp(
+  routes: RouteRecord[],
+  adapter?: HydrationAdapter,
+  base: string = "/",
+): Promise<void> {
   const rootElement = document.getElementById("root");
   if (!rootElement) {
     return;
   }
 
-  const match = matchRoute(routes, window.location.pathname);
+  const match = matchRoute(routes, stripBase(window.location.pathname, base));
   if (!match) {
     return;
   }

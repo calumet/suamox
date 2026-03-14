@@ -26,6 +26,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
 
   let server: ViteDevServer | undefined;
   let root: string;
+  let basePath = "/";
   let routesCache: RouteRecord[] | null = null;
   let moduleCode: string | null = null;
 
@@ -37,7 +38,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     });
 
     routesCache = result.routes;
-    moduleCode = generateRoutesModule(result.routes, { defaultMode });
+    moduleCode = generateRoutesModule(result.routes, { defaultMode, base: basePath });
 
     if (logErrors && result.errors.length > 0) {
       console.error(pc.red("\n[suamox:pages] Route errors:"));
@@ -63,6 +64,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
 
     configResolved(config) {
       root = config.root;
+      basePath = config.base.replace(/\/+$/, "") || "/";
     },
 
     configureServer(_server) {
@@ -118,7 +120,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       }
       if (id === RESOLVED_VIRTUAL_SERVER_MODULE_ID) {
         // Re-export simple para el entry point SSR
-        return `export { routes } from 'virtual:pages';`;
+        return `export { routes, base } from 'virtual:pages';`;
       }
     },
   };

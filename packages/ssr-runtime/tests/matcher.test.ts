@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { matchRoute } from "../src/index";
+import { matchRoute, stripBase } from "../src/index";
 import type { RouteRecord } from "../src/index";
 
 function createMockRoute(overrides: Partial<RouteRecord>): RouteRecord {
@@ -249,5 +249,35 @@ describe("matchRoute", () => {
       expect(match).toBeTruthy();
       expect(match?.params).toEqual({ id: "123", postId: "456" });
     });
+  });
+});
+
+describe("stripBase", () => {
+  it("should return pathname unchanged when base is /", () => {
+    expect(stripBase("/about", "/")).toBe("/about");
+  });
+
+  it("should return pathname unchanged when base is empty", () => {
+    expect(stripBase("/about", "")).toBe("/about");
+  });
+
+  it("should strip base prefix from pathname", () => {
+    expect(stripBase("/app/about", "/app")).toBe("/about");
+  });
+
+  it("should return / when pathname equals base", () => {
+    expect(stripBase("/app", "/app")).toBe("/");
+  });
+
+  it("should strip nested base prefix", () => {
+    expect(stripBase("/my/app/blog/post", "/my/app")).toBe("/blog/post");
+  });
+
+  it("should return pathname unchanged when base does not match", () => {
+    expect(stripBase("/other/path", "/app")).toBe("/other/path");
+  });
+
+  it("should handle root pathname with base", () => {
+    expect(stripBase("/app/", "/app")).toBe("/");
   });
 });

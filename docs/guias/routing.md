@@ -54,6 +54,60 @@ El runtime ordena rutas automáticamente:
 
 No necesitas ordenar archivos manualmente.
 
+## Base path
+
+Si tu aplicación se sirve bajo un subpath (e.g. `https://ejemplo.com/grupos/`), configura `base` en `vite.config.ts`:
+
+```ts
+export default defineConfig({
+  base: "/grupos/",
+  plugins: [react(), suamoxPages()],
+});
+```
+
+Suamox lee `base` automáticamente de la config de Vite y lo aplica en:
+
+- **Router del cliente**: strip del base antes de resolver rutas.
+- **SSR (dev y prod)**: el servidor strip el base antes de hacer match de rutas.
+- **SSG**: los archivos HTML se generan bajo `dist/static/grupos/...`.
+- **CSS en SSG**: los paths de assets usan el prefijo base.
+
+No necesitas configurar el base en cada paquete individualmente.
+
+### Links con base path
+
+Suamox **no** modifica automáticamente los `href` de los `<a>`. Si tu base es `/grupos`, debes incluir el prefijo manualmente en tus links:
+
+```tsx
+// Incorrecto: navega a /about, fuera del base
+<a href="/about">About</a>
+
+// Correcto: incluye el base
+<a href="/grupos/about">About</a>
+```
+
+Para evitar hardcodear el base, puedes usar `import.meta.env.BASE_URL`:
+
+```tsx
+<a href={`${import.meta.env.BASE_URL}about`}>About</a>
+```
+
+Esto aplica también dentro de páginas generadas con `getStaticPaths`. Los links en el markup de esas páginas deben incluir el base manualmente:
+
+```tsx
+// src/pages/blog/[slug].tsx
+export function getStaticPaths() {
+  return [{ params: { slug: "hola" } }];
+}
+
+export default function BlogPost() {
+  // Incluir el base en links dentro de páginas SSG
+  return <a href={`${import.meta.env.BASE_URL}blog`}>Volver al blog</a>;
+}
+```
+
+Este es el mismo comportamiento que Astro y Vite: el base se aplica a assets y rutas de salida automáticamente, pero los links en tu markup son responsabilidad del desarrollador.
+
 ## Configuración del plugin
 
 En `vite.config.ts`:

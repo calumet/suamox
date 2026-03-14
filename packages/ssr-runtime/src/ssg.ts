@@ -15,6 +15,7 @@ export interface PrerenderOptions {
   routes: RouteRecord[];
   outDir: string;
   baseUrl?: string;
+  base?: string;
   scripts?: string[];
   styles?: string[];
   preloadScripts?: string[];
@@ -31,6 +32,7 @@ export interface RunSsgOptions {
   serverEntry?: string;
   outDir?: string;
   baseUrl?: string;
+  base?: string;
 }
 
 function isDynamicRoute(route: RouteRecord): boolean {
@@ -154,15 +156,18 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
     routes,
     outDir,
     baseUrl = "http://localhost",
+    base = "/",
     scripts = [],
     styles = [],
     preloadScripts = [],
     resolveAssets,
   } = options;
 
+  const normalizedBase = base === "/" ? "" : base;
+
   const getOutputPath = (pathname: string): { dir: string; filePath: string } => {
-    const normalizedPath = pathname === "" ? "/" : pathname;
-    const parts = normalizedPath.split("/").filter(Boolean);
+    const fullPath = `${normalizedBase}${pathname === "/" ? "" : pathname}`;
+    const parts = fullPath.split("/").filter(Boolean);
     const dir = parts.length === 0 ? outDir : join(outDir, ...parts);
     return {
       dir,
@@ -244,6 +249,7 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
     serverEntry,
     outDir,
     baseUrl = "http://localhost",
+    base = "/",
   } = options;
 
   const resolvedDistDir = distDir ?? resolve(rootDir, "dist");
@@ -284,11 +290,14 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
 
   const serverModule = (await import(pathToFileURL(resolvedServerEntry).href)) as {
     routes?: RouteRecord[];
+    base?: string;
   };
 
   if (!serverModule.routes) {
     throw new Error("SSR entry must export routes.");
   }
+
+  const resolvedBase = base ?? serverModule.base ?? "/";
 
   const manifestPath = resolve(clientBuildDir, ".vite", "manifest.json");
   let manifest: Manifest = {};
@@ -314,7 +323,8 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
       keys.push(routeKey);
     }
 
-    return collectStylesFromManifest(manifest, keys, "/client");
+    const cssPrefix = resolvedBase === "/" ? "/client" : `${resolvedBase}/client`;
+    return collectStylesFromManifest(manifest, keys, cssPrefix);
   };
 
   await rm(resolvedOutDir, { recursive: true, force: true });
@@ -323,6 +333,7 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
     routes: serverModule.routes,
     outDir: resolvedOutDir,
     baseUrl,
+    base: resolvedBase,
     resolveAssets: ({ route }) => ({
       styles: resolveRouteStyles(route),
     }),

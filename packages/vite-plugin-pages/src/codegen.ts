@@ -4,6 +4,7 @@ export type DefaultPageMode = "ssr" | "ssg" | "csr";
 
 export interface GenerateRoutesOptions {
   defaultMode?: DefaultPageMode;
+  base?: string;
 }
 
 /**
@@ -13,7 +14,7 @@ export function generateRoutesModule(
   routes: RouteRecord[],
   options: GenerateRoutesOptions = {},
 ): string {
-  const { defaultMode = "ssr" } = options;
+  const { defaultMode = "ssr", base = "/" } = options;
   const defaultPrerender = defaultMode === "ssg";
   const defaultCsr = defaultMode === "csr";
   const declarations: string[] = [];
@@ -76,11 +77,15 @@ export function generateRoutesModule(
     routeObjects.push(routeObj);
   });
 
+  const normalizedBase = base.replace(/\/+$/, "") || "/";
+
   return `${declarations.join("\n")}
 
 export const routes = [
 ${routeObjects.join(",\n")}
 ];
+
+export const base = ${JSON.stringify(normalizedBase)};
 
 export default routes;
 `;

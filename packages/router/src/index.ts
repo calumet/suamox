@@ -2,6 +2,7 @@ import {
   createPageElement,
   matchRoute,
   resolveRouteModule,
+  stripBase,
   type HydrationAdapter,
   type LoaderContext,
   type RouteRecord,
@@ -15,6 +16,7 @@ export interface RouterOptions {
   adapter?: HydrationAdapter;
   rootElementId?: string;
   baseUrl?: string;
+  base?: string;
   prefetch?: boolean;
 }
 
@@ -121,7 +123,7 @@ const ensureAdapter = async (adapter?: HydrationAdapter): Promise<HydrationAdapt
 };
 
 export async function startRouter(options: RouterOptions): Promise<RouterInstance> {
-  const { routes, adapter, rootElementId = "root", baseUrl, prefetch = true } = options;
+  const { routes, adapter, rootElementId = "root", baseUrl, base = "/", prefetch = true } = options;
 
   if (!canUseDOM()) {
     return {
@@ -150,7 +152,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     { scroll = true, useInitialData = false }: { scroll?: boolean; useInitialData?: boolean },
   ): Promise<void> => {
     const activeId = ++navigationId;
-    const match = resolveMatch(routes, url.pathname);
+    const match = resolveMatch(routes, stripBase(url.pathname, base));
 
     if (!match) {
       return;
@@ -206,7 +208,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     if (isSameDocumentHash(url)) {
       return;
     }
-    const match = resolveMatch(routes, url.pathname);
+    const match = resolveMatch(routes, stripBase(url.pathname, base));
     if (!match || !match.route.load) {
       return;
     }
@@ -252,7 +254,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     }
 
     // No interceptar links a páginas SSG — requieren full page reload
-    const match = resolveMatch(routes, url.pathname);
+    const match = resolveMatch(routes, stripBase(url.pathname, base));
     if (match?.route.prerender) {
       return;
     }
@@ -301,7 +303,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
       return;
     }
 
-    const match = resolveMatch(routes, url.pathname);
+    const match = resolveMatch(routes, stripBase(url.pathname, base));
     if (!match || match.route.prerender) {
       window.location.assign(url.toString());
       return;

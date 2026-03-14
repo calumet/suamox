@@ -286,4 +286,28 @@ describe("generateRoutesModule", () => {
     );
     expect(code).toContain("const _csr = _hasCsr ? _module.csr === true : !_prerender;");
   });
+
+  it("should export base as / by default", () => {
+    const code = generateRoutesModule([]);
+
+    expect(code).toContain('export const base = "/";');
+  });
+
+  it("should export base with custom value", () => {
+    const code = generateRoutesModule([], { base: "/app" });
+
+    expect(code).toContain('export const base = "/app";');
+  });
+
+  it("should strip trailing slashes from base", () => {
+    const code = generateRoutesModule([], { base: "/app/" });
+
+    expect(code).toContain('export const base = "/app";');
+  });
+
+  it("should normalize base with multiple trailing slashes", () => {
+    const code = generateRoutesModule([], { base: "/app///" });
+
+    expect(code).toContain('export const base = "/app";');
+  });
 });
