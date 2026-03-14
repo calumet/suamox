@@ -548,16 +548,22 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         return c.redirect(result.redirectTo, result.status as 301 | 302 | 303 | 307 | 308);
       }
 
-      // Generar HTML completo
+      // Detectar si la ruta es prerender
+      const matched = matchRoute(routes, url.pathname);
+      const resolvedMatch = matched ? await resolveRouteModule(matched.route) : null;
+      const isPrerender = resolvedMatch?.prerender === true;
+
+      // Generar HTML completo (sin hidratación para rutas prerender)
       const { preloadScripts, styles } = collectManifestAssets(routes, url.pathname);
       const html = generateHTML({
         html: `<div id="root">${result.html}</div>`,
         head: result.head,
-        initialData: result.initialData,
-        scripts: [entryClientScript],
-        preloadScripts,
+        initialData: isPrerender ? undefined : result.initialData,
+        scripts: isPrerender ? [] : [entryClientScript],
+        preloadScripts: isPrerender ? [] : preloadScripts,
         styles,
         scriptPlacement: "head",
+        includeInitialDataScript: !isPrerender,
       });
 
       return c.html(html, result.status as 200 | 404 | 500);

@@ -184,10 +184,10 @@ export default function PostPage() {
 
 ### Diferencia entre `useLoaderData` y `useStaticProps`
 
-| Hook               | Fuente                        | Disponible en              |
-| ------------------ | ----------------------------- | -------------------------- |
-| `useLoaderData()`  | Retorno de `loader()`         | SSR, SSG, cliente          |
-| `useStaticProps()` | `props` de `getStaticPaths()` | Solo servidor (SSR y SSG)  |
+| Hook               | Fuente                        | Disponible en             |
+| ------------------ | ----------------------------- | ------------------------- |
+| `useLoaderData()`  | Retorno de `loader()`         | SSR, SSG, cliente         |
+| `useStaticProps()` | `props` de `getStaticPaths()` | Solo servidor (SSR y SSG) |
 
 - `useStaticProps()` es **server-only**. Llamarlo en el cliente lanza un error.
 - Retorna `{}` si la página no tiene `getStaticPaths` o si la entrada no incluye `props`.

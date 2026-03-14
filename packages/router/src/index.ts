@@ -251,6 +251,12 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
       return;
     }
 
+    // No interceptar links a páginas SSG — requieren full page reload
+    const match = resolveMatch(routes, url.pathname);
+    if (match?.route.prerender) {
+      return;
+    }
+
     event.preventDefault();
     void navigate(url.toString());
   };
@@ -296,7 +302,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     }
 
     const match = resolveMatch(routes, url.pathname);
-    if (!match) {
+    if (!match || match.route.prerender) {
       window.location.assign(url.toString());
       return;
     }

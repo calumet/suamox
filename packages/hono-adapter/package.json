@@ -1,6 +1,6 @@
 {
   "name": "@calumet/suamox-hono-adapter",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Hono server adapter for Suamox framework",
   "type": "module",
   "main": "./dist/index.js",
