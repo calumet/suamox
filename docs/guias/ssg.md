@@ -67,6 +67,18 @@ Durante `suamox ssg`, el runtime:
 
 Esto evita páginas estáticas sin estilos al servir `dist/static`.
 
+## Sin hidratación
+
+Las páginas SSG generan HTML puro, sin JavaScript de cliente. A diferencia de las páginas SSR:
+
+- No incluyen `entry-client.tsx` ni scripts de hidratación de React.
+- No inyectan `window.__INITIAL_DATA__`.
+- Los estilos CSS sí se incluyen normalmente.
+
+Esto aplica tanto en build (`suamox ssg`) como en desarrollo (`suamox dev`). En dev, las rutas con `prerender = true` se renderizan en el servidor sin enviar scripts de hidratación al browser.
+
+Si necesitas interactividad en una página SSG, considera usar una página SSR (`prerender = false`) en su lugar.
+
 ## Comportamiento en producción
 
 Al usar `suamox preview`:

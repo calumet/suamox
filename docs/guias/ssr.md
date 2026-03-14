@@ -60,11 +60,13 @@ Siempre está disponible:
 
 ## HTML y datos iniciales
 
-El runtime genera HTML completo e inyecta:
+Para páginas SSR (sin `prerender = true`), el runtime genera HTML completo e inyecta:
 
 - `window.__INITIAL_DATA__` con datos serializados de `loader()`.
 - `<link rel="stylesheet">` para CSS resuelto desde manifest.
 - Scripts y preloads de cliente para hidratación.
+
+Las páginas con `prerender = true` (SSG) no incluyen scripts de hidratación ni `__INITIAL_DATA__`. Solo se sirve el HTML estático con sus estilos CSS.
 
 ## Notas de desarrollo
 
