@@ -88,7 +88,7 @@ importers:
   packages/cli:
     dependencies:
       '@calumet/suamox':
-        specifier: ^0.1.1
+        specifier: workspace:^
         version: link:../ssr-runtime
     devDependencies:
       '@types/node':
@@ -150,7 +150,7 @@ importers:
         version: 1.1.1
     devDependencies:
       '@calumet/suamox':
-        specifier: ^0.1.0
+        specifier: workspace:^
         version: link:../ssr-runtime
       '@hono/node-server':
         specifier: ^1.14.0
@@ -180,10 +180,10 @@ importers:
   packages/router:
     dependencies:
       '@calumet/suamox':
-        specifier: ^0.1.0
+        specifier: workspace:^
         version: link:../ssr-runtime
       '@calumet/suamox-head':
-        specifier: ^0.1.0
+        specifier: workspace:^
         version: link:../head
     devDependencies:
       '@types/node':
@@ -211,7 +211,7 @@ importers:
   packages/ssr-runtime:
     dependencies:
       '@calumet/suamox-head':
-        specifier: ^0.1.0
+        specifier: workspace:^
         version: link:../head
     devDependencies:
       '@types/node':

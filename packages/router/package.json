@@ -30,8 +30,8 @@
     "access": "public"
   },
   "dependencies": {
-    "@calumet/suamox-head": "^0.1.0",
-    "@calumet/suamox": "^0.1.0"
+    "@calumet/suamox-head": "workspace:^",
+    "@calumet/suamox": "workspace:^"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
