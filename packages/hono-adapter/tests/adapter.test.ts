@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { RedirectResponse, stripBase } from "@calumet/suamox";
 import type { RenderOptions, RenderResult } from "@calumet/suamox";
 import type { ViteDevServer } from "vite";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -28,6 +29,22 @@ vi.mock("@calumet/suamox", async (importOriginal) => {
 });
 
 import { createDevHandler, createHonoApp, createProdHandler } from "../src/index";
+
+const runtimeModule = {
+  renderPage: mocks.renderPage,
+  matchRoute: mocks.matchRoute,
+  resolveRouteModule: mocks.resolveRouteModule,
+  stripBase,
+  RedirectResponse,
+};
+
+const createSsrLoadModule = (routes: unknown[]) =>
+  vi.fn((id: string) => {
+    if (id === "@calumet/suamox") {
+      return Promise.resolve(runtimeModule);
+    }
+    return Promise.resolve({ routes });
+  });
 
 describe("createHonoApp", () => {
   it("exposes a health endpoint", async () => {
@@ -68,10 +85,9 @@ describe("createDevHandler", () => {
     });
 
     const routes: unknown[] = [];
-    const ssrLoadModule = vi.fn((_id: string) => Promise.resolve({ routes }));
     const transformIndexHtml = vi.fn((_url: string, html: string) => Promise.resolve(html));
     const vite = {
-      ssrLoadModule,
+      ssrLoadModule: createSsrLoadModule(routes),
       transformIndexHtml,
       ssrFixStacktrace: vi.fn(),
       transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
@@ -114,10 +130,8 @@ describe("createDevHandler", () => {
       head: "",
       initialData: null,
     });
-    const ssrLoadModule = vi.fn((_id: string) => Promise.resolve({ routes: [] }));
-
     const vite = {
-      ssrLoadModule,
+      ssrLoadModule: createSsrLoadModule([]),
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
       ssrFixStacktrace: vi.fn(),
       transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
@@ -147,7 +161,7 @@ describe("createDevHandler", () => {
     });
 
     const vite = {
-      ssrLoadModule: vi.fn(() => Promise.resolve({ routes: [] })),
+      ssrLoadModule: createSsrLoadModule([]),
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
       ssrFixStacktrace: vi.fn(),
       transformRequest: vi.fn((_url: string) => Promise.reject(new Error("missing"))),
@@ -179,7 +193,7 @@ describe("createDevHandler", () => {
     });
 
     const vite = {
-      ssrLoadModule: vi.fn(() => Promise.resolve({ routes: [] })),
+      ssrLoadModule: createSsrLoadModule([]),
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
       ssrFixStacktrace: vi.fn(),
       transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
@@ -232,7 +246,7 @@ describe("createDevHandler", () => {
     });
 
     const vite = {
-      ssrLoadModule: vi.fn(() => Promise.resolve({ routes: [route] })),
+      ssrLoadModule: createSsrLoadModule([route]),
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
       ssrFixStacktrace: vi.fn(),
       transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
@@ -266,7 +280,7 @@ describe("createDevHandler", () => {
     });
 
     const vite = {
-      ssrLoadModule: vi.fn(() => Promise.resolve({ routes: [route] })),
+      ssrLoadModule: createSsrLoadModule([route]),
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
       ssrFixStacktrace: vi.fn(),
       transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
@@ -285,12 +299,9 @@ describe("createDevHandler", () => {
 
 describe("createDevHandler /__data endpoint", () => {
   const createViteMock = (routes: unknown[] = [], loaderRoute?: unknown) => {
-    const ssrLoadModule = vi.fn((_id: string) => {
-      const resolvedRoutes = loaderRoute ? [loaderRoute] : routes;
-      return Promise.resolve({ routes: resolvedRoutes });
-    });
+    const resolvedRoutes = loaderRoute ? [loaderRoute] : routes;
     return {
-      ssrLoadModule,
+      ssrLoadModule: createSsrLoadModule(resolvedRoutes),
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
       ssrFixStacktrace: vi.fn(),
       transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
@@ -447,9 +458,9 @@ describe("createDevHandler /__data endpoint", () => {
     mocks.matchRoute.mockReturnValue({ route, params: {} });
     mocks.resolveRouteModule.mockResolvedValue(route);
 
-    const ssrLoadModule = vi.fn((_id: string) => Promise.resolve({ routes: [route] }));
+    const ssrLoadModuleFn = createSsrLoadModule([route]);
     const vite = {
-      ssrLoadModule,
+      ssrLoadModule: ssrLoadModuleFn,
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
       ssrFixStacktrace: vi.fn(),
       transformRequest: vi.fn(),
@@ -458,7 +469,7 @@ describe("createDevHandler /__data endpoint", () => {
     const app = createDevHandler({ vite });
     await app.request("http://localhost/__data?path=/about");
 
-    expect(ssrLoadModule).toHaveBeenCalledWith("virtual:pages/server");
+    expect(ssrLoadModuleFn).toHaveBeenCalledWith("virtual:pages/server");
   });
 });
 

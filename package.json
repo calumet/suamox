@@ -10,7 +10,8 @@
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test:e2e": "playwright test"
   },
   "keywords": [
     "framework",
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@calumet/elise-linter": "^0.1.2",
     "@eslint/js": "^9.18.0",
+    "@playwright/test": "^1.58.2",
     "@types/node": "^22.10.5",
     "eslint": "^9.39.2",
     "prettier": "^3.8.0",

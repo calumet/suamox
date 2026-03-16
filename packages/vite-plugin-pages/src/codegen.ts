@@ -86,6 +86,13 @@ export function generateRoutesModule(
 
   const normalizedBase = base.replace(/\/+$/, "") || "/";
 
+  // En el módulo servidor, re-exportar funciones del runtime para que
+  // el prod handler use la misma instancia que las páginas.
+  const runtimeReExports =
+    target === "server"
+      ? `\nexport { renderPage, matchRoute, resolveRouteModule, RedirectResponse } from "@calumet/suamox";\n`
+      : "";
+
   return `${declarations.join("\n")}
 
 export const routes = [
@@ -93,7 +100,7 @@ ${routeObjects.join(",\n")}
 ];
 
 export const base = ${JSON.stringify(normalizedBase)};
-
+${runtimeReExports}
 export default routes;
 `;
 }

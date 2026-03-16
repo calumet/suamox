@@ -1,6 +1,6 @@
 {
   "name": "@calumet/suamox-vite-plugin-pages",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Vite plugin for filesystem-based routing",
   "type": "module",
   "main": "./dist/index.js",

@@ -229,6 +229,11 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
   const { vite, onRequest, onBeforeRender, onAfterRender, root = process.cwd() } = options;
   const app = createHonoApp(options);
 
+  // Carga @calumet/suamox a través de Vite para compartir la misma instancia
+  // de contextos React (LoaderDataContext, StaticPropsContext) con las páginas.
+  const loadRuntime = () =>
+    vite.ssrLoadModule("@calumet/suamox") as Promise<typeof import("@calumet/suamox")>;
+
   // Endpoint de datos para client-side navigation
   app.get("/__data", async (c) => {
     const path = c.req.query("path");
@@ -237,6 +242,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
     }
 
     try {
+      const runtime = await loadRuntime();
       const routesModule = (await vite.ssrLoadModule("virtual:pages/server")) as {
         routes: RouteRecord[];
         base?: string;
@@ -245,12 +251,12 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       const routeBase = routesModule.base ?? "/";
       const strippedPathname = stripBase(path, routeBase);
 
-      const match = matchRoute(routes, strippedPathname);
+      const match = runtime.matchRoute(routes, strippedPathname);
       if (!match) {
         return c.json(null, 404);
       }
 
-      const resolved = await resolveRouteModule(match.route);
+      const resolved = await runtime.resolveRouteModule(match.route);
       if (!resolved.loader) {
         return c.json(null);
       }
@@ -294,7 +300,8 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         await onRequest(c);
       }
 
-      // Cargar módulo virtual:pages/server (incluye loaders y getStaticPaths)
+      // Cargar runtime y rutas a través de Vite para compartir instancias de contexto
+      const runtime = await loadRuntime();
       const routesModule = (await vite.ssrLoadModule("virtual:pages/server")) as {
         routes: RouteRecord[];
         base?: string;
@@ -306,9 +313,9 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       // Resolver módulo de ruta para detectar prerender y getStaticPaths
       let staticProps: Record<string, unknown> | undefined;
       let isPrerender = false;
-      const match = matchRoute(routes, strippedPathname);
+      const match = runtime.matchRoute(routes, strippedPathname);
       if (match) {
-        const resolved = await resolveRouteModule(match.route);
+        const resolved = await runtime.resolveRouteModule(match.route);
         isPrerender = resolved.prerender === true;
         if (resolved.getStaticPaths) {
           const entries = await resolved.getStaticPaths();
@@ -333,7 +340,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       }
 
       // Renderizar página
-      let result = await renderPage(renderContext);
+      let result = await runtime.renderPage(renderContext);
 
       // Ejecutar hook onAfterRender
       if (onAfterRender) {
@@ -560,6 +567,35 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     }
   };
 
+  // Carga el runtime desde el server entry para compartir la misma instancia
+  // de contextos React (LoaderDataContext, StaticPropsContext) con las páginas.
+  type ServerEntryRuntime = {
+    routes: RouteRecord[];
+    renderPage: typeof renderPage;
+    matchRoute: typeof matchRoute;
+    resolveRouteModule: typeof resolveRouteModule;
+    RedirectResponse: typeof RedirectResponse;
+  };
+
+  const loadServerEntry = async (): Promise<ServerEntryRuntime> => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const serverModule = await import(serverEntryURL);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const routes = serverModule.routes as RouteRecord[];
+    if (!routes) {
+      throw new Error("Server entry must export routes");
+    }
+    const mod = serverModule as Record<string, unknown>;
+    return {
+      routes,
+      renderPage: (mod.renderPage as typeof renderPage) ?? renderPage,
+      matchRoute: (mod.matchRoute as typeof matchRoute) ?? matchRoute,
+      resolveRouteModule:
+        (mod.resolveRouteModule as typeof resolveRouteModule) ?? resolveRouteModule,
+      RedirectResponse: (mod.RedirectResponse as typeof RedirectResponse) ?? RedirectResponse,
+    };
+  };
+
   // Endpoint de datos para client-side navigation
   app.get("/__data", async (c) => {
     const path = c.req.query("path");
@@ -568,22 +604,14 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     }
 
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const serverModule = await import(serverEntryURL);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const routes = serverModule.routes as RouteRecord[];
-
-      if (!routes) {
-        return c.json({ error: "Server entry must export routes" }, 500);
-      }
-
+      const entry = await loadServerEntry();
       const strippedPathname = stripBase(path, base);
-      const match = matchRoute(routes, strippedPathname);
+      const match = entry.matchRoute(entry.routes, strippedPathname);
       if (!match) {
         return c.json(null, 404);
       }
 
-      const resolved = await resolveRouteModule(match.route);
+      const resolved = await entry.resolveRouteModule(match.route);
       if (!resolved.loader) {
         return c.json(null);
       }
@@ -635,30 +663,21 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         await onRequest(c);
       }
 
-      // Importar entry del servidor (debe exportar rutas)
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const serverModule = await import(serverEntryURL);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      const routes = serverModule.routes as RouteRecord[];
-
-      if (!routes) {
-        throw new Error("Server entry must export routes");
-      }
-
+      const entry = await loadServerEntry();
       const strippedPathname = stripBase(url.pathname, base);
 
       // Ejecutar hook onBeforeRender
       let renderContext: RenderOptions = {
         pathname: strippedPathname,
         request: c.req.raw,
-        routes,
+        routes: entry.routes,
       };
       if (onBeforeRender) {
         renderContext = await onBeforeRender(renderContext);
       }
 
       // Renderizar página
-      let result = await renderPage(renderContext);
+      let result = await entry.renderPage(renderContext);
 
       // Ejecutar hook onAfterRender
       if (onAfterRender) {
@@ -670,12 +689,12 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       }
 
       // Detectar si la ruta es prerender
-      const matched = matchRoute(routes, strippedPathname);
-      const resolvedMatch = matched ? await resolveRouteModule(matched.route) : null;
+      const matched = entry.matchRoute(entry.routes, strippedPathname);
+      const resolvedMatch = matched ? await entry.resolveRouteModule(matched.route) : null;
       const isPrerender = resolvedMatch?.prerender === true;
 
       // Generar HTML completo (sin hidratación para rutas prerender)
-      const { preloadScripts, styles } = collectManifestAssets(routes, strippedPathname);
+      const { preloadScripts, styles } = collectManifestAssets(entry.routes, strippedPathname);
       const html = generateHTML({
         html: `<div id="root">${result.html}</div>`,
         head: result.head,

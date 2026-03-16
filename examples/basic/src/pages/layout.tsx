@@ -14,6 +14,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <a href="/blog">Blog</a>
           <a href="/counter">Counter</a>
           <a href="/dashboard">Dashboard</a>
+          <a href="/time">Time</a>
+          <a href="/loader-hook">Loader Hook</a>
         </nav>
       </header>
       <main style={{ flex: 1, padding: "2rem" }}>{children}</main>

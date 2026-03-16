@@ -1,1 +1,7 @@
-export { routes } from "virtual:pages/server";
+export {
+  routes,
+  renderPage,
+  matchRoute,
+  resolveRouteModule,
+  RedirectResponse,
+} from "virtual:pages/server";
