@@ -26,7 +26,7 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm -r --filter "@calumet/suamox*" build
+      - run: pnpm --filter "@calumet/suamox*" build
       - run: pnpm -r test
 
       - run: pnpm -r --filter "@calumet/suamox*" publish --no-git-checks
