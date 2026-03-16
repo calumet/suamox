@@ -16,13 +16,13 @@
 
 ### Packages
 
-| Paquete | Versión anterior | Nueva versión |
-|---------|-----------------|---------------|
-| `@calumet/suamox` | 0.1.10 | 0.2.0 |
-| `@calumet/suamox-vite-plugin-pages` | 0.1.9 | 0.2.0 |
-| `@calumet/suamox-router` | 0.1.6 | 0.2.0 |
-| `@calumet/suamox-hono-adapter` | 0.1.11 | 0.2.0 |
-| `@calumet/suamox-create-app` | 0.1.3 | 0.2.0 |
+| Paquete                             | Versión anterior | Nueva versión |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox`                   | 0.1.10           | 0.2.0         |
+| `@calumet/suamox-vite-plugin-pages` | 0.1.9            | 0.2.0         |
+| `@calumet/suamox-router`            | 0.1.6            | 0.2.0         |
+| `@calumet/suamox-hono-adapter`      | 0.1.11           | 0.2.0         |
+| `@calumet/suamox-create-app`        | 0.1.3            | 0.2.0         |
 
 ### Migration
 

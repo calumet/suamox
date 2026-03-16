@@ -311,7 +311,7 @@ describe("createDevHandler /__data endpoint", () => {
     const response = await app.request("http://localhost/__data");
 
     expect(response.status).toBe(400);
-    const json = await response.json();
+    const json: unknown = await response.json();
     expect(json).toEqual({ error: "Missing path parameter" });
   });
 
@@ -335,7 +335,7 @@ describe("createDevHandler /__data endpoint", () => {
     const response = await app.request("http://localhost/__data?path=/about");
 
     expect(response.status).toBe(200);
-    const json = await response.json();
+    const json: unknown = await response.json();
     expect(json).toBeNull();
   });
 
@@ -355,7 +355,7 @@ describe("createDevHandler /__data endpoint", () => {
     const response = await app.request("http://localhost/__data?path=/api");
 
     expect(response.status).toBe(200);
-    const json = await response.json();
+    const json: unknown = await response.json();
     expect(json).toEqual(loaderData);
     expect(route.loader).toHaveBeenCalledTimes(1);
   });
@@ -395,7 +395,7 @@ describe("createDevHandler /__data endpoint", () => {
 
     await app.request("http://localhost/__data?path=/search&q=test&page=2");
 
-    const call = route.loader.mock.calls[0]![0];
+    const call = route.loader.mock.calls[0]![0] as { query: URLSearchParams };
     expect(call.query.get("q")).toBe("test");
     expect(call.query.get("page")).toBe("2");
     expect(call.query.has("path")).toBe(false);
@@ -419,7 +419,7 @@ describe("createDevHandler /__data endpoint", () => {
     const response = await app.request("http://localhost/__data?path=/old");
 
     expect(response.status).toBe(200);
-    const json = await response.json();
+    const json: unknown = await response.json();
     expect(json).toEqual({ __redirect: "/new", __status: 301 });
   });
 
@@ -438,7 +438,7 @@ describe("createDevHandler /__data endpoint", () => {
     const response = await app.request("http://localhost/__data?path=/broken");
 
     expect(response.status).toBe(500);
-    const json = await response.json();
+    const json: unknown = await response.json();
     expect(json).toEqual({ error: "Loader error" });
   });
 
@@ -560,10 +560,7 @@ describe("createProdHandler /__data endpoint", () => {
     const routeExport = loaderRoute
       ? `[{ path: '${loaderRoute.path}', params: ${JSON.stringify(loaderRoute.params)} }]`
       : "[]";
-    await writeFile(
-      join(serverDir, "entry-server.mjs"),
-      `export const routes = ${routeExport};`,
-    );
+    await writeFile(join(serverDir, "entry-server.mjs"), `export const routes = ${routeExport};`);
     await writeFile(join(clientDir, "manifest.json"), JSON.stringify({}));
 
     return createProdHandler({
@@ -607,7 +604,7 @@ describe("createProdHandler /__data endpoint", () => {
     const response = await app.request("http://localhost/__data?path=/about");
 
     expect(response.status).toBe(200);
-    const json = await response.json();
+    const json: unknown = await response.json();
     expect(json).toBeNull();
   });
 
@@ -626,7 +623,7 @@ describe("createProdHandler /__data endpoint", () => {
     const response = await app.request("http://localhost/__data?path=/menu");
 
     expect(response.status).toBe(200);
-    const json = await response.json();
+    const json: unknown = await response.json();
     expect(json).toEqual(loaderData);
   });
 
@@ -647,7 +644,7 @@ describe("createProdHandler /__data endpoint", () => {
     const response = await app.request("http://localhost/__data?path=/old");
 
     expect(response.status).toBe(200);
-    const json = await response.json();
+    const json: unknown = await response.json();
     expect(json).toEqual({ __redirect: "/new", __status: 302 });
   });
 
@@ -665,7 +662,7 @@ describe("createProdHandler /__data endpoint", () => {
     const response = await app.request("http://localhost/__data?path=/broken");
 
     expect(response.status).toBe(500);
-    const json = await response.json();
+    const json: unknown = await response.json();
     expect(json).toEqual({ error: "Loader error" });
   });
 });

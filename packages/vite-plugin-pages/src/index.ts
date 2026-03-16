@@ -39,8 +39,16 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     });
 
     routesCache = result.routes;
-    clientModuleCode = generateRoutesModule(result.routes, { defaultMode, base: basePath, target: "client" });
-    serverModuleCode = generateRoutesModule(result.routes, { defaultMode, base: basePath, target: "server" });
+    clientModuleCode = generateRoutesModule(result.routes, {
+      defaultMode,
+      base: basePath,
+      target: "client",
+    });
+    serverModuleCode = generateRoutesModule(result.routes, {
+      defaultMode,
+      base: basePath,
+      target: "server",
+    });
 
     if (logErrors && result.errors.length > 0) {
       console.error(pc.red("\n[suamox:pages] Route errors:"));

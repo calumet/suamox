@@ -1,7 +1,12 @@
+import { parse } from "acorn";
 import { describe, it, expect } from "vitest";
 
 import { generateRoutesModule } from "../src/codegen";
 import type { RouteRecord } from "../src/types";
+
+function assertValidModule(code: string): void {
+  parse(code, { ecmaVersion: "latest", sourceType: "module" });
+}
 
 describe("generateRoutesModule", () => {
   it("should generate empty routes array for no routes", () => {
@@ -370,5 +375,44 @@ describe("generateRoutesModule", () => {
     const code = generateRoutesModule([], { base: "/app///" });
 
     expect(code).toContain('export const base = "/app";');
+  });
+
+  it("should generate syntactically valid JavaScript for all targets", () => {
+    const routes: RouteRecord[] = [
+      {
+        path: "/",
+        filePath: "/pages/index.tsx",
+        params: [],
+        isCatchAll: false,
+        isIndex: true,
+        segments: [],
+        priority: 0,
+      },
+      {
+        path: "/blog/:slug",
+        filePath: "/pages/blog/[slug].tsx",
+        params: ["slug"],
+        isCatchAll: false,
+        isIndex: false,
+        segments: [],
+        priority: 215,
+        hasLoader: true,
+        layouts: ["/pages/layout.tsx"],
+      },
+      {
+        path: "/*",
+        filePath: "/pages/[...all].tsx",
+        params: ["all"],
+        isCatchAll: true,
+        isIndex: false,
+        segments: [],
+        priority: 101,
+      },
+    ];
+
+    for (const target of ["client", "server"] as const) {
+      const code = generateRoutesModule(routes, { target });
+      expect(() => assertValidModule(code), `invalid JS for target="${target}"`).not.toThrow();
+    }
   });
 });

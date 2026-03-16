@@ -70,7 +70,7 @@ export function generateRoutesModule(
 };`);
 
     // Generar objeto de ruta
-    const hasLoaderField = route.hasLoader ? `\n    hasLoader: true,` : "";
+    const hasLoaderField = route.hasLoader ? `,\n    hasLoader: true` : "";
     const routeObj = `  {
     path: ${JSON.stringify(route.path)},
     load: ${loadRouteName},
