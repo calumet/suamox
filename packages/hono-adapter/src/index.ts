@@ -4,8 +4,9 @@ import type { IncomingHttpHeaders, IncomingMessage } from "node:http";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import type { RenderOptions, RouteRecord, RenderResult } from "@calumet/suamox";
+import type { LoaderContext, RenderOptions, RouteRecord, RenderResult } from "@calumet/suamox";
 import {
+  RedirectResponse,
   generateHTML,
   matchRoute,
   renderPage,
@@ -228,6 +229,60 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
   const { vite, onRequest, onBeforeRender, onAfterRender, root = process.cwd() } = options;
   const app = createHonoApp(options);
 
+  // Endpoint de datos para client-side navigation
+  app.get("/__data", async (c) => {
+    const path = c.req.query("path");
+    if (!path) {
+      return c.json({ error: "Missing path parameter" }, 400);
+    }
+
+    try {
+      const routesModule = (await vite.ssrLoadModule("virtual:pages/server")) as {
+        routes: RouteRecord[];
+        base?: string;
+      };
+      const routes = routesModule.routes;
+      const routeBase = routesModule.base ?? "/";
+      const strippedPathname = stripBase(path, routeBase);
+
+      const match = matchRoute(routes, strippedPathname);
+      if (!match) {
+        return c.json(null, 404);
+      }
+
+      const resolved = await resolveRouteModule(match.route);
+      if (!resolved.loader) {
+        return c.json(null);
+      }
+
+      const originalUrl = new URL(c.req.url);
+      const loaderUrl = new URL(path, originalUrl.origin);
+      // Forward query params (excluding internal "path" param)
+      originalUrl.searchParams.forEach((value, key) => {
+        if (key !== "path") {
+          loaderUrl.searchParams.append(key, value);
+        }
+      });
+
+      const loaderContext: LoaderContext = {
+        request: new Request(loaderUrl),
+        url: loaderUrl,
+        params: match.params,
+        query: loaderUrl.searchParams,
+      };
+
+      const data = await resolved.loader(loaderContext);
+      return c.json(data);
+    } catch (error) {
+      if (error instanceof RedirectResponse) {
+        return c.json({ __redirect: error.location, __status: error.status });
+      }
+      vite.ssrFixStacktrace(error as Error);
+      console.error(pc.red("[Data Endpoint Error]"), error);
+      return c.json({ error: "Loader error" }, 500);
+    }
+  });
+
   // Handler SSR para páginas (el middleware de Vite se maneja en createServer)
   app.use("*", async (c) => {
     const url = new URL(c.req.url);
@@ -239,8 +294,8 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         await onRequest(c);
       }
 
-      // Cargar módulo virtual:pages
-      const routesModule = (await vite.ssrLoadModule("virtual:pages")) as {
+      // Cargar módulo virtual:pages/server (incluye loaders y getStaticPaths)
+      const routesModule = (await vite.ssrLoadModule("virtual:pages/server")) as {
         routes: RouteRecord[];
         base?: string;
       };
@@ -504,6 +559,60 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       return null;
     }
   };
+
+  // Endpoint de datos para client-side navigation
+  app.get("/__data", async (c) => {
+    const path = c.req.query("path");
+    if (!path) {
+      return c.json({ error: "Missing path parameter" }, 400);
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const serverModule = await import(serverEntryURL);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const routes = serverModule.routes as RouteRecord[];
+
+      if (!routes) {
+        return c.json({ error: "Server entry must export routes" }, 500);
+      }
+
+      const strippedPathname = stripBase(path, base);
+      const match = matchRoute(routes, strippedPathname);
+      if (!match) {
+        return c.json(null, 404);
+      }
+
+      const resolved = await resolveRouteModule(match.route);
+      if (!resolved.loader) {
+        return c.json(null);
+      }
+
+      const originalUrl = new URL(c.req.url);
+      const loaderUrl = new URL(path, originalUrl.origin);
+      originalUrl.searchParams.forEach((value, key) => {
+        if (key !== "path") {
+          loaderUrl.searchParams.append(key, value);
+        }
+      });
+
+      const loaderContext: LoaderContext = {
+        request: new Request(loaderUrl),
+        url: loaderUrl,
+        params: match.params,
+        query: loaderUrl.searchParams,
+      };
+
+      const data = await resolved.loader(loaderContext);
+      return c.json(data);
+    } catch (error) {
+      if (error instanceof RedirectResponse) {
+        return c.json({ __redirect: error.location, __status: error.status });
+      }
+      console.error(pc.red("[Data Endpoint Error]"), error);
+      return c.json({ error: "Loader error" }, 500);
+    }
+  });
 
   // Handler SSR: solo para rutas que no son assets
   app.use("*", async (c) => {

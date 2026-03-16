@@ -4,7 +4,6 @@ import {
   resolveRouteModule,
   stripBase,
   type HydrationAdapter,
-  type LoaderContext,
   type RouteRecord,
 } from "@calumet/suamox";
 import { HeadProvider } from "@calumet/suamox-head";
@@ -65,13 +64,6 @@ const resolveMatch = (routes: RouteRecord[], pathname: string): ResolvedMatch | 
   }
   return { route: notFoundRoute, params: {} };
 };
-
-const createLoaderContext = (url: URL, params: Record<string, string>): LoaderContext => ({
-  request: new Request(url),
-  url,
-  params,
-  query: url.searchParams,
-});
 
 const scrollToLocation = (hash: string): void => {
   if (!hash) {
@@ -164,10 +156,28 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
       if (useInitialData && initialData !== undefined) {
         data = initialData;
         initialData = undefined;
-      } else if (resolvedRoute.loader) {
-        const loaderContext = createLoaderContext(url, match.params);
+      } else if (resolvedRoute.loader || match.route.hasLoader) {
         try {
-          data = await resolvedRoute.loader(loaderContext);
+          const dataUrl = new URL("/__data", origin);
+          dataUrl.searchParams.set("path", url.pathname);
+          url.searchParams.forEach((value, key) => {
+            dataUrl.searchParams.append(key, value);
+          });
+          const response = await fetch(dataUrl.toString());
+          if (!response.ok) {
+            throw new Error(`Data fetch failed: ${response.status}`);
+          }
+          const json: unknown = await response.json();
+          if (
+            json != null &&
+            typeof json === "object" &&
+            "__redirect" in (json as Record<string, unknown>)
+          ) {
+            const redirectData = json as { __redirect: string };
+            window.location.assign(redirectData.__redirect);
+            return;
+          }
+          data = json;
         } catch (err) {
           if (activeId !== navigationId) {
             return;

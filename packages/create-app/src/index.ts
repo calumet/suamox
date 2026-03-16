@@ -12,6 +12,9 @@ const resolveTemplateEntryName = (name: string): string => {
   if (name === "_npmrc") {
     return ".npmrc";
   }
+  if (name === "_gitignore") {
+    return ".gitignore";
+  }
   return name;
 };
 

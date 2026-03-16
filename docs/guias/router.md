@@ -4,7 +4,7 @@ Suamox usa `@calumet/suamox-router` como router del cliente para navegación SPA
 
 ## Arranque
 
-En `src/entry-client.tsx`:
+En `src/entry-client.tsx`, importa las rutas del módulo cliente (sin loaders):
 
 ```tsx
 import { startRouter } from "@calumet/suamox-router";
@@ -13,11 +13,17 @@ import { routes } from "virtual:pages";
 void startRouter({ routes });
 ```
 
+En `src/entry-server.tsx`, importa las rutas del módulo servidor (con loaders y getStaticPaths):
+
+```tsx
+export { routes } from "virtual:pages/server";
+```
+
 ## Qué hace
 
 - Intercepta clicks en links internos.
 - Resuelve la ruta desde el manifest `virtual:pages`.
-- Ejecuta `loader()` de la ruta cuando aplica.
+- Obtiene datos del loader via `/__data?path=...` (los loaders son server-only, nunca se ejecutan en el browser).
 - Renderiza/hidrata la página sin recarga completa.
 - Soporta prefetch en hover/focus/touch (activado por defecto).
 

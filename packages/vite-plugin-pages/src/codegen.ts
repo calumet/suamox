@@ -5,6 +5,7 @@ export type DefaultPageMode = "ssr" | "ssg" | "csr";
 export interface GenerateRoutesOptions {
   defaultMode?: DefaultPageMode;
   base?: string;
+  target?: "client" | "server";
 }
 
 /**
@@ -14,7 +15,7 @@ export function generateRoutesModule(
   routes: RouteRecord[],
   options: GenerateRoutesOptions = {},
 ): string {
-  const { defaultMode = "ssr", base = "/" } = options;
+  const { defaultMode = "ssr", base = "/", target = "client" } = options;
   const defaultPrerender = defaultMode === "ssg";
   const defaultCsr = defaultMode === "csr";
   const declarations: string[] = [];
@@ -46,6 +47,13 @@ export function generateRoutesModule(
 
     declarations.push(`const ${loadLayoutsName} = () => ${layoutsValue};`);
 
+    const serverOnlyFields =
+      target === "server"
+        ? `
+    loader: _module.loader,
+    getStaticPaths: _module.getStaticPaths,`
+        : "";
+
     declarations.push(`const ${loadRouteName} = async () => {
   const _module = await ${loadPageName}();
   const _layouts = await ${loadLayoutsName}();
@@ -54,9 +62,7 @@ export function generateRoutesModule(
   const _prerender = _hasPrerender ? _module.prerender === true : ${defaultPrerender};
   const _csr = _hasCsr ? _module.csr === true : ${defaultCsr ? "!_prerender" : "false"};
   return {
-    component: _module.default,
-    loader: _module.loader,
-    getStaticPaths: _module.getStaticPaths,
+    component: _module.default,${serverOnlyFields}
     prerender: _prerender,
     csr: _csr,
     layouts: _layouts
@@ -64,6 +70,7 @@ export function generateRoutesModule(
 };`);
 
     // Generar objeto de ruta
+    const hasLoaderField = route.hasLoader ? `\n    hasLoader: true,` : "";
     const routeObj = `  {
     path: ${JSON.stringify(route.path)},
     load: ${loadRouteName},
@@ -71,7 +78,7 @@ export function generateRoutesModule(
     params: ${JSON.stringify(route.params)},
     isCatchAll: ${route.isCatchAll},
     isIndex: ${route.isIndex},
-    priority: ${route.priority}
+    priority: ${route.priority}${hasLoaderField}
   }`;
 
     routeObjects.push(routeObj);

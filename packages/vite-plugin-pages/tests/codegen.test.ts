@@ -32,7 +32,9 @@ describe("generateRoutesModule", () => {
     expect(code).toContain("const loadRoute0 = async () => {");
     expect(code).toContain('path: "/about"');
     expect(code).toContain("load: loadRoute0");
-    expect(code).toContain("getStaticPaths: _module.getStaticPaths");
+    // Client target should NOT include server-only fields
+    expect(code).not.toContain("getStaticPaths: _module.getStaticPaths");
+    expect(code).not.toContain("loader: _module.loader");
     expect(code).toContain("const _hasPrerender = 'prerender' in _module;");
     expect(code).toContain(
       "const _prerender = _hasPrerender ? _module.prerender === true : false;",
@@ -43,6 +45,27 @@ describe("generateRoutesModule", () => {
     expect(code).toContain("isCatchAll: false");
     expect(code).toContain("isIndex: false");
     expect(code).toContain("priority: 110");
+  });
+
+  it("should include server-only fields when target is server", () => {
+    const routes: RouteRecord[] = [
+      {
+        path: "/about",
+        filePath: "/project/src/pages/about.tsx",
+        params: [],
+        isCatchAll: false,
+        isIndex: false,
+        segments: [],
+        priority: 110,
+        hasLoader: true,
+      },
+    ];
+
+    const code = generateRoutesModule(routes, { target: "server" });
+
+    expect(code).toContain("getStaticPaths: _module.getStaticPaths");
+    expect(code).toContain("loader: _module.loader");
+    expect(code).toContain("hasLoader: true");
   });
 
   it("should generate multiple imports for multiple routes", () => {
@@ -91,7 +114,8 @@ describe("generateRoutesModule", () => {
     const code = generateRoutesModule(routes);
 
     expect(code).toContain('path: "/blog/:slug"');
-    expect(code).toContain("getStaticPaths: _module.getStaticPaths");
+    // Client target should NOT include server-only fields
+    expect(code).not.toContain("getStaticPaths: _module.getStaticPaths");
     expect(code).toContain(
       "const _prerender = _hasPrerender ? _module.prerender === true : false;",
     );
@@ -118,7 +142,7 @@ describe("generateRoutesModule", () => {
     expect(code).toContain("isCatchAll: true");
   });
 
-  it("should include getStaticPaths and prerender from the module", () => {
+  it("should include getStaticPaths and prerender in server target", () => {
     const routes: RouteRecord[] = [
       {
         path: "/blog/:slug",
@@ -131,7 +155,7 @@ describe("generateRoutesModule", () => {
       },
     ];
 
-    const code = generateRoutesModule(routes);
+    const code = generateRoutesModule(routes, { target: "server" });
 
     expect(code).toContain("getStaticPaths: _module.getStaticPaths");
     expect(code).toContain(
@@ -303,6 +327,43 @@ describe("generateRoutesModule", () => {
     const code = generateRoutesModule([], { base: "/app/" });
 
     expect(code).toContain('export const base = "/app";');
+  });
+
+  it("should emit hasLoader flag on route object when route has loader", () => {
+    const routes: RouteRecord[] = [
+      {
+        path: "/about",
+        filePath: "/pages/about.tsx",
+        params: [],
+        isCatchAll: false,
+        isIndex: false,
+        segments: [],
+        priority: 110,
+        hasLoader: true,
+      },
+    ];
+
+    const code = generateRoutesModule(routes);
+
+    expect(code).toContain("hasLoader: true");
+  });
+
+  it("should not emit hasLoader flag when route has no loader", () => {
+    const routes: RouteRecord[] = [
+      {
+        path: "/about",
+        filePath: "/pages/about.tsx",
+        params: [],
+        isCatchAll: false,
+        isIndex: false,
+        segments: [],
+        priority: 110,
+      },
+    ];
+
+    const code = generateRoutesModule(routes);
+
+    expect(code).not.toContain("hasLoader");
   });
 
   it("should normalize base with multiple trailing slashes", () => {

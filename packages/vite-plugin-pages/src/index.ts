@@ -28,7 +28,8 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
   let root: string;
   let basePath = "/";
   let routesCache: RouteRecord[] | null = null;
-  let moduleCode: string | null = null;
+  let clientModuleCode: string | null = null;
+  let serverModuleCode: string | null = null;
 
   async function updateRoutes(logErrors = true): Promise<void> {
     const result = await scanRoutes({
@@ -38,7 +39,8 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     });
 
     routesCache = result.routes;
-    moduleCode = generateRoutesModule(result.routes, { defaultMode, base: basePath });
+    clientModuleCode = generateRoutesModule(result.routes, { defaultMode, base: basePath, target: "client" });
+    serverModuleCode = generateRoutesModule(result.routes, { defaultMode, base: basePath, target: "server" });
 
     if (logErrors && result.errors.length > 0) {
       console.error(pc.red("\n[suamox:pages] Route errors:"));
@@ -48,9 +50,15 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     }
 
     if (server) {
-      const module = server.moduleGraph.getModuleById(RESOLVED_VIRTUAL_MODULE_ID);
-      if (module) {
-        server.moduleGraph.invalidateModule(module);
+      const clientModule = server.moduleGraph.getModuleById(RESOLVED_VIRTUAL_MODULE_ID);
+      if (clientModule) {
+        server.moduleGraph.invalidateModule(clientModule);
+      }
+      const serverModule = server.moduleGraph.getModuleById(RESOLVED_VIRTUAL_SERVER_MODULE_ID);
+      if (serverModule) {
+        server.moduleGraph.invalidateModule(serverModule);
+      }
+      if (clientModule || serverModule) {
         server.ws.send({
           type: "full-reload",
           path: "*",
@@ -113,14 +121,16 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
 
     async load(id) {
       if (id === RESOLVED_VIRTUAL_MODULE_ID) {
-        if (!moduleCode) {
+        if (!clientModuleCode) {
           await updateRoutes(false);
         }
-        return moduleCode;
+        return clientModuleCode;
       }
       if (id === RESOLVED_VIRTUAL_SERVER_MODULE_ID) {
-        // Re-export simple para el entry point SSR
-        return `export { routes, base } from 'virtual:pages';`;
+        if (!serverModuleCode) {
+          await updateRoutes(false);
+        }
+        return serverModuleCode;
       }
     },
   };

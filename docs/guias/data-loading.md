@@ -2,6 +2,8 @@
 
 Suamox permite cargar datos por página con `loader()` y prerender dinámico con `getStaticPaths()`.
 
+> **Importante:** Tanto `loader()` como `getStaticPaths()` son **server-only**. Nunca se ejecutan en el navegador. Durante navegación SPA, el cliente obtiene los datos del loader via el endpoint `/__data?path=...` del servidor.
+
 ## `loader(ctx)`
 
 Puedes exportar un loader en cualquier página:
@@ -109,7 +111,8 @@ export default function HomePage() {
 
 - Si la página tiene `loader`, `useLoaderData()` retorna lo que el loader devolvió.
 - Si la página no tiene `loader`, retorna `null`.
-- Funciona en SSR, SSG y navegación cliente por igual.
+- Funciona en SSR, SSG y navegación SPA por igual.
+- En navegación SPA, los datos se obtienen automáticamente del servidor via `/__data?path=...`.
 
 ## `redirect()` — redirecciones server-side
 
@@ -143,7 +146,7 @@ export async function loader({ params }: LoaderContext) {
 
 ### Notas
 
-- `redirect()` funciona solo dentro de loaders, en el servidor (SSR).
+- `redirect()` funciona solo dentro de loaders (server-only). En navegación SPA, el servidor ejecuta la redirección y la respuesta se propaga al cliente via `/__data`.
 - Puede redirigir a rutas internas (`/es`) o URLs externas (`https://example.com`).
 - La función nunca retorna — internamente lanza una excepción que el framework captura.
 
@@ -184,13 +187,14 @@ export default function PostPage() {
 
 ### Diferencia entre `useLoaderData` y `useStaticProps`
 
-| Hook               | Fuente                        | Disponible en             |
-| ------------------ | ----------------------------- | ------------------------- |
-| `useLoaderData()`  | Retorno de `loader()`         | SSR, SSG, cliente         |
-| `useStaticProps()` | `props` de `getStaticPaths()` | Solo servidor (SSR y SSG) |
+| Hook               | Fuente                        | Disponible en                          |
+| ------------------ | ----------------------------- | -------------------------------------- |
+| `useLoaderData()`  | Retorno de `loader()` (server)| SSR, SSG, navegación SPA (via `/__data`) |
+| `useStaticProps()` | `props` de `getStaticPaths()` | Solo servidor (SSR y SSG)              |
 
 - `useStaticProps()` es **server-only**. Llamarlo en el cliente lanza un error.
 - Retorna `{}` si la página no tiene `getStaticPaths` o si la entrada no incluye `props`.
+- Durante navegación SPA, los datos del loader se obtienen automáticamente del servidor via `/__data?path=...`.
 - Las páginas SSG no hidratan en el cliente, por lo que el HTML generado con `useStaticProps` se sirve tal cual sin JavaScript.
 
 ## Errores en loaders

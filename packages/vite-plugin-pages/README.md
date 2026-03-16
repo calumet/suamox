@@ -54,10 +54,27 @@ src/pages/
 
 ### 3. Importa rutas
 
+El plugin genera dos módulos virtuales:
+
+#### `virtual:pages` — Módulo cliente
+
+No incluye `loader()` ni `getStaticPaths()`. Usado en `src/entry-client.tsx`:
+
 ```ts
 import { routes } from "virtual:pages";
+```
 
-// routes es un arreglo de objetos RouteRecord:
+#### `virtual:pages/server` — Módulo servidor
+
+Incluye `loader()` y `getStaticPaths()` de cada página. Usado en `src/entry-server.tsx`:
+
+```ts
+export { routes } from "virtual:pages/server";
+```
+
+Cada ruta es un objeto `RouteRecord`:
+
+```ts
 // {
 //   path: string;
 //   component: React.ComponentType;
@@ -66,6 +83,9 @@ import { routes } from "virtual:pages";
 //   isCatchAll: boolean;
 //   isIndex: boolean;
 //   priority: number;
+//   hasLoader?: boolean;        // solo en módulo cliente, indica que la ruta tiene loader
+//   loader?: Function;          // solo en módulo servidor
+//   getStaticPaths?: Function;  // solo en módulo servidor
 // }
 ```
 

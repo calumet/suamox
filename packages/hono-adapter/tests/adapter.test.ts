@@ -23,6 +23,7 @@ vi.mock("@calumet/suamox", async (importOriginal) => {
     matchRoute: mocks.matchRoute,
     resolveRouteModule: mocks.resolveRouteModule,
     stripBase: actual.stripBase,
+    RedirectResponse: actual.RedirectResponse,
   };
 });
 
@@ -282,6 +283,185 @@ describe("createDevHandler", () => {
   });
 });
 
+describe("createDevHandler /__data endpoint", () => {
+  const createViteMock = (routes: unknown[] = [], loaderRoute?: unknown) => {
+    const ssrLoadModule = vi.fn((_id: string) => {
+      const resolvedRoutes = loaderRoute ? [loaderRoute] : routes;
+      return Promise.resolve({ routes: resolvedRoutes });
+    });
+    return {
+      ssrLoadModule,
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+      ssrFixStacktrace: vi.fn(),
+      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
+    } as unknown as ViteDevServer;
+  };
+
+  beforeEach(() => {
+    mocks.matchRoute.mockReset();
+    mocks.matchRoute.mockReturnValue(null);
+    mocks.resolveRouteModule.mockReset();
+    mocks.resolveRouteModule.mockImplementation((route: unknown) => Promise.resolve(route));
+  });
+
+  it("returns 400 when path parameter is missing", async () => {
+    const vite = createViteMock();
+    const app = createDevHandler({ vite });
+
+    const response = await app.request("http://localhost/__data");
+
+    expect(response.status).toBe(400);
+    const json = await response.json();
+    expect(json).toEqual({ error: "Missing path parameter" });
+  });
+
+  it("returns 404 when route is not found", async () => {
+    const vite = createViteMock();
+    const app = createDevHandler({ vite });
+
+    const response = await app.request("http://localhost/__data?path=/nonexistent");
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns null when route has no loader", async () => {
+    const route = { path: "/about", params: [] };
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const vite = createViteMock([], route);
+    const app = createDevHandler({ vite });
+
+    const response = await app.request("http://localhost/__data?path=/about");
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json).toBeNull();
+  });
+
+  it("executes loader and returns data as JSON", async () => {
+    const loaderData = { items: [{ id: 1, name: "Test" }] };
+    const route = {
+      path: "/api",
+      params: [],
+      loader: vi.fn(() => Promise.resolve(loaderData)),
+    };
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const vite = createViteMock([], route);
+    const app = createDevHandler({ vite });
+
+    const response = await app.request("http://localhost/__data?path=/api");
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json).toEqual(loaderData);
+    expect(route.loader).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes correct params to loader context", async () => {
+    const route = {
+      path: "/blog/:slug",
+      params: ["slug"],
+      loader: vi.fn(() => Promise.resolve({ title: "Post" })),
+    };
+    mocks.matchRoute.mockReturnValue({ route, params: { slug: "hello" } });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const vite = createViteMock([], route);
+    const app = createDevHandler({ vite });
+
+    await app.request("http://localhost/__data?path=/blog/hello");
+
+    expect(route.loader).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: { slug: "hello" },
+      }),
+    );
+  });
+
+  it("forwards query parameters to loader context (excluding path)", async () => {
+    const route = {
+      path: "/search",
+      params: [],
+      loader: vi.fn(() => Promise.resolve({ results: [] })),
+    };
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const vite = createViteMock([], route);
+    const app = createDevHandler({ vite });
+
+    await app.request("http://localhost/__data?path=/search&q=test&page=2");
+
+    const call = route.loader.mock.calls[0]![0];
+    expect(call.query.get("q")).toBe("test");
+    expect(call.query.get("page")).toBe("2");
+    expect(call.query.has("path")).toBe(false);
+  });
+
+  it("serializes RedirectResponse as JSON with __redirect field", async () => {
+    const { RedirectResponse } = await import("@calumet/suamox");
+    const route = {
+      path: "/old",
+      params: [],
+      loader: vi.fn(() => {
+        throw new RedirectResponse("/new", 301);
+      }),
+    };
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const vite = createViteMock([], route);
+    const app = createDevHandler({ vite });
+
+    const response = await app.request("http://localhost/__data?path=/old");
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json).toEqual({ __redirect: "/new", __status: 301 });
+  });
+
+  it("returns 500 when loader throws an error", async () => {
+    const route = {
+      path: "/broken",
+      params: [],
+      loader: vi.fn(() => Promise.reject(new Error("DB connection failed"))),
+    };
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const vite = createViteMock([], route);
+    const app = createDevHandler({ vite });
+
+    const response = await app.request("http://localhost/__data?path=/broken");
+
+    expect(response.status).toBe(500);
+    const json = await response.json();
+    expect(json).toEqual({ error: "Loader error" });
+  });
+
+  it("loads routes from virtual:pages/server module", async () => {
+    const route = { path: "/about", params: [] };
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const ssrLoadModule = vi.fn((_id: string) => Promise.resolve({ routes: [route] }));
+    const vite = {
+      ssrLoadModule,
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+      ssrFixStacktrace: vi.fn(),
+      transformRequest: vi.fn(),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite });
+    await app.request("http://localhost/__data?path=/about");
+
+    expect(ssrLoadModule).toHaveBeenCalledWith("virtual:pages/server");
+  });
+});
+
 describe("createProdHandler", () => {
   beforeEach(() => {
     mocks.renderPage.mockReset();
@@ -359,5 +539,133 @@ describe("createProdHandler", () => {
     );
     expect(body).toContain("/assets/client.js");
     expect(body).toContain("/assets/client.css");
+  });
+});
+
+describe("createProdHandler /__data endpoint", () => {
+  const createProdApp = async (loaderRoute?: {
+    path: string;
+    params: string[];
+    loader?: ReturnType<typeof vi.fn>;
+  }) => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-data-"));
+    const serverDir = join(root, "dist", "server");
+    const clientDir = join(root, "dist", "client", ".vite");
+    const staticDir = join(root, "dist", "static");
+
+    await mkdir(serverDir, { recursive: true });
+    await mkdir(clientDir, { recursive: true });
+    await mkdir(staticDir, { recursive: true });
+
+    const routeExport = loaderRoute
+      ? `[{ path: '${loaderRoute.path}', params: ${JSON.stringify(loaderRoute.params)} }]`
+      : "[]";
+    await writeFile(
+      join(serverDir, "entry-server.mjs"),
+      `export const routes = ${routeExport};`,
+    );
+    await writeFile(join(clientDir, "manifest.json"), JSON.stringify({}));
+
+    return createProdHandler({
+      root,
+      clientDir: join(root, "dist", "client"),
+      serverEntry: join(root, "dist", "server", "entry-server.mjs"),
+      staticDir,
+    });
+  };
+
+  beforeEach(() => {
+    mocks.matchRoute.mockReset();
+    mocks.matchRoute.mockReturnValue(null);
+    mocks.resolveRouteModule.mockReset();
+    mocks.resolveRouteModule.mockImplementation((route: unknown) => Promise.resolve(route));
+  });
+
+  it("returns 400 when path parameter is missing", async () => {
+    const app = await createProdApp();
+
+    const response = await app.request("http://localhost/__data");
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 404 when route is not found", async () => {
+    const app = await createProdApp();
+
+    const response = await app.request("http://localhost/__data?path=/nonexistent");
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns null when route has no loader", async () => {
+    const route = { path: "/about", params: [] };
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const app = await createProdApp(route);
+
+    const response = await app.request("http://localhost/__data?path=/about");
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json).toBeNull();
+  });
+
+  it("executes loader and returns data as JSON", async () => {
+    const loaderData = { menus: ["Inicio", "Contacto"] };
+    const route = {
+      path: "/menu",
+      params: [],
+      loader: vi.fn(() => Promise.resolve(loaderData)),
+    };
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const app = await createProdApp(route);
+
+    const response = await app.request("http://localhost/__data?path=/menu");
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json).toEqual(loaderData);
+  });
+
+  it("serializes RedirectResponse as JSON with __redirect field", async () => {
+    const { RedirectResponse } = await import("@calumet/suamox");
+    const route = {
+      path: "/old",
+      params: [],
+      loader: vi.fn(() => {
+        throw new RedirectResponse("/new", 302);
+      }),
+    };
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const app = await createProdApp(route);
+
+    const response = await app.request("http://localhost/__data?path=/old");
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json).toEqual({ __redirect: "/new", __status: 302 });
+  });
+
+  it("returns 500 when loader throws an error", async () => {
+    const route = {
+      path: "/broken",
+      params: [],
+      loader: vi.fn(() => Promise.reject(new Error("Internal error"))),
+    };
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const app = await createProdApp(route);
+
+    const response = await app.request("http://localhost/__data?path=/broken");
+
+    expect(response.status).toBe(500);
+    const json = await response.json();
+    expect(json).toEqual({ error: "Loader error" });
   });
 });

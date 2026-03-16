@@ -23,6 +23,7 @@ export interface RouteRecord {
   isIndex: boolean;
   priority: number;
   loader?: (ctx: LoaderContext) => Promise<unknown>;
+  hasLoader?: boolean;
 }
 
 export interface LoaderContext {

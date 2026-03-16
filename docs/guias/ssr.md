@@ -17,7 +17,8 @@ await createServer({ port: 3000 });
 En desarrollo:
 
 - Se levanta Vite en middleware mode.
-- `virtual:pages` se carga en caliente.
+- `virtual:pages/server` (con loaders y getStaticPaths) se usa en el servidor para SSR y el endpoint `/__data`.
+- `virtual:pages` (sin loaders) se carga en el navegador para el router SPA.
 - Se renderiza SSR por request.
 - HMR de Vite sigue activo para cambios de código.
 
@@ -51,6 +52,14 @@ await createServer({
   },
 });
 ```
+
+## Endpoint de datos (`/__data`)
+
+Durante navegación SPA, el router del cliente no ejecuta loaders directamente. En su lugar, hace fetch al endpoint del servidor:
+
+- `GET /__data?path=/ruta&query=valor` -> JSON con los datos del loader
+
+El servidor ejecuta el loader de la ruta correspondiente y devuelve el resultado como JSON. Si el loader usa `redirect()`, la respuesta contiene `{ __redirect, __status }` y el cliente redirige automáticamente.
 
 ## Endpoint de salud
 
