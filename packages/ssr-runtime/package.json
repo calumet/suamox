@@ -1,6 +1,6 @@
 {
   "name": "@calumet/suamox",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "SSR and SSG runtime for Suamox framework",
   "type": "module",
   "main": "./dist/index.js",
