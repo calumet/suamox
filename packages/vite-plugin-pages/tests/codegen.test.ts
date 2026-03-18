@@ -187,7 +187,7 @@ describe("generateRoutesModule", () => {
     expect(code).toContain("const loadLayout0_0 = () => import('/pages/layout.tsx');");
     expect(code).toContain("const loadLayout0_1 = () => import('/pages/blog/layout.tsx');");
     expect(code).toContain("Promise.all([loadLayout0_0(), loadLayout0_1()])");
-    expect(code).toContain("layouts: _layouts");
+    expect(code).toContain("layouts: _layoutModules.map((mod) => mod.default)");
   });
 
   it("should normalize Windows paths to forward slashes", () => {
@@ -414,5 +414,79 @@ describe("generateRoutesModule", () => {
       const code = generateRoutesModule(routes, { target });
       expect(() => assertValidModule(code), `invalid JS for target="${target}"`).not.toThrow();
     }
+  });
+
+  it("should generate layoutInfos with routeIds for server target", () => {
+    const routes: RouteRecord[] = [
+      {
+        path: "/:lang",
+        filePath: "/pages/[lang]/index.tsx",
+        params: ["lang"],
+        isCatchAll: false,
+        isIndex: true,
+        segments: [],
+        priority: 215,
+        layouts: ["/pages/layout.tsx", "/pages/[lang]/layout.tsx"],
+        layoutMetas: [
+          { filePath: "/pages/layout.tsx", routeId: "layout:root", hasLoader: false },
+          { filePath: "/pages/[lang]/layout.tsx", routeId: "layout:[lang]", hasLoader: true },
+        ],
+      },
+    ];
+
+    const code = generateRoutesModule(routes, { target: "server" });
+
+    expect(code).toContain("layoutInfos:");
+    expect(code).toContain("loader: mod.loader");
+    expect(code).toContain('"layout:root"');
+    expect(code).toContain('"layout:[lang]"');
+  });
+
+  it("should generate layoutInfos without loader for client target", () => {
+    const routes: RouteRecord[] = [
+      {
+        path: "/:lang",
+        filePath: "/pages/[lang]/index.tsx",
+        params: ["lang"],
+        isCatchAll: false,
+        isIndex: true,
+        segments: [],
+        priority: 215,
+        layouts: ["/pages/layout.tsx", "/pages/[lang]/layout.tsx"],
+        layoutMetas: [
+          { filePath: "/pages/layout.tsx", routeId: "layout:root", hasLoader: false },
+          { filePath: "/pages/[lang]/layout.tsx", routeId: "layout:[lang]", hasLoader: true },
+        ],
+      },
+    ];
+
+    const code = generateRoutesModule(routes, { target: "client" });
+
+    expect(code).toContain("layoutInfos:");
+    expect(code).toContain('"layout:root"');
+    expect(code).not.toContain("loader: mod.loader");
+  });
+
+  it("should emit hasLayoutLoaders and layoutRouteIds on route object", () => {
+    const routes: RouteRecord[] = [
+      {
+        path: "/:lang",
+        filePath: "/pages/[lang]/index.tsx",
+        params: ["lang"],
+        isCatchAll: false,
+        isIndex: true,
+        segments: [],
+        priority: 215,
+        layoutMetas: [
+          { filePath: "/pages/layout.tsx", routeId: "layout:root", hasLoader: false },
+          { filePath: "/pages/[lang]/layout.tsx", routeId: "layout:[lang]", hasLoader: true },
+        ],
+      },
+    ];
+
+    const code = generateRoutesModule(routes);
+
+    expect(code).toContain("hasLayoutLoaders: true");
+    expect(code).toContain('layoutRouteIds: ["layout:root","layout:[lang]"]');
   });
 });

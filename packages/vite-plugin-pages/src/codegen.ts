@@ -40,9 +40,10 @@ export function generateRoutesModule(
       });
     }
 
+    // Cargar modules completos para poder extraer loader en server
     const layoutsValue =
       layoutLoadCalls.length > 0
-        ? `Promise.all([${layoutLoadCalls.join(", ")}]).then((modules) => modules.map((mod) => mod.default))`
+        ? `Promise.all([${layoutLoadCalls.join(", ")}])`
         : "Promise.resolve([])";
 
     declarations.push(`const ${loadLayoutsName} = () => ${layoutsValue};`);
@@ -54,9 +55,29 @@ export function generateRoutesModule(
     getStaticPaths: _module.getStaticPaths,`
         : "";
 
+    const layoutMetas = (route.layoutMetas ?? []) as Array<{ routeId: string; hasLoader: boolean }>;
+    const layoutRouteIds: string[] = layoutMetas.map((m) => m.routeId);
+
+    const layoutInfosField =
+      layoutMetas.length > 0
+        ? target === "server"
+          ? `
+    layoutInfos: _layoutModules.map((mod, i) => ({
+      component: mod.default,
+      loader: mod.loader,
+      routeId: ${JSON.stringify(layoutRouteIds)}[i],
+      hasLoader: typeof mod.loader === 'function',
+    })),`
+          : `
+    layoutInfos: _layoutModules.map((mod, i) => ({
+      component: mod.default,
+      routeId: ${JSON.stringify(layoutRouteIds)}[i],
+    })),`
+        : "";
+
     declarations.push(`const ${loadRouteName} = async () => {
   const _module = await ${loadPageName}();
-  const _layouts = await ${loadLayoutsName}();
+  const _layoutModules = await ${loadLayoutsName}();
   const _hasPrerender = 'prerender' in _module;
   const _hasCsr = 'csr' in _module;
   const _prerender = _hasPrerender ? _module.prerender === true : ${defaultPrerender};
@@ -65,12 +86,16 @@ export function generateRoutesModule(
     component: _module.default,${serverOnlyFields}
     prerender: _prerender,
     csr: _csr,
-    layouts: _layouts
+    layouts: _layoutModules.map((mod) => mod.default),${layoutInfosField}
   };
 };`);
 
     // Generar objeto de ruta
     const hasLoaderField = route.hasLoader ? `,\n    hasLoader: true` : "";
+    const hasLayoutLoaders = layoutMetas.some((m) => m.hasLoader);
+    const hasLayoutLoadersField = hasLayoutLoaders ? `,\n    hasLayoutLoaders: true` : "";
+    const layoutRouteIdsField =
+      layoutRouteIds.length > 0 ? `,\n    layoutRouteIds: ${JSON.stringify(layoutRouteIds)}` : "";
     const routeObj = `  {
     path: ${JSON.stringify(route.path)},
     load: ${loadRouteName},
@@ -78,7 +103,7 @@ export function generateRoutesModule(
     params: ${JSON.stringify(route.params)},
     isCatchAll: ${route.isCatchAll},
     isIndex: ${route.isIndex},
-    priority: ${route.priority}${hasLoaderField}
+    priority: ${route.priority}${hasLoaderField}${hasLayoutLoadersField}${layoutRouteIdsField}
   }`;
 
     routeObjects.push(routeObj);

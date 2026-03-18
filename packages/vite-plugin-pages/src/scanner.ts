@@ -1,11 +1,11 @@
 import { readFile } from "node:fs/promises";
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname, relative, resolve } from "node:path";
 
 import { init, parse } from "es-module-lexer";
 import fg from "fast-glob";
 
 import { parseRoute, sortRoutes, validateRoutes } from "./parser.js";
-import type { RouteRecord } from "./types.js";
+import type { LayoutMeta, RouteRecord } from "./types.js";
 
 const loaderExportPatterns = [
   /\bexport\s+(async\s+)?function\s+loader\b/,
@@ -45,6 +45,17 @@ function isLayoutFile(filePath: string, extensions: string[]): boolean {
   return basename(filePath, matchedExtension) === "layout";
 }
 
+/**
+ * Genera un route ID para un layout basado en su ruta relativa al pages dir.
+ * Ej: src/pages/[lang]/layout.tsx → "layout:[lang]"
+ *     src/pages/layout.tsx → "layout:root"
+ *     src/pages/(admin)/layout.tsx → "layout:(admin)"
+ */
+function layoutRouteId(layoutFile: string, pagesDir: string): string {
+  const rel = relative(pagesDir, dirname(layoutFile)).replace(/\\/g, "/");
+  return rel === "" ? "layout:root" : `layout:${rel}`;
+}
+
 function collectLayoutsForFile(
   filePath: string,
   layoutMap: Map<string, string>,
@@ -72,6 +83,40 @@ function collectLayoutsForFile(
   }
 
   return layouts.reverse();
+}
+
+function collectLayoutMetasForFile(
+  filePath: string,
+  layoutMap: Map<string, string>,
+  layoutLoaderMap: Map<string, boolean>,
+  pagesDir: string,
+): LayoutMeta[] {
+  const metas: LayoutMeta[] = [];
+  let currentDir = dirname(filePath);
+
+  while (true) {
+    const layoutFile = layoutMap.get(currentDir);
+    if (layoutFile) {
+      metas.push({
+        filePath: layoutFile,
+        routeId: layoutRouteId(layoutFile, pagesDir),
+        hasLoader: layoutLoaderMap.get(layoutFile) ?? false,
+      });
+    }
+
+    if (currentDir === pagesDir) {
+      break;
+    }
+
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) {
+      break;
+    }
+
+    currentDir = parentDir;
+  }
+
+  return metas.reverse();
 }
 
 export interface ScanOptions {
@@ -109,10 +154,28 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
   const layoutFiles = files.filter((file) => isLayoutFile(file, extensions));
   const pageFiles = files.filter((file) => !isLayoutFile(file, extensions));
   const layoutMap = new Map<string, string>();
+  const layoutLoaderMap = new Map<string, boolean>();
 
   for (const layoutFile of layoutFiles) {
     layoutMap.set(dirname(layoutFile), layoutFile);
   }
+
+  // Detectar loaders en layout files
+  await Promise.all(
+    layoutFiles.map(async (file) => {
+      let content = "";
+      try {
+        content = await readFile(file, "utf-8");
+        const [, exports] = parse(content);
+        layoutLoaderMap.set(
+          file,
+          exports.some((exp) => exp.n === "loader"),
+        );
+      } catch {
+        layoutLoaderMap.set(file, fallbackHasLoader(content));
+      }
+    }),
+  );
 
   const errors: string[] = [];
   const routes = await Promise.all(
@@ -124,6 +187,12 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
       }
 
       route.layouts = collectLayoutsForFile(file, layoutMap, absolutePagesDir);
+      route.layoutMetas = collectLayoutMetasForFile(
+        file,
+        layoutMap,
+        layoutLoaderMap,
+        absolutePagesDir,
+      );
 
       // Verificar exports con es-module-lexer cuando el archivo sea parseable como ESM.
       let content = "";

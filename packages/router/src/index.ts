@@ -139,6 +139,10 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
   let initialData: unknown = (window as Window & { __INITIAL_DATA__?: unknown }).__INITIAL_DATA__;
   const prefetched = new Map<string, Promise<void>>();
 
+  // Track current layout chain and cached layout data
+  let currentLayoutRouteIds: string[] = [];
+  let currentLayoutData: Record<string, unknown> = {};
+
   const renderLocation = async (
     url: URL,
     { scroll = true, useInitialData = false }: { scroll?: boolean; useInitialData?: boolean },
@@ -152,17 +156,43 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
 
     const resolvedRoute = await resolveRouteModule(match.route);
     let data: unknown = null;
+    let layoutData: Record<string, unknown> | undefined;
+
     if (!resolvedRoute.csr) {
       if (useInitialData && initialData !== undefined) {
-        data = initialData;
+        // Parse structured initial data
+        const raw = initialData;
+        if (raw && typeof raw === "object" && "page" in (raw as Record<string, unknown>)) {
+          const structured = raw as { page: unknown; layouts: Record<string, unknown> };
+          data = structured.page;
+          layoutData = structured.layouts;
+          currentLayoutData = { ...structured.layouts };
+        } else {
+          data = raw;
+        }
         initialData = undefined;
-      } else if (resolvedRoute.loader || match.route.hasLoader) {
+      } else if (resolvedRoute.loader || match.route.hasLoader || match.route.hasLayoutLoaders) {
         try {
+          // Determine stable layouts
+          const newLayoutRouteIds: string[] =
+            (match.route as ResolvedMatch["route"] & { layoutRouteIds?: string[] })
+              .layoutRouteIds ?? [];
+          const stableLayouts: string[] = [];
+          for (const id of newLayoutRouteIds) {
+            if (currentLayoutRouteIds.includes(id) && id in currentLayoutData) {
+              stableLayouts.push(id);
+            }
+          }
+
           const dataUrl = new URL("/__data", origin);
           dataUrl.searchParams.set("path", url.pathname);
           url.searchParams.forEach((value, key) => {
             dataUrl.searchParams.append(key, value);
           });
+          if (stableLayouts.length > 0) {
+            dataUrl.searchParams.set("stableLayouts", stableLayouts.join(","));
+          }
+
           const response = await fetch(dataUrl.toString());
           if (!response.ok) {
             throw new Error(`Data fetch failed: ${response.status}`);
@@ -177,7 +207,24 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
             window.location.assign(redirectData.__redirect);
             return;
           }
-          data = json;
+
+          // Parse segmented vs flat response
+          if (
+            json != null &&
+            typeof json === "object" &&
+            "page" in (json as Record<string, unknown>)
+          ) {
+            const structured = json as { page: unknown; layouts: Record<string, unknown> };
+            data = structured.page;
+            layoutData = {};
+            for (const [id, val] of Object.entries(structured.layouts)) {
+              layoutData[id] = val === null ? currentLayoutData[id] : val;
+            }
+            currentLayoutData = { ...layoutData };
+          } else {
+            data = json;
+            currentLayoutData = {};
+          }
         } catch (err) {
           if (activeId !== navigationId) {
             return;
@@ -191,7 +238,15 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
       return;
     }
 
-    const element = createElement(HeadProvider, null, createPageElement(resolvedRoute, data));
+    // Update current layout chain
+    currentLayoutRouteIds =
+      (match.route as ResolvedMatch["route"] & { layoutRouteIds?: string[] }).layoutRouteIds ?? [];
+
+    const element = createElement(
+      HeadProvider,
+      null,
+      createPageElement(resolvedRoute, data, undefined, layoutData),
+    );
 
     if (!root) {
       if (resolvedRoute.csr) {

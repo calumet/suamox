@@ -54,6 +54,40 @@ test.describe("useLoaderData in layout during client-side navigation", () => {
     await expect(page.getByTestId("lang-footer")).toContainText("Footer: Site Footer");
   });
 
+  test("useRouteLoaderData reads layout data from a page component", async ({ page }) => {
+    await page.goto("/es/noticias/noticia?id=1");
+    await expect(page.getByTestId("noticia-title")).toHaveText("Noticia 1");
+    await expect(page.getByTestId("layout-info-from-page")).toContainText(
+      "Layout info from page: Site Info",
+    );
+  });
+
+  test("useRouteLoaderData works after SPA navigation", async ({ page }) => {
+    await page.goto("/es/noticias");
+    await expect(page.locator("h1")).toHaveText("Noticias");
+
+    await page.click('a[href="/es/noticias/noticia?id=1"]');
+    await expect(page.getByTestId("noticia-title")).toHaveText("Noticia 1");
+    await expect(page.getByTestId("layout-info-from-page")).toContainText(
+      "Layout info from page: Site Info",
+    );
+  });
+
+  test("sends stableLayouts param when navigating between sibling pages", async ({ page }) => {
+    await page.goto("/es/noticias");
+    await expect(page.locator("h1")).toHaveText("Noticias");
+
+    // SPA navigate to sibling — should send stableLayouts for [lang] layout
+    const [request] = await Promise.all([
+      page.waitForRequest((req) => req.url().includes("/__data")),
+      page.click('a[href="/es/noticias/noticia?id=1"]'),
+    ]);
+    await expect(page.getByTestId("noticia-title")).toHaveText("Noticia 1");
+    const url = decodeURIComponent(request.url());
+    expect(url).toContain("stableLayouts=");
+    expect(url).toContain("layout:[lang]");
+  });
+
   test("layout useLoaderData works with browser back button", async ({ page }) => {
     await page.goto("/es/noticias");
     await expect(page.locator("h1")).toHaveText("Noticias");

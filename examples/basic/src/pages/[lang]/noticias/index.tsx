@@ -2,12 +2,7 @@ import type { LoaderContext } from "@calumet/suamox";
 import { useLoaderData } from "@calumet/suamox";
 
 export function loader({ params }: LoaderContext) {
-  return {
-    info: "Site Info",
-    footer: "Site Footer",
-    params,
-    items: ["Noticia A", "Noticia B", "Noticia C"],
-  };
+  return { params, items: ["Noticia A", "Noticia B", "Noticia C"] };
 }
 
 export default function NoticiasIndex() {

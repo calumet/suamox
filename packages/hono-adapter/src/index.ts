@@ -257,15 +257,11 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       }
 
       const resolved = await runtime.resolveRouteModule(match.route);
-      if (!resolved.loader) {
-        return c.json(null);
-      }
 
       const originalUrl = new URL(c.req.url);
       const loaderUrl = new URL(path, originalUrl.origin);
-      // Forward query params (excluding internal "path" param)
       originalUrl.searchParams.forEach((value, key) => {
-        if (key !== "path") {
+        if (key !== "path" && key !== "stableLayouts") {
           loaderUrl.searchParams.append(key, value);
         }
       });
@@ -277,6 +273,33 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         query: loaderUrl.searchParams,
       };
 
+      // Layout loaders
+      const layoutInfos = resolved.layoutInfos;
+      const hasLayoutLoaders = layoutInfos?.some((li: { loader?: unknown }) => li.loader);
+
+      if (hasLayoutLoaders) {
+        const stableParam = c.req.query("stableLayouts");
+        const stableSet = stableParam ? new Set(stableParam.split(",")) : new Set<string>();
+
+        const layouts: Record<string, unknown> = {};
+        for (const info of layoutInfos!) {
+          if (info.loader) {
+            if (stableSet.has(info.routeId)) {
+              layouts[info.routeId] = null;
+            } else {
+              layouts[info.routeId] = await info.loader(loaderContext);
+            }
+          }
+        }
+
+        const pageData = resolved.loader ? await resolved.loader(loaderContext) : null;
+        return c.json({ page: pageData, layouts });
+      }
+
+      // Legacy: sin layout loaders
+      if (!resolved.loader) {
+        return c.json(null);
+      }
       const data = await resolved.loader(loaderContext);
       return c.json(data);
     } catch (error) {
@@ -383,7 +406,10 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       // Inyectar datos iniciales solo para rutas con hidratación
       let finalHtml = template;
       if (!isPrerender) {
-        const serializedData = serializeData(result.initialData ?? null);
+        const initialDataPayload = result.layoutData
+          ? { page: result.initialData ?? null, layouts: result.layoutData }
+          : (result.initialData ?? null);
+        const serializedData = serializeData(initialDataPayload);
         finalHtml = template.replace(
           "</body>",
           `<script>window.__INITIAL_DATA__ = ${serializedData};</script></body>`,
@@ -612,14 +638,11 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       }
 
       const resolved = await entry.resolveRouteModule(match.route);
-      if (!resolved.loader) {
-        return c.json(null);
-      }
 
       const originalUrl = new URL(c.req.url);
       const loaderUrl = new URL(path, originalUrl.origin);
       originalUrl.searchParams.forEach((value, key) => {
-        if (key !== "path") {
+        if (key !== "path" && key !== "stableLayouts") {
           loaderUrl.searchParams.append(key, value);
         }
       });
@@ -631,6 +654,35 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         query: loaderUrl.searchParams,
       };
 
+      // Layout loaders
+      const layoutInfos = resolved.layoutInfos as
+        | Array<{ loader?: (ctx: LoaderContext) => Promise<unknown>; routeId: string }>
+        | undefined;
+      const hasLayoutLoaders = layoutInfos?.some((li) => li.loader);
+
+      if (hasLayoutLoaders) {
+        const stableParam = c.req.query("stableLayouts");
+        const stableSet = stableParam ? new Set(stableParam.split(",")) : new Set<string>();
+
+        const layouts: Record<string, unknown> = {};
+        for (const info of layoutInfos!) {
+          if (info.loader) {
+            if (stableSet.has(info.routeId)) {
+              layouts[info.routeId] = null;
+            } else {
+              layouts[info.routeId] = await info.loader(loaderContext);
+            }
+          }
+        }
+
+        const pageData = resolved.loader ? await resolved.loader(loaderContext) : null;
+        return c.json({ page: pageData, layouts });
+      }
+
+      // Legacy: sin layout loaders
+      if (!resolved.loader) {
+        return c.json(null);
+      }
       const data = await resolved.loader(loaderContext);
       return c.json(data);
     } catch (error) {
@@ -695,10 +747,15 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 
       // Generar HTML completo (sin hidratación para rutas prerender)
       const { preloadScripts, styles } = collectManifestAssets(entry.routes, strippedPathname);
+      const prodInitialData = isPrerender
+        ? undefined
+        : result.layoutData
+          ? { page: result.initialData ?? null, layouts: result.layoutData }
+          : result.initialData;
       const html = generateHTML({
         html: `<div id="root">${result.html}</div>`,
         head: result.head,
-        initialData: isPrerender ? undefined : result.initialData,
+        initialData: prodInitialData,
         scripts: isPrerender ? [] : [entryClientScript],
         preloadScripts: isPrerender ? [] : preloadScripts,
         styles,

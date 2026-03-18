@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.2 / 0.2.3 / 0.2.4 (2026-03-18)
+
+### Features
+
+- **Layout loaders**: los archivos `layout.tsx` ahora pueden exportar una funcion `loader()`. Cada layout obtiene su propio `LoaderDataContext.Provider`, por lo que `useLoaderData()` en un layout lee los datos de su propio loader, no del loader de la pagina hija. Esto elimina la necesidad de duplicar datos de layout en cada loader de pagina.
+- **Smart refetch (stableLayouts)**: durante navegacion SPA entre paginas hermanas (mismo layout), el router detecta que layouts son estables y envia `stableLayouts` al servidor para evitar re-ejecutar sus loaders. Solo se re-ejecutan los loaders de segmentos que cambiaron, como hace Remix.
+- **Route IDs opacos**: los layouts se identifican con IDs derivados de la ruta (`layout:root`, `layout:[lang]`, `layout:(admin)`) en vez de rutas del filesystem. Los file paths nunca se exponen al cliente.
+- **`layoutInfos` en codegen**: el modulo virtual genera `layoutInfos` tanto para server (con loader) como para client (sin loader), permitiendo a `createPageElement` anidar providers correctamente.
+- **Formato estructurado de datos**: `__INITIAL_DATA__` y `/__data` usan formato `{ page, layouts }` cuando hay layout loaders. Retrocompatible: sin layout loaders el formato es plano.
+- **Base path support**: soporte para `vite.config.base`, stripBase en routing, SSG output paths, y navegacion client-side.
+
+### Packages
+
+| Paquete                             | Nueva version |
+| ----------------------------------- | ------------- |
+| `@calumet/suamox`                   | 0.2.2         |
+| `@calumet/suamox-vite-plugin-pages` | 0.2.4         |
+| `@calumet/suamox-router`            | 0.2.2         |
+| `@calumet/suamox-hono-adapter`      | 0.2.3         |
+
 ## 0.2.0 (2026-03-16)
 
 ### Breaking Changes

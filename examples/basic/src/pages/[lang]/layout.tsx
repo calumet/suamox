@@ -1,5 +1,10 @@
 import { useLoaderData } from "@calumet/suamox";
+import type { LoaderContext } from "@calumet/suamox";
 import type { ReactNode } from "react";
+
+export function loader({ params }: LoaderContext) {
+  return { info: "Site Info", footer: "Site Footer", lang: params.lang };
+}
 
 function Header() {
   const { info } = useLoaderData<{ info: string }>();

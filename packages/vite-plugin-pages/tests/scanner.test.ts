@@ -68,6 +68,40 @@ describe("scanRoutes layouts", () => {
     expect(routeFiles).not.toContain(adminLayout);
   });
 
+  it("detects layout loaders and populates layoutMetas with routeIds", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+
+    const rootLayout = join(pagesDir, "layout.tsx");
+    const langLayout = join(pagesDir, "[lang]", "layout.tsx");
+    const page = join(pagesDir, "[lang]", "index.tsx");
+
+    await writeFileWithDirs(
+      rootLayout,
+      "export default function Layout({ children }) { return children; }",
+    );
+    await writeFileWithDirs(
+      langLayout,
+      `export function loader() { return { info: 'test' }; }
+export default function Layout({ children }) { return children; }`,
+    );
+    await writeFileWithDirs(page, "export default function Page() { return null; }");
+
+    const result = await scanRoutes({
+      pagesDir: "src/pages",
+      extensions: [".tsx"],
+      root,
+    });
+
+    const route = result.routes.find((r) => r.path === "/:lang");
+    expect(route).toBeDefined();
+    expect(route?.layoutMetas).toHaveLength(2);
+    expect(route?.layoutMetas?.[0]?.routeId).toBe("layout:root");
+    expect(route?.layoutMetas?.[0]?.hasLoader).toBe(false);
+    expect(route?.layoutMetas?.[1]?.routeId).toBe("layout:[lang]");
+    expect(route?.layoutMetas?.[1]?.hasLoader).toBe(true);
+  });
+
   it("detects loader, getStaticPaths and prerender exports in tsx pages", async () => {
     const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
     const pagesDir = join(root, "src", "pages");

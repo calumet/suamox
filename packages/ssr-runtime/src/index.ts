@@ -9,12 +9,20 @@ import type React from "react";
 import { createContext, createElement, Fragment, useContext } from "react";
 import { renderToStaticMarkup, renderToString } from "react-dom/server";
 
+export interface LayoutInfo {
+  component: React.ComponentType<{ children: React.ReactNode }>;
+  loader?: (ctx: LoaderContext) => Promise<unknown>;
+  routeId: string;
+  hasLoader?: boolean;
+}
+
 export interface RouteRecord {
   path: string;
   filePath: string;
   component?: React.ComponentType<PageProps>;
   load?: RouteModuleLoader;
   layouts?: Array<React.ComponentType<{ children: React.ReactNode }>>;
+  layoutInfos?: LayoutInfo[];
   getStaticPaths?: GetStaticPaths;
   prerender?: boolean;
   csr?: boolean;
@@ -24,6 +32,8 @@ export interface RouteRecord {
   priority: number;
   loader?: (ctx: LoaderContext) => Promise<unknown>;
   hasLoader?: boolean;
+  hasLayoutLoaders?: boolean;
+  layoutRouteIds?: string[];
 }
 
 export interface LoaderContext {
@@ -48,6 +58,7 @@ export type GetStaticPaths = () => Promise<StaticPathEntry[]>;
 export interface RouteModule {
   component: React.ComponentType<PageProps>;
   layouts?: Array<React.ComponentType<{ children: React.ReactNode }>>;
+  layoutInfos?: LayoutInfo[];
   loader?: (ctx: LoaderContext) => Promise<unknown>;
   getStaticPaths?: GetStaticPaths;
   prerender?: boolean;
@@ -58,10 +69,16 @@ export type RouteModuleLoader = () => Promise<RouteModule>;
 
 const LoaderDataContext = createContext<unknown>(null);
 const StaticPropsContext = createContext<Record<string, unknown>>({});
+const AllRouteDataContext = createContext<Record<string, unknown>>({});
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useLoaderData<T = any>(): T {
   return useContext(LoaderDataContext) as T;
+}
+
+export function useRouteLoaderData<T = unknown>(routeId: string): T | undefined {
+  const allData = useContext(AllRouteDataContext);
+  return allData[routeId] as T | undefined;
 }
 
 export function useStaticProps<T = Record<string, unknown>>(): T {
@@ -113,6 +130,7 @@ export interface RenderResult {
   html: string;
   head?: string;
   initialData?: unknown;
+  layoutData?: Record<string, unknown>;
   redirectTo?: string;
 }
 
@@ -229,27 +247,58 @@ export function createPageElement(
   route: RouteRecord,
   data: unknown,
   staticProps?: Record<string, unknown>,
+  layoutData?: Record<string, unknown>,
 ): React.ReactElement {
   if (!route.component) {
     throw new Error(`Route component not resolved for ${route.path}`);
   }
   const pageElement = createElement(route.component, { data });
-  const layouts = route.layouts ?? [];
-  const withLayouts =
-    layouts.length === 0
-      ? pageElement
-      : layouts.reduceRight<React.ReactElement>(
-          (child, Layout) => createElement(Layout, null, child),
-          pageElement,
-        );
+  const layoutInfos = route.layoutInfos;
 
-  const withLoaderData = createElement(LoaderDataContext.Provider, { value: data }, withLayouts);
+  let tree: React.ReactElement;
 
-  if (staticProps) {
-    return createElement(StaticPropsContext.Provider, { value: staticProps }, withLoaderData);
+  if (layoutInfos && layoutInfos.length > 0 && layoutData) {
+    // Cada layout tiene su propio LoaderDataContext.Provider
+    tree = layoutInfos.reduceRight<React.ReactElement>(
+      (child, info) => {
+        const layoutElement = createElement(info.component, null, child);
+        const thisData = layoutData[info.routeId];
+        if (thisData !== undefined) {
+          return createElement(LoaderDataContext.Provider, { value: thisData }, layoutElement);
+        }
+        return layoutElement;
+      },
+      // La pagina queda envuelta con su propio provider
+      createElement(LoaderDataContext.Provider, { value: data }, pageElement),
+    );
+  } else {
+    // Legacy: un solo provider para todo
+    const layouts = route.layouts ?? [];
+    const withLayouts =
+      layouts.length === 0
+        ? pageElement
+        : layouts.reduceRight<React.ReactElement>(
+            (child, Layout) => createElement(Layout, null, child),
+            pageElement,
+          );
+    tree = createElement(LoaderDataContext.Provider, { value: data }, withLayouts);
   }
 
-  return withLoaderData;
+  // Construir mapa completo de route data para useRouteLoaderData
+  const allRouteData: Record<string, unknown> = {};
+  if (layoutData) {
+    Object.assign(allRouteData, layoutData);
+  }
+  if (data !== null && data !== undefined) {
+    allRouteData[route.path] = data;
+  }
+  tree = createElement(AllRouteDataContext.Provider, { value: allRouteData }, tree);
+
+  if (staticProps) {
+    return createElement(StaticPropsContext.Provider, { value: staticProps }, tree);
+  }
+
+  return tree;
 }
 
 export async function resolveRouteModule(route: RouteRecord): Promise<RouteRecord> {
@@ -264,6 +313,7 @@ export async function resolveRouteModule(route: RouteRecord): Promise<RouteRecor
   const loaded = await route.load();
   route.component = loaded.component;
   route.layouts = loaded.layouts ?? [];
+  route.layoutInfos = loaded.layoutInfos;
   route.loader = loaded.loader;
   route.getStaticPaths = loaded.getStaticPaths;
   route.prerender = loaded.prerender === true;
@@ -287,9 +337,26 @@ export async function hydrateApp(
     return;
   }
 
-  const initialData = (window as Window & { __INITIAL_DATA__?: unknown }).__INITIAL_DATA__ ?? null;
+  const rawInitialData =
+    (window as Window & { __INITIAL_DATA__?: unknown }).__INITIAL_DATA__ ?? null;
   const resolvedRoute = await resolveRouteModule(match.route);
-  const pageElement = createPageElement(resolvedRoute, initialData);
+
+  let initialData: unknown = null;
+  let layoutData: Record<string, unknown> | undefined;
+
+  if (
+    rawInitialData &&
+    typeof rawInitialData === "object" &&
+    "page" in (rawInitialData as Record<string, unknown>)
+  ) {
+    const structured = rawInitialData as { page: unknown; layouts: Record<string, unknown> };
+    initialData = structured.page;
+    layoutData = structured.layouts;
+  } else {
+    initialData = rawInitialData;
+  }
+
+  const pageElement = createPageElement(resolvedRoute, initialData, undefined, layoutData);
   const element = createElement(HeadProvider, null, pageElement);
 
   let hydrateRoot = adapter?.hydrateRoot;
@@ -348,7 +415,34 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
     query: url.searchParams,
   };
 
-  // Ejecutar loader si existe
+  // Ejecutar layout loaders secuencialmente
+  let layoutData: Record<string, unknown> | undefined;
+  const layoutInfos = resolvedRoute.layoutInfos;
+  if (layoutInfos && layoutInfos.some((li) => li.loader)) {
+    layoutData = {};
+    for (const info of layoutInfos) {
+      if (info.loader) {
+        try {
+          layoutData[info.routeId] = await info.loader(loaderContext);
+        } catch (error) {
+          if (error instanceof RedirectResponse) {
+            return {
+              status: error.status,
+              html: "",
+              redirectTo: error.location,
+            };
+          }
+          console.error("Layout loader error:", error);
+          return {
+            status: 500,
+            html: "<h1>500 - Internal Server Error</h1>",
+          };
+        }
+      }
+    }
+  }
+
+  // Ejecutar page loader si existe
   let data: unknown = null;
   if (resolvedRoute.loader) {
     try {
@@ -375,7 +469,7 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
     const element = createElement(
       HeadProvider,
       { manager: headManager },
-      createPageElement(resolvedRoute, data, props),
+      createPageElement(resolvedRoute, data, props, layoutData),
     );
     const html = renderToString(element);
     const head = renderHeadToString(headManager.getSnapshot());
@@ -385,6 +479,7 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
       html,
       head,
       initialData: data,
+      layoutData,
     };
   } catch (error) {
     console.error("Render error:", error);

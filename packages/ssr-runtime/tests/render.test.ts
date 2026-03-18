@@ -1,9 +1,17 @@
 import { createElement } from "react";
 import type { ReactNode } from "react";
+import { renderToString } from "react-dom/server";
 import { describe, it, expect, vi } from "vitest";
 
-import { renderPage, useLoaderData, useStaticProps, redirect } from "../src/index";
-import type { RouteRecord, LoaderContext } from "../src/index";
+import {
+  renderPage,
+  useLoaderData,
+  useRouteLoaderData,
+  useStaticProps,
+  redirect,
+  createPageElement,
+} from "../src/index";
+import type { RouteRecord, LoaderContext, LayoutInfo } from "../src/index";
 
 function createMockRoute(overrides: Partial<RouteRecord>): RouteRecord {
   return {
@@ -642,5 +650,90 @@ describe("redirect", () => {
 
     expect(result.status).toBe(302);
     expect(result.redirectTo).toBe("https://example.com");
+  });
+});
+
+describe("useRouteLoaderData", () => {
+  it("reads layout data by route ID from a page component", () => {
+    function PageComponent() {
+      const layoutData = useRouteLoaderData<{ info: string }>("layout:root");
+      return createElement("div", { "data-testid": "page" }, `Layout info: ${layoutData?.info}`);
+    }
+
+    const layoutInfo: LayoutInfo = {
+      component: (({ children }: { children: ReactNode }) =>
+        createElement("div", null, children)) as React.ComponentType<{ children: React.ReactNode }>,
+      routeId: "layout:root",
+      hasLoader: true,
+    };
+
+    const route: RouteRecord = {
+      ...createMockRoute({ path: "/test" }),
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+      component: PageComponent as any,
+      layoutInfos: [layoutInfo],
+    };
+
+    const element = createPageElement(route, { page: "data" }, undefined, {
+      "layout:root": { info: "Site Info" },
+    });
+    const html = renderToString(element);
+
+    expect(html).toContain("Layout info: Site Info");
+  });
+
+  it("reads page data by route path from a layout component", () => {
+    function LayoutComponent({ children }: { children: ReactNode }) {
+      const pageData = useRouteLoaderData<{ title: string }>("/:lang/noticias");
+      return createElement(
+        "div",
+        null,
+        createElement("span", { "data-testid": "from-layout" }, `Page title: ${pageData?.title}`),
+        children,
+      );
+    }
+
+    function PageComponent() {
+      return createElement("div", null, "Page content");
+    }
+
+    const layoutInfo: LayoutInfo = {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+      component: LayoutComponent as any,
+      routeId: "layout:[lang]",
+      hasLoader: true,
+    };
+
+    const route: RouteRecord = {
+      ...createMockRoute({ path: "/:lang/noticias" }),
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+      component: PageComponent as any,
+      layoutInfos: [layoutInfo],
+    };
+
+    const element = createPageElement(route, { title: "Noticias" }, undefined, {
+      "layout:[lang]": { info: "Info" },
+    });
+    const html = renderToString(element);
+
+    expect(html).toContain("Page title: Noticias");
+  });
+
+  it("returns undefined for unknown route ID", () => {
+    function PageComponent() {
+      const data = useRouteLoaderData("nonexistent");
+      return createElement("div", null, `Data: ${String(data)}`);
+    }
+
+    const route: RouteRecord = {
+      ...createMockRoute({ path: "/test" }),
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+      component: PageComponent as any,
+    };
+
+    const element = createPageElement(route, null);
+    const html = renderToString(element);
+
+    expect(html).toContain("Data: undefined");
   });
 });

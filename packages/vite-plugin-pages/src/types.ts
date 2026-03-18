@@ -1,3 +1,9 @@
+export interface LayoutMeta {
+  filePath: string;
+  routeId: string;
+  hasLoader: boolean;
+}
+
 export interface RouteRecord {
   path: string;
   filePath: string;
@@ -10,6 +16,7 @@ export interface RouteRecord {
   getStaticPaths?: GetStaticPaths;
   prerender?: boolean;
   layouts?: string[];
+  layoutMetas?: LayoutMeta[];
   hasLoader?: boolean;
   hasGetStaticPaths?: boolean;
   hasPrerender?: boolean;
