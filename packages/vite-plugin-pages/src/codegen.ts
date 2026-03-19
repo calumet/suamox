@@ -6,6 +6,7 @@ export interface GenerateRoutesOptions {
   defaultMode?: DefaultPageMode;
   base?: string;
   target?: "client" | "server";
+  hasMiddleware?: boolean;
 }
 
 /**
@@ -15,7 +16,7 @@ export function generateRoutesModule(
   routes: RouteRecord[],
   options: GenerateRoutesOptions = {},
 ): string {
-  const { defaultMode = "ssr", base = "/", target = "client" } = options;
+  const { defaultMode = "ssr", base = "/", target = "client", hasMiddleware = false } = options;
   const defaultPrerender = defaultMode === "ssg";
   const defaultCsr = defaultMode === "csr";
   const declarations: string[] = [];
@@ -113,9 +114,11 @@ export function generateRoutesModule(
 
   // En el módulo servidor, re-exportar funciones del runtime para que
   // el prod handler use la misma instancia que las páginas.
+  // El middleware solo se incluye en el bundle del servidor, nunca en el cliente.
   const runtimeReExports =
     target === "server"
-      ? `\nexport { renderPage, matchRoute, resolveRouteModule, RedirectResponse } from "@calumet/suamox";\n`
+      ? `\nexport { renderPage, matchRoute, resolveRouteModule, RedirectResponse } from "@calumet/suamox";\n` +
+        (hasMiddleware ? `export { onRequest } from "../../src/middleware";\n` : "")
       : "";
 
   return `${declarations.join("\n")}

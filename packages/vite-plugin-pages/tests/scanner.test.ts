@@ -133,3 +133,67 @@ export default function Page() {
     expect(route?.hasPrerender).toBe(true);
   });
 });
+
+describe("scanRoutes middleware detection", () => {
+  it("detects src/middleware.ts when present", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+
+    await writeFileWithDirs(
+      join(pagesDir, "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+    await writeFileWithDirs(
+      join(root, "src", "middleware.ts"),
+      "export function onRequest(ctx, next) { return next(); }",
+    );
+
+    const result = await scanRoutes({
+      pagesDir: "src/pages",
+      extensions: [".tsx", ".ts"],
+      root,
+    });
+
+    expect(result.hasMiddleware).toBe(true);
+  });
+
+  it("detects src/middleware/index.ts when present", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+
+    await writeFileWithDirs(
+      join(pagesDir, "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+    await writeFileWithDirs(
+      join(root, "src", "middleware", "index.ts"),
+      "export function onRequest(ctx, next) { return next(); }",
+    );
+
+    const result = await scanRoutes({
+      pagesDir: "src/pages",
+      extensions: [".tsx", ".ts"],
+      root,
+    });
+
+    expect(result.hasMiddleware).toBe(true);
+  });
+
+  it("returns hasMiddleware false when no middleware file exists", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+
+    await writeFileWithDirs(
+      join(pagesDir, "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+
+    const result = await scanRoutes({
+      pagesDir: "src/pages",
+      extensions: [".tsx", ".ts"],
+      root,
+    });
+
+    expect(result.hasMiddleware).toBe(false);
+  });
+});

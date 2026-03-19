@@ -48,6 +48,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       defaultMode,
       base: basePath,
       target: "server",
+      hasMiddleware: result.hasMiddleware,
     });
 
     if (logErrors && result.errors.length > 0) {

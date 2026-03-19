@@ -41,7 +41,21 @@ export interface LoaderContext {
   url: URL;
   params: Record<string, string>;
   query: URLSearchParams;
+  locals: Record<string, unknown>;
 }
+
+export interface MiddlewareContext {
+  request: Request;
+  url: URL;
+  params: Record<string, string>;
+  locals: Record<string, unknown>;
+}
+
+export type MiddlewareNext = () => Promise<Response>;
+export type MiddlewareHandler = (
+  context: MiddlewareContext,
+  next: MiddlewareNext,
+) => Response | Promise<Response>;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface PageProps<T = any> {
@@ -123,6 +137,7 @@ export interface RenderOptions {
   request: Request;
   routes: RouteRecord[];
   props?: Record<string, unknown>;
+  locals?: Record<string, unknown>;
 }
 
 export interface RenderResult {
@@ -379,7 +394,7 @@ export async function hydrateApp(
  * Renderiza una página con SSR
  */
 export async function renderPage(options: RenderOptions): Promise<RenderResult> {
-  const { pathname, request, routes, props = {} } = options;
+  const { pathname, request, routes, props = {}, locals = {} } = options;
 
   // Hacer match de ruta
   const match = matchRoute(routes, pathname);
@@ -413,6 +428,7 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
     url,
     params,
     query: url.searchParams,
+    locals,
   };
 
   // Ejecutar layout loaders secuencialmente

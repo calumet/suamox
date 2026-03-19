@@ -26,8 +26,9 @@ El resultado del loader se inyecta como `data` en el componente.
 
 - `request`: `Request` original.
 - `url`: instancia `URL`.
-- `params`: parámetros de ruta (`[id]`, `[slug]`, etc.).
+- `params`: parametros de ruta (`[id]`, `[slug]`, etc.).
 - `query`: `URLSearchParams`.
+- `locals`: objeto con datos del [middleware](./middleware.md) (vacio si no hay middleware).
 
 ## Ejemplo con parámetros dinámicos
 

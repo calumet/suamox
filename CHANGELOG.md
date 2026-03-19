@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.3 / 0.2.4 / 0.2.5 (2026-03-19)
+
+### Features
+
+- **Middleware**: soporte para `src/middleware.ts` con la funcion `onRequest(context, next)`. El middleware se ejecuta antes de los loaders en cada peticion, tanto SSR como `/__data`. Permite setear `context.locals` con datos transversales (auth, sesion, i18n) que los loaders reciben via `LoaderContext.locals`. El middleware puede cortar la peticion (short-circuit) retornando una respuesta sin llamar a `next()`. Solo se incluye en el server bundle, nunca en el cliente.
+- **`LoaderContext.locals`**: todos los loaders (pagina y layout) ahora reciben `locals` en su contexto. `locals` nunca se serializa ni se envia al cliente.
+
+### Packages
+
+| Paquete                             | Nueva version |
+| ----------------------------------- | ------------- |
+| `@calumet/suamox`                   | 0.2.3         |
+| `@calumet/suamox-vite-plugin-pages` | 0.2.5         |
+| `@calumet/suamox-hono-adapter`      | 0.2.4         |
+
+---
+
 ## 0.2.2 / 0.2.3 / 0.2.4 (2026-03-18)
 
 ### Features

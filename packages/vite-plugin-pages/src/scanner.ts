@@ -1,3 +1,4 @@
+import { access } from "node:fs/promises";
 import { readFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve } from "node:path";
 
@@ -128,6 +129,7 @@ export interface ScanOptions {
 export interface ScanResult {
   routes: RouteRecord[];
   errors: string[];
+  hasMiddleware: boolean;
 }
 
 /**
@@ -219,8 +221,33 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
   // Ordenar rutas por prioridad
   const sortedRoutes = sortRoutes(routes);
 
+  // Detectar middleware global (src/middleware.ts o src/middleware/index.ts)
+  const srcDir = resolve(absolutePagesDir, "..");
+  let hasMiddleware = false;
+  for (const ext of extensions) {
+    try {
+      await access(resolve(srcDir, `middleware${ext}`));
+      hasMiddleware = true;
+      break;
+    } catch {
+      // no existe, continuar
+    }
+  }
+  if (!hasMiddleware) {
+    for (const ext of extensions) {
+      try {
+        await access(resolve(srcDir, "middleware", `index${ext}`));
+        hasMiddleware = true;
+        break;
+      } catch {
+        // no existe, continuar
+      }
+    }
+  }
+
   return {
     routes: sortedRoutes,
     errors,
+    hasMiddleware,
   };
 }

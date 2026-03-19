@@ -2,8 +2,9 @@ import { useLoaderData } from "@calumet/suamox";
 import type { LoaderContext } from "@calumet/suamox";
 import type { ReactNode } from "react";
 
-export function loader({ params }: LoaderContext) {
-  return { info: "Site Info", footer: "Site Footer", lang: params.lang };
+export function loader({ params, locals }: LoaderContext) {
+  const siteName = (locals.siteName as string) ?? "Default Site";
+  return { info: siteName, footer: "Site Footer", lang: params.lang };
 }
 
 function Header() {

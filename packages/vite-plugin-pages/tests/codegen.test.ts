@@ -489,4 +489,33 @@ describe("generateRoutesModule", () => {
     expect(code).toContain("hasLayoutLoaders: true");
     expect(code).toContain('layoutRouteIds: ["layout:root","layout:[lang]"]');
   });
+
+  it("exports onRequest from middleware in server target only", () => {
+    const routes: RouteRecord[] = [];
+
+    const serverCode = generateRoutesModule(routes, {
+      target: "server",
+      hasMiddleware: true,
+    });
+    const clientCode = generateRoutesModule(routes, {
+      target: "client",
+      hasMiddleware: true,
+    });
+
+    expect(serverCode).toContain('export { onRequest } from "../../src/middleware"');
+    expect(clientCode).not.toContain("onRequest");
+    expect(clientCode).not.toContain("middleware");
+  });
+
+  it("does not export onRequest when hasMiddleware is false", () => {
+    const routes: RouteRecord[] = [];
+
+    const code = generateRoutesModule(routes, {
+      target: "server",
+      hasMiddleware: false,
+    });
+
+    expect(code).not.toContain("onRequest");
+    expect(code).not.toContain("middleware");
+  });
 });

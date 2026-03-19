@@ -150,6 +150,40 @@ const collectCssImportsFromEntryClient = async (
   return Array.from(links);
 };
 
+type MiddlewareFunction = (
+  context: {
+    request: Request;
+    url: URL;
+    params: Record<string, string>;
+    locals: Record<string, unknown>;
+  },
+  next: () => Promise<Response>,
+) => Response | Promise<Response>;
+
+const runMiddleware = async (
+  middlewareFn: MiddlewareFunction | undefined,
+  request: Request,
+  url: URL,
+): Promise<{ locals: Record<string, unknown>; response?: Response }> => {
+  const locals: Record<string, unknown> = {};
+  if (!middlewareFn) {
+    return { locals };
+  }
+
+  let nextCalled = false;
+  const context = { request, url, params: {}, locals };
+  const result = await middlewareFn(context, () => {
+    nextCalled = true;
+    return Promise.resolve(new Response(null));
+  });
+
+  if (!nextCalled) {
+    return { locals, response: result };
+  }
+
+  return { locals };
+};
+
 /**
  * Crea una app de Hono con soporte SSR
  */
@@ -234,6 +268,17 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
   const loadRuntime = () =>
     vite.ssrLoadModule("@calumet/suamox") as Promise<typeof import("@calumet/suamox")>;
 
+  const loadMiddleware = async (): Promise<MiddlewareFunction | undefined> => {
+    try {
+      const mod = (await vite.ssrLoadModule("src/middleware")) as {
+        onRequest?: MiddlewareFunction;
+      };
+      return mod.onRequest;
+    } catch {
+      return undefined;
+    }
+  };
+
   // Endpoint de datos para client-side navigation
   app.get("/__data", async (c) => {
     const path = c.req.query("path");
@@ -258,6 +303,17 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
 
       const resolved = await runtime.resolveRouteModule(match.route);
 
+      // Ejecutar middleware para obtener locals
+      const middlewareFn = await loadMiddleware();
+      const { locals, response: mwResponse } = await runMiddleware(
+        middlewareFn,
+        c.req.raw,
+        new URL(c.req.url),
+      );
+      if (mwResponse) {
+        return mwResponse;
+      }
+
       const originalUrl = new URL(c.req.url);
       const loaderUrl = new URL(path, originalUrl.origin);
       originalUrl.searchParams.forEach((value, key) => {
@@ -271,6 +327,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         url: loaderUrl,
         params: match.params,
         query: loaderUrl.searchParams,
+        locals,
       };
 
       // Layout loaders
@@ -323,6 +380,13 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         await onRequest(c);
       }
 
+      // Ejecutar middleware de usuario
+      const middlewareFn = await loadMiddleware();
+      const { locals, response: mwResponse } = await runMiddleware(middlewareFn, c.req.raw, url);
+      if (mwResponse) {
+        return mwResponse;
+      }
+
       // Cargar runtime y rutas a través de Vite para compartir instancias de contexto
       const runtime = await loadRuntime();
       const routesModule = (await vite.ssrLoadModule("virtual:pages/server")) as {
@@ -357,6 +421,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         request: c.req.raw,
         routes,
         props: staticProps,
+        locals,
       };
       if (onBeforeRender) {
         renderContext = await onBeforeRender(renderContext);
@@ -601,6 +666,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     matchRoute: typeof matchRoute;
     resolveRouteModule: typeof resolveRouteModule;
     RedirectResponse: typeof RedirectResponse;
+    onRequest?: MiddlewareFunction;
   };
 
   const loadServerEntry = async (): Promise<ServerEntryRuntime> => {
@@ -619,6 +685,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       resolveRouteModule:
         (mod.resolveRouteModule as typeof resolveRouteModule) ?? resolveRouteModule,
       RedirectResponse: (mod.RedirectResponse as typeof RedirectResponse) ?? RedirectResponse,
+      onRequest: mod.onRequest as MiddlewareFunction | undefined,
     };
   };
 
@@ -639,6 +706,16 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 
       const resolved = await entry.resolveRouteModule(match.route);
 
+      // Ejecutar middleware para obtener locals
+      const { locals, response: mwResponse } = await runMiddleware(
+        entry.onRequest,
+        c.req.raw,
+        new URL(c.req.url),
+      );
+      if (mwResponse) {
+        return mwResponse;
+      }
+
       const originalUrl = new URL(c.req.url);
       const loaderUrl = new URL(path, originalUrl.origin);
       originalUrl.searchParams.forEach((value, key) => {
@@ -652,6 +729,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         url: loaderUrl,
         params: match.params,
         query: loaderUrl.searchParams,
+        locals,
       };
 
       // Layout loaders
@@ -716,6 +794,13 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       }
 
       const entry = await loadServerEntry();
+
+      // Ejecutar middleware de usuario
+      const { locals, response: mwResponse } = await runMiddleware(entry.onRequest, c.req.raw, url);
+      if (mwResponse) {
+        return mwResponse;
+      }
+
       const strippedPathname = stripBase(url.pathname, base);
 
       // Ejecutar hook onBeforeRender
@@ -723,6 +808,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         pathname: strippedPathname,
         request: c.req.raw,
         routes: entry.routes,
+        locals,
       };
       if (onBeforeRender) {
         renderContext = await onBeforeRender(renderContext);

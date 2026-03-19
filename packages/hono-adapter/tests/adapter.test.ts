@@ -38,10 +38,16 @@ const runtimeModule = {
   RedirectResponse,
 };
 
-const createSsrLoadModule = (routes: unknown[]) =>
+const createSsrLoadModule = (routes: unknown[], middlewareFn?: unknown) =>
   vi.fn((id: string) => {
     if (id === "@calumet/suamox") {
       return Promise.resolve(runtimeModule);
+    }
+    if (id === "src/middleware") {
+      if (middlewareFn) {
+        return Promise.resolve({ onRequest: middlewareFn });
+      }
+      return Promise.reject(new Error("no middleware"));
     }
     return Promise.resolve({ routes });
   });
@@ -675,5 +681,115 @@ describe("createProdHandler /__data endpoint", () => {
     expect(response.status).toBe(500);
     const json: unknown = await response.json();
     expect(json).toEqual({ error: "Loader error" });
+  });
+});
+
+describe("createDevHandler middleware", () => {
+  beforeEach(() => {
+    mocks.renderPage.mockReset();
+    mocks.matchRoute.mockReset();
+    mocks.matchRoute.mockReturnValue(null);
+    mocks.resolveRouteModule.mockReset();
+    mocks.resolveRouteModule.mockImplementation((route: unknown) => Promise.resolve(route));
+  });
+
+  it("passes locals from middleware to loader context via __data", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-mw-"));
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "entry-client.tsx"), "void 0;\n");
+
+    const route = {
+      path: "/api",
+      params: [],
+      loader: vi.fn((ctx: { locals: Record<string, unknown> }) =>
+        Promise.resolve({ user: ctx.locals.user }),
+      ),
+    };
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const middlewareFn = vi.fn(
+      async (ctx: { locals: Record<string, unknown> }, next: () => Promise<Response>) => {
+        ctx.locals.user = { id: 1, name: "Admin" };
+        return next();
+      },
+    );
+
+    const vite = {
+      ssrLoadModule: createSsrLoadModule([route], middlewareFn),
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+      ssrFixStacktrace: vi.fn(),
+      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite, root });
+    const response = await app.request("http://localhost/__data?path=/api");
+
+    expect(response.status).toBe(200);
+    const json: unknown = await response.json();
+    expect(json).toEqual({ user: { id: 1, name: "Admin" } });
+    expect(middlewareFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("short-circuits when middleware does not call next", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-mw-"));
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "entry-client.tsx"), "void 0;\n");
+
+    const middlewareFn = vi.fn(() => {
+      return new Response(JSON.stringify({ error: "unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    const vite = {
+      ssrLoadModule: createSsrLoadModule([], middlewareFn),
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+      ssrFixStacktrace: vi.fn(),
+      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite, root });
+    const response = await app.request("http://localhost/");
+
+    expect(response.status).toBe(401);
+    const json: unknown = await response.json();
+    expect(json).toEqual({ error: "unauthorized" });
+  });
+
+  it("locals object is not serialized in __INITIAL_DATA__", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-mw-"));
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "entry-client.tsx"), "void 0;\n");
+
+    const middlewareFn = vi.fn(
+      async (ctx: { locals: Record<string, unknown> }, next: () => Promise<Response>) => {
+        ctx.locals.secret = "server-only-token";
+        return next();
+      },
+    );
+
+    mocks.renderPage.mockResolvedValue({
+      status: 200,
+      html: "<div>Page</div>",
+      head: "",
+      initialData: { public: "data" },
+    });
+
+    const vite = {
+      ssrLoadModule: createSsrLoadModule([], middlewareFn),
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+      ssrFixStacktrace: vi.fn(),
+      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite, root });
+    const response = await app.request("http://localhost/");
+    const body = await response.text();
+
+    expect(body).toContain('window.__INITIAL_DATA__ = {"public":"data"}');
+    expect(body).not.toContain("server-only-token");
+    expect(body).not.toContain("secret");
   });
 });
