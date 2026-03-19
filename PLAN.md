@@ -346,6 +346,349 @@ Layout por folder: `layout.tsx` (similar a Astro)
 
 ---
 
+### Fase 8 — Server code stripping (seguridad de bundles)
+
+#### Problema
+
+Los archivos de pagina (`src/pages/*.tsx`) exportan tanto el componente como el `loader`. El codegen del cliente solo accede a `_module.default`, pero el `import()` dinamico carga el modulo completo. Vite/Rollup elimina exports no usados via tree-shaking en produccion, pero tree-shaking tiene limitaciones:
+
+1. **Side-effects a nivel de modulo**: si el loader importa un modulo que ejecuta codigo al ser importado (ej: un cliente de base de datos que se conecta al importarse, un `console.log` en el top-level), el bundler no puede eliminarlo porque debe preservar los side-effects.
+2. **Paquetes sin `"sideEffects": false`**: si un paquete npm no declara `"sideEffects": false` en su `package.json`, el bundler asume que tiene side-effects y no lo elimina aunque no se use.
+3. **Re-exports transitivos**: si el loader importa de un barrel file (`import { db } from "../lib"`) y ese barrel re-exporta otros modulos con side-effects, todo el barrel puede terminar en el bundle.
+
+En desarrollo no hay tree-shaking (Vite sirve modulos individuales), pero los loaders no se ejecutan en el cliente porque el router usa `/__data`. El riesgo real es en produccion si el codigo del loader o sus dependencias terminan en el bundle del cliente.
+
+#### Como lo resuelve Remix
+
+Remix no depende del tree-shaking. Su compilador genera un **modulo proxy** por cada archivo de ruta:
+
+```ts
+// Archivo original: routes/blog.$slug.tsx
+export async function loader({ params }) {
+  const post = await db.post.findUnique({ where: { slug: params.slug } });
+  return json(post);
+}
+
+export function meta({ data }) {
+  return [{ title: data.title }];
+}
+
+export default function BlogPost() {
+  const data = useLoaderData();
+  return <h1>{data.title}</h1>;
+}
+```
+
+```ts
+// Proxy generado por el compilador (solo para el browser bundle)
+export { meta, default } from "./routes/blog.$slug.tsx";
+// loader NO se re-exporta, por lo tanto ni loader ni db entran al grafo de imports
+```
+
+Adicionalmente, Remix ofrece la convencion `.server.ts`: nombrar un archivo `db.server.ts` le indica al compilador que nunca lo incluya en el bundle del cliente. Si algun codigo del cliente intenta importar un `.server.ts`, el build falla con error en vez de incluir silenciosamente codigo del servidor.
+
+#### Implementar
+
+1. **Plugin de Vite (`transform` hook)**: interceptar imports de archivos dentro de `src/pages/` durante el build del cliente. Reemplazar el contenido del modulo con un proxy que solo re-exporte los exports seguros para el cliente:
+   - `default` (componente)
+   - `prerender` (flag boolean)
+   - `csr` (flag boolean)
+   - Eliminar del proxy: `loader`, `getStaticPaths`, y cualquier import que solo estos usen
+
+2. **Convencion `.server.ts`**: archivos nombrados `*.server.ts` (ej: `db.server.ts`, `api.server.ts`) deben ser excluidos del bundle del cliente. El plugin debe lanzar un error de build si un modulo del cliente intenta importar un `.server.ts`.
+
+3. **Validacion post-build**: script o plugin que analice el bundle del cliente generado y verifique que no contiene patrones conocidos de codigo server-only (imports de `node:*`, referencias a `process.env` sensibles, nombres de funciones loader).
+
+4. **Documentar las restricciones de modulos**: guia explicando que los side-effects a nivel de modulo en archivos de pagina pueden filtrarse al cliente, y como evitarlo (mover side-effects dentro del loader, usar `.server.ts` para dependencias server-only).
+
+#### Salida
+
+- Garantia de que `loader()`, `getStaticPaths()`, middleware y sus dependencias no llegan al browser
+- Convencion `.server.ts` documentada y con error de build si se viola
+- Guia de restricciones de modulos en `docs/guias/`
+
+---
+
+### Fase 9 — Prehydrate state (`useClientValue`)
+
+#### Problema: hydration snap
+
+Cuando una pagina SSR depende de estado que solo existe en el cliente (sessionStorage, localStorage, cookies JS, navigator), el HTML del servidor se renderiza con un valor por defecto (ej: `isLoggedIn = false`). Cuando React hidrata, detecta el valor real y actualiza el DOM, causando un "snap" visible (flash de contenido incorrecto).
+
+Este problema es inherente al modelo de hidratacion de React. Ningun framework de React (Next.js, Remix, Astro) lo resuelve automaticamente. Qwik lo evita con resumability (no usa hidratacion), pero no aplica al ecosistema React.
+
+El patron para resolverlo esta documentado en el articulo "A clock that doesn't snap" de Ethan Niser (https://ethanniser.dev/blog/a-clock-that-doesnt-snap) y consiste en:
+
+1. SSR renderiza el HTML con un valor por defecto
+2. Un `<script>` inline colocado justo despues de los elementos afectados se ejecuta antes de que React hidrate
+3. El script computa el valor real usando APIs del browser (sessionStorage, etc.) y parchea el DOM directamente
+4. El script guarda el valor en una variable global (`window.__PREHYDRATE__`)
+5. Cuando React hidrata, `useState` lee de `window.__PREHYDRATE__` en vez del default, evitando hydration mismatch
+
+El resultado es que el usuario nunca ve el estado incorrecto: el inline script corrige el DOM antes del primer paint visible, y React hidrata con el mismo valor sin mismatch.
+
+#### Implementacion actual (manual)
+
+Hoy el dev tiene que escribir este patron a mano en cada componente:
+
+```tsx
+// Declarar la variable global
+declare global {
+  interface Window { __AUTH__?: boolean; }
+}
+
+export function Header() {
+  // 5. React lee el valor pre-computado al hidratar
+  const [isLoggedIn] = useState(() => {
+    if (typeof window !== "undefined" && window.__AUTH__ !== undefined) {
+      return window.__AUTH__;
+    }
+    return false; // 1. Default para SSR
+  });
+
+  return (
+    <header>
+      {/* Botones con style condicional basado en isLoggedIn */}
+      <button id="btn-logout" style={isLoggedIn ? undefined : { display: "none" }}>
+        Salir
+      </button>
+      <a id="btn-login" style={isLoggedIn ? { display: "none" } : undefined}>
+        Ingresar
+      </a>
+
+      {/* 2-4. Inline script que corre antes de React */}
+      <script dangerouslySetInnerHTML={{ __html: `(function(){
+        var logged = !!sessionStorage.getItem("idUsr");
+        window.__AUTH__ = logged;
+        var login = document.getElementById("btn-login");
+        var logout = document.getElementById("btn-logout");
+        if (login) login.style.display = logged ? "none" : "";
+        if (logout) logout.style.display = logged ? "" : "none";
+      })()` }} />
+    </header>
+  );
+}
+```
+
+Este patron funciona pero es verbose, propenso a errores, y requiere mantener la logica de DOM duplicada entre el script inline y el JSX.
+
+#### API propuesta: `useClientValue`
+
+```tsx
+useClientValue(fallback, resolve, patch?)
+```
+
+- `fallback`: valor para SSR (ej: `false`)
+- `resolve`: funcion que computa el valor real en el cliente. Se serializa via `.toString()` para el inline script. No puede usar imports ni closures externas, solo APIs del browser.
+- `patch` (opcional): puede ser un objeto declarativo o una funcion manual.
+
+**Tipo del tercer argumento:**
+
+```ts
+type PatchDeclarative = {
+  show?: string;  // selector CSS, se muestra cuando value es truthy
+  hide?: string;  // selector CSS, se oculta cuando value es truthy
+};
+
+type PatchManual<T> = (value: T) => void;
+
+type Patch<T> = PatchDeclarative | PatchManual<T>;
+```
+
+**Uso declarativo (casos comunes):**
+
+La mayoria de casos de prehydrate son toggles de visibilidad basados en un boolean. El objeto declarativo abstrae la manipulacion de DOM.
+
+La estrategia principal usa `data-cv-hide` attributes y una regla CSS global inyectada por el framework:
+
+```css
+/* CSS inyectado automaticamente por el framework */
+[data-cv-hide] { display: none !important; }
+```
+
+El dev marca los elementos con `data-cv-hide` condicional y el inline script toggle el atributo antes de React:
+
+```tsx
+import { useClientValue } from "@calumet/suamox";
+
+export function Header() {
+  const isLoggedIn = useClientValue(false, () => {
+    return !!sessionStorage.getItem("idUsr");
+  }, {
+    show: "#btn-logout",
+    hide: "#btn-login",
+  });
+
+  return (
+    <header>
+      <button id="btn-logout" data-cv-hide={!isLoggedIn || undefined}>
+        Salir
+      </button>
+      <a id="btn-login" data-cv-hide={isLoggedIn || undefined}>
+        Ingresar
+      </a>
+    </header>
+  );
+}
+```
+
+El framework genera el inline script automaticamente:
+
+```js
+// generado internamente
+(function(){
+  var __v = (function(){ return !!sessionStorage.getItem("idUsr"); })();
+  window.__PREHYDRATE__ = window.__PREHYDRATE__ || {};
+  window.__PREHYDRATE__["auth_0"] = __v;
+  document.querySelectorAll("#btn-logout").forEach(function(el) {
+    if (__v) el.removeAttribute("data-cv-hide");
+    else el.setAttribute("data-cv-hide", "");
+  });
+  document.querySelectorAll("#btn-login").forEach(function(el) {
+    if (__v) el.setAttribute("data-cv-hide", "");
+    else el.removeAttribute("data-cv-hide");
+  });
+})()
+```
+
+El flujo es:
+1. SSR: `isLoggedIn=false`, logout tiene `data-cv-hide`, CSS lo oculta
+2. Inline script: computa `true`, remueve `data-cv-hide` de logout, lo agrega a login
+3. React hidrata: `isLoggedIn=true`, JSX coincide con el DOM (logout sin attr, login con attr)
+4. Sin mismatch, sin flash
+
+Si durante la implementacion `data-cv-hide` presenta problemas (ej: conflictos con CSS existente, especificidad insuficiente con `!important`, o frameworks de UI que sobreescriben `display`), se puede usar `style.display` como fallback:
+
+```js
+// fallback: manipulacion directa de style
+document.querySelectorAll("#btn-logout").forEach(function(el) {
+  el.style.display = __v ? "" : "none";
+});
+```
+
+En ese caso el dev usaria `style` condicional en el JSX en vez de `data-cv-hide`:
+
+```tsx
+<button id="btn-logout" style={isLoggedIn ? undefined : { display: "none" }}>
+```
+
+`show` y `hide` aceptan cualquier selector CSS valido, incluyendo clases:
+
+```tsx
+// Toggle de secciones completas
+const isLoggedIn = useClientValue(false, () => {
+  return !!sessionStorage.getItem("idUsr");
+}, {
+  show: "#noticias-auth",
+  hide: "#noticias-guest",
+});
+
+// Con clases
+const isLoggedIn = useClientValue(false, () => {
+  return !!sessionStorage.getItem("idUsr");
+}, {
+  show: ".auth-only",
+  hide: ".guest-only",
+});
+```
+
+**Uso manual (escape hatch para casos complejos):**
+
+Cuando el patch no es un toggle de display (ej: cambiar texto, atributos, clases), se pasa una funcion:
+
+```tsx
+const time = useClientValue("00:00:00", () => {
+  return new Date().toLocaleTimeString();
+}, (value) => {
+  document.getElementById("clock")!.textContent = value;
+});
+```
+
+**Uso sin patch (solo sync de state):**
+
+```tsx
+const locale = useClientValue("en", () => {
+  return navigator.language.startsWith("es") ? "es" : "en";
+});
+```
+
+Sin patch no hay correccion visual pre-hidratacion. React hidrata con el valor correcto (sin mismatch), pero el HTML del servidor se muestra con el fallback hasta que React hidrate. Esto es aceptable cuando el cambio visual es menor.
+
+#### `suppressHydrationWarning` y por que es necesario
+
+El inline script modifica el DOM antes de que React hidrate. Pero React no compara contra el DOM actual del browser, sino contra lo que el servidor renderizo. Cuando React hidrata y ve que un atributo (ej: `style`) es diferente a lo que el servidor genero, emite un hydration mismatch warning:
+
+```
++  style={undefined}        ← lo que React quiere renderizar (isLoggedIn=true)
+-  style={{display:"none"}}  ← lo que el servidor renderizo (isLoggedIn=false)
+```
+
+Esto ocurre porque:
+1. SSR renderizo con `fallback=false` (logout oculto)
+2. El inline script parcheo el DOM (logout visible)
+3. React hidrata con `resolve()=true` (logout deberia estar visible)
+4. React detecta que el atributo `style` del HTML del servidor no coincide con su render
+
+El warning es cosmetic (React adopta el valor del cliente), pero para silenciarlo los elementos parchados necesitan `suppressHydrationWarning`:
+
+```tsx
+<button
+  id="btn-logout"
+  suppressHydrationWarning
+  data-cv-hide={!isLoggedIn || undefined}
+>
+  Salir
+</button>
+```
+
+Esto es lo mismo que hace el articulo original de Ethan Niser. `suppressHydrationWarning` le dice a React: "se que este elemento va a diferir entre servidor y cliente, no es un error".
+
+Con la estrategia `data-cv-hide`, el mismatch es minimo (solo el atributo `data-cv-hide` difiere). Con la estrategia `style.display`, el mismatch es en el atributo `style`. En ambos casos `suppressHydrationWarning` es necesario.
+
+Adicionalmente, cualquier valor derivado de APIs del browser dentro del JSX (no dentro de `resolve`) tambien causa mismatch. Por ejemplo:
+
+```tsx
+// MISMATCH: en SSR typeof window === "undefined", en cliente es true
+const loginHref = typeof window !== "undefined"
+  ? `/${lang}/login?redirect=${encodeURIComponent(window.location.pathname)}`
+  : `/${lang}/login`;
+```
+
+Estas branches server/client deben moverse dentro de `useClientValue` o marcarse con `suppressHydrationWarning` en el elemento que las usa. El framework podria agregar `suppressHydrationWarning` automaticamente a los elementos seleccionados por `show`/`hide` en una implementacion futura, pero eso requiere control sobre el JSX que no es trivial.
+
+#### Restricciones de `resolve` y `patch`
+
+Tanto `resolve` como `patch` (cuando es funcion) se serializan con `.toString()` para inyectarse en el inline script. Esto implica que:
+
+- No pueden importar modulos externos
+- No pueden referenciar variables del scope del componente (closures)
+- Solo pueden usar APIs globales del browser: `sessionStorage`, `localStorage`, `document`, `navigator`, `window`, `Date`, etc.
+- Deben ser puras respecto a su entorno: todo lo que necesitan debe estar disponible globalmente
+
+Esto es una limitacion inherente al patron: el inline script se ejecuta fuera del contexto de React, en un `<script>` tag que el browser interpreta como JS plano.
+
+#### Implementar
+
+1. **Hook `useClientValue`** en `ssr-runtime`:
+   - En servidor: retorna `fallback`, registra el inline script para inyeccion
+   - En cliente: lee de `window.__PREHYDRATE__[key]` si existe, sino usa `fallback`
+   - Genera un key unico por invocacion (hash o contador)
+
+2. **Inyeccion del `<script>` inline**:
+   - Opcion A: el hook retorna una tupla `[value, ScriptComponent]` donde `ScriptComponent` es un componente React que renderiza el `<script>` inline. El dev debe colocarlo en su JSX. Mas explicito pero requiere que el dev recuerde renderizarlo.
+   - Opcion B: el framework recolecta todos los registros durante SSR y los inyecta automaticamente antes de `</body>`. Mas magico pero el dev no tiene que hacer nada extra. Riesgo: el script debe estar despues de los elementos que parchea, y si se inyecta al final del body podria haber un gap visual.
+   - Opcion C: el hook retorna `[value, ScriptComponent]` y el dev lo coloca justo despues de los elementos afectados (patron del articulo original). Equilibrio entre control y conveniencia.
+
+3. **Documentar** el patron, las restricciones de serialization, y ejemplos para casos comunes: auth, dark mode, locale, feature flags.
+
+#### Salida
+
+- Hook `useClientValue(fallback, resolve, patch?)` en `@calumet/suamox`
+- Documentacion en `docs/guias/prehydrate.md`
+- Ejemplo en `examples/basic` con auth toggle
+
+---
+
 ## Testing / Calidad
 
 ### Unit tests
