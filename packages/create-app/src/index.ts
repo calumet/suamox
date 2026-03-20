@@ -63,7 +63,7 @@ const main = async () => {
     process.exit(1);
   }
 
-  const name = rawName.replace(/[^a-zA-Z0-9\-_@/.]/g, "");
+  const name = rawName.replace(/[^a-zA-Z0-9\-_@]/g, "");
   if (name !== rawName) {
     console.log(`[create-suamox] Project name sanitized to: ${name}`);
   }

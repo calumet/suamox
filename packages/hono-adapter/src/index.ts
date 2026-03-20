@@ -239,7 +239,7 @@ const runMiddleware = async (
  * Rechaza requests cross-origin al endpoint /__data usando Sec-Fetch-Site.
  * Retorna true si el request debe ser bloqueado.
  */
-const isCrossOriginDataRequest = (c: Context): boolean => {
+const isInvalidDataRequest = (c: Context): boolean => {
   const fetchSite = c.req.header("sec-fetch-site");
   return !!fetchSite && fetchSite !== "same-origin" && fetchSite !== "none";
 };
@@ -349,7 +349,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
 
   // Endpoint de datos para client-side navigation
   app.get("/__data", async (c) => {
-    if (isCrossOriginDataRequest(c)) {
+    if (isInvalidDataRequest(c)) {
       return c.json({ error: "Cross-origin request blocked" }, 403);
     }
 
@@ -771,7 +771,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 
   // Endpoint de datos para client-side navigation
   app.get("/__data", async (c) => {
-    if (isCrossOriginDataRequest(c)) {
+    if (isInvalidDataRequest(c)) {
       return c.json({ error: "Cross-origin request blocked" }, 403);
     }
 
