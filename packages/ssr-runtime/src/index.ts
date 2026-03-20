@@ -146,7 +146,8 @@ const UNSAFE_REDIRECT_PROTOCOLS = new Set([
  * Usar antes de redirigir con URLs que provienen de input del usuario.
  */
 export function isSafeRedirectUrl(location: string, baseOrigin?: string): boolean {
-  const base = baseOrigin ?? (typeof window !== "undefined" ? window.location.origin : "http://localhost");
+  const base =
+    baseOrigin ?? (typeof window !== "undefined" ? window.location.origin : "http://localhost");
   try {
     const url = new URL(location, base);
     return !UNSAFE_REDIRECT_PROTOCOLS.has(url.protocol);

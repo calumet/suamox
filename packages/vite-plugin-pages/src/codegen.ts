@@ -45,7 +45,9 @@ export function generateRoutesModule(
         const layoutLoaderName = `loadLayout${index}_${layoutIndex}`;
         const layoutImportPath = `${layoutPath.replace(/\\/g, "/")}${clientQuery}`;
 
-        declarations.push(`const ${layoutLoaderName} = () => import(${JSON.stringify(layoutImportPath)});`);
+        declarations.push(
+          `const ${layoutLoaderName} = () => import(${JSON.stringify(layoutImportPath)});`,
+        );
         layoutLoadCalls.push(`${layoutLoaderName}()`);
       });
     }

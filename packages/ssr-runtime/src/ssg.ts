@@ -39,8 +39,7 @@ function isDynamicRoute(route: RouteRecord): boolean {
   return route.path.includes(":") || route.path.includes("*");
 }
 
-const escapeRegExp = (value: string): string =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function encodeCatchAll(value: string): string {
   return value
@@ -91,7 +90,10 @@ function resolvePrerenderPath(route: RouteRecord, params: Record<string, string>
       throw new Error(`Missing param "${paramName}" for route ${route.path}`);
     }
     const encoded = encodeURIComponent(String(rawValue));
-    resolvedPath = resolvedPath.replace(new RegExp(`:${escapeRegExp(paramName)}(?=/|$)`, "g"), encoded);
+    resolvedPath = resolvedPath.replace(
+      new RegExp(`:${escapeRegExp(paramName)}(?=/|$)`, "g"),
+      encoded,
+    );
   }
 
   return resolvedPath;

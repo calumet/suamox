@@ -894,7 +894,11 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       const safeUrl = new URL(`${safeOrigin}${url.pathname}${url.search}`);
       const safeRequest = new Request(safeUrl, { headers: c.req.raw.headers });
 
-      const { locals, response: mwResponse } = await runMiddleware(entry.onRequest, safeRequest, safeUrl);
+      const { locals, response: mwResponse } = await runMiddleware(
+        entry.onRequest,
+        safeRequest,
+        safeUrl,
+      );
       if (mwResponse) {
         return mwResponse;
       }
