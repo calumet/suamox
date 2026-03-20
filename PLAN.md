@@ -434,7 +434,9 @@ Hoy el dev tiene que escribir este patron a mano en cada componente:
 ```tsx
 // Declarar la variable global
 declare global {
-  interface Window { __AUTH__?: boolean; }
+  interface Window {
+    __AUTH__?: boolean;
+  }
 }
 
 export function Header() {
@@ -457,14 +459,18 @@ export function Header() {
       </a>
 
       {/* 2-4. Inline script que corre antes de React */}
-      <script dangerouslySetInnerHTML={{ __html: `(function(){
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `(function(){
         var logged = !!sessionStorage.getItem("idUsr");
         window.__AUTH__ = logged;
         var login = document.getElementById("btn-login");
         var logout = document.getElementById("btn-logout");
         if (login) login.style.display = logged ? "none" : "";
         if (logout) logout.style.display = logged ? "" : "none";
-      })()` }} />
+      })()`,
+        }}
+      />
     </header>
   );
 }
@@ -486,8 +492,8 @@ useClientValue(fallback, resolve, patch?)
 
 ```ts
 type PatchDeclarative = {
-  show?: string;  // selector CSS, se muestra cuando value es truthy
-  hide?: string;  // selector CSS, se oculta cuando value es truthy
+  show?: string; // selector CSS, se muestra cuando value es truthy
+  hide?: string; // selector CSS, se oculta cuando value es truthy
 };
 
 type PatchManual<T> = (value: T) => void;
@@ -503,7 +509,9 @@ La estrategia principal usa `data-cv-hide` attributes y una regla CSS global iny
 
 ```css
 /* CSS inyectado automaticamente por el framework */
-[data-cv-hide] { display: none !important; }
+[data-cv-hide] {
+  display: none !important;
+}
 ```
 
 El dev marca los elementos con `data-cv-hide` condicional y el inline script toggle el atributo antes de React:
@@ -512,12 +520,16 @@ El dev marca los elementos con `data-cv-hide` condicional y el inline script tog
 import { useClientValue } from "@calumet/suamox";
 
 export function Header() {
-  const isLoggedIn = useClientValue(false, () => {
-    return !!sessionStorage.getItem("idUsr");
-  }, {
-    show: "#btn-logout",
-    hide: "#btn-login",
-  });
+  const isLoggedIn = useClientValue(
+    false,
+    () => {
+      return !!sessionStorage.getItem("idUsr");
+    },
+    {
+      show: "#btn-logout",
+      hide: "#btn-login",
+    },
+  );
 
   return (
     <header>
@@ -536,22 +548,25 @@ El framework genera el inline script automaticamente:
 
 ```js
 // generado internamente
-(function(){
-  var __v = (function(){ return !!sessionStorage.getItem("idUsr"); })();
+(function () {
+  var __v = (function () {
+    return !!sessionStorage.getItem("idUsr");
+  })();
   window.__PREHYDRATE__ = window.__PREHYDRATE__ || {};
   window.__PREHYDRATE__["auth_0"] = __v;
-  document.querySelectorAll("#btn-logout").forEach(function(el) {
+  document.querySelectorAll("#btn-logout").forEach(function (el) {
     if (__v) el.removeAttribute("data-cv-hide");
     else el.setAttribute("data-cv-hide", "");
   });
-  document.querySelectorAll("#btn-login").forEach(function(el) {
+  document.querySelectorAll("#btn-login").forEach(function (el) {
     if (__v) el.setAttribute("data-cv-hide", "");
     else el.removeAttribute("data-cv-hide");
   });
-})()
+})();
 ```
 
 El flujo es:
+
 1. SSR: `isLoggedIn=false`, logout tiene `data-cv-hide`, CSS lo oculta
 2. Inline script: computa `true`, remueve `data-cv-hide` de logout, lo agrega a login
 3. React hidrata: `isLoggedIn=true`, JSX coincide con el DOM (logout sin attr, login con attr)
@@ -561,7 +576,7 @@ Si durante la implementacion `data-cv-hide` presenta problemas (ej: conflictos c
 
 ```js
 // fallback: manipulacion directa de style
-document.querySelectorAll("#btn-logout").forEach(function(el) {
+document.querySelectorAll("#btn-logout").forEach(function (el) {
   el.style.display = __v ? "" : "none";
 });
 ```
@@ -576,20 +591,28 @@ En ese caso el dev usaria `style` condicional en el JSX en vez de `data-cv-hide`
 
 ```tsx
 // Toggle de secciones completas
-const isLoggedIn = useClientValue(false, () => {
-  return !!sessionStorage.getItem("idUsr");
-}, {
-  show: "#noticias-auth",
-  hide: "#noticias-guest",
-});
+const isLoggedIn = useClientValue(
+  false,
+  () => {
+    return !!sessionStorage.getItem("idUsr");
+  },
+  {
+    show: "#noticias-auth",
+    hide: "#noticias-guest",
+  },
+);
 
 // Con clases
-const isLoggedIn = useClientValue(false, () => {
-  return !!sessionStorage.getItem("idUsr");
-}, {
-  show: ".auth-only",
-  hide: ".guest-only",
-});
+const isLoggedIn = useClientValue(
+  false,
+  () => {
+    return !!sessionStorage.getItem("idUsr");
+  },
+  {
+    show: ".auth-only",
+    hide: ".guest-only",
+  },
+);
 ```
 
 **Uso manual (escape hatch para casos complejos):**
@@ -597,11 +620,15 @@ const isLoggedIn = useClientValue(false, () => {
 Cuando el patch no es un toggle de display (ej: cambiar texto, atributos, clases), se pasa una funcion:
 
 ```tsx
-const time = useClientValue("00:00:00", () => {
-  return new Date().toLocaleTimeString();
-}, (value) => {
-  document.getElementById("clock")!.textContent = value;
-});
+const time = useClientValue(
+  "00:00:00",
+  () => {
+    return new Date().toLocaleTimeString();
+  },
+  (value) => {
+    document.getElementById("clock")!.textContent = value;
+  },
+);
 ```
 
 **Uso sin patch (solo sync de state):**
@@ -624,6 +651,7 @@ El inline script modifica el DOM antes de que React hidrate. Pero React no compa
 ```
 
 Esto ocurre porque:
+
 1. SSR renderizo con `fallback=false` (logout oculto)
 2. El inline script parcheo el DOM (logout visible)
 3. React hidrata con `resolve()=true` (logout deberia estar visible)
@@ -632,11 +660,7 @@ Esto ocurre porque:
 El warning es cosmetic (React adopta el valor del cliente), pero para silenciarlo los elementos parchados necesitan `suppressHydrationWarning`:
 
 ```tsx
-<button
-  id="btn-logout"
-  suppressHydrationWarning
-  data-cv-hide={!isLoggedIn || undefined}
->
+<button id="btn-logout" suppressHydrationWarning data-cv-hide={!isLoggedIn || undefined}>
   Salir
 </button>
 ```
@@ -649,9 +673,10 @@ Adicionalmente, cualquier valor derivado de APIs del browser dentro del JSX (no 
 
 ```tsx
 // MISMATCH: en SSR typeof window === "undefined", en cliente es true
-const loginHref = typeof window !== "undefined"
-  ? `/${lang}/login?redirect=${encodeURIComponent(window.location.pathname)}`
-  : `/${lang}/login`;
+const loginHref =
+  typeof window !== "undefined"
+    ? `/${lang}/login?redirect=${encodeURIComponent(window.location.pathname)}`
+    : `/${lang}/login`;
 ```
 
 Estas branches server/client deben moverse dentro de `useClientValue` o marcarse con `suppressHydrationWarning` en el elemento que las usa. El framework podria agregar `suppressHydrationWarning` automaticamente a los elementos seleccionados por `show`/`hide` en una implementacion futura, pero eso requiere control sobre el JSX que no es trivial.

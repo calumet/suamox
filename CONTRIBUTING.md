@@ -43,7 +43,7 @@ suamox/
 4. Ejecuta linting: `pnpm lint`
 5. Formatea código: `pnpm format`
 6. Compila paquetes: `pnpm build`
-7. Ejecuta tests: `pnpm test`
+7. Ejecuta tests: `pnpm test` y `pnpm test:e2e`
 
 ### Desarrollo de Paquetes
 
