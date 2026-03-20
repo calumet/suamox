@@ -196,8 +196,13 @@ const renderHeadToString = (nodes: React.ReactNode[]): string => {
  * Hace match de un pathname contra rutas y extrae params
  */
 export function matchRoute(routes: RouteRecord[], pathname: string): MatchResult | null {
-  // Normalizar pathname
-  const normalizedPath = pathname === "" ? "/" : pathname;
+  // Normalizar pathname y decodificar URL encoding
+  let normalizedPath = pathname === "" ? "/" : pathname;
+  try {
+    normalizedPath = decodeURIComponent(normalizedPath);
+  } catch {
+    // Secuencias % inválidas, usar el path original
+  }
 
   for (const route of routes) {
     const match = matchPattern(route, normalizedPath);
@@ -568,20 +573,23 @@ export function generateHTML(options: {
     scriptPlacement = "body",
   } = options;
 
+  const escapeAttr = (value: string): string =>
+    value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+
   const uniqueStyles = Array.from(new Set(styles));
   const uniquePreloadScripts = Array.from(new Set(preloadScripts));
   const uniqueScripts = Array.from(new Set(scripts));
 
   const styleTags = uniqueStyles
-    .map((href) => `<link rel="stylesheet" href="${href}">`)
+    .map((href) => `<link rel="stylesheet" href="${escapeAttr(href)}">`)
     .join("\n    ");
 
   const preloadTags = uniquePreloadScripts
-    .map((href) => `<link rel="modulepreload" href="${href}">`)
+    .map((href) => `<link rel="modulepreload" href="${escapeAttr(href)}">`)
     .join("\n    ");
 
   const scriptTags = uniqueScripts
-    .map((src) => `<script type="module" src="${src}"></script>`)
+    .map((src) => `<script type="module" src="${escapeAttr(src)}"></script>`)
     .join("\n    ");
 
   const dataScript = includeInitialDataScript

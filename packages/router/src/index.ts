@@ -71,7 +71,11 @@ const scrollToLocation = (hash: string): void => {
     window.scrollTo(0, 0);
     return;
   }
-  const target = document.querySelector(hash);
+  const id = hash.slice(1);
+  if (!id) {
+    return;
+  }
+  const target = document.getElementById(id);
   if (target instanceof HTMLElement) {
     target.scrollIntoView();
   }

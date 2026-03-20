@@ -17,6 +17,7 @@ import {
 import { serveStatic } from "@hono/node-server/serve-static";
 import type { Context } from "hono";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import pc from "picocolors";
 import type { ViteDevServer } from "vite";
 
@@ -249,6 +250,7 @@ const isCrossOriginDataRequest = (c: Context): boolean => {
 export function createHonoApp(_options: HonoAdapterOptions = {}): Hono {
   const app = new Hono();
 
+  app.use("*", bodyLimit({ maxSize: 1024 * 1024 }));
   app.use("*", async (c, next) => {
     await next();
     c.header("X-Content-Type-Options", "nosniff");
@@ -852,7 +854,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       if (error instanceof RedirectResponse) {
         return c.json({ __redirect: error.location, __status: error.status });
       }
-      console.error(pc.red("[Data Endpoint Error]"), error);
+      console.error(pc.red("[Data Endpoint Error]"), (error as Error).message);
       return c.json({ error: "Loader error" }, 500);
     }
   });
@@ -940,7 +942,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 
       return c.html(html, result.status as 200 | 404 | 500);
     } catch (error) {
-      console.error(pc.red("[SSR Error]"), error);
+      console.error(pc.red("[SSR Error]"), (error as Error).message);
 
       const errorHtml = generateHTML({
         html: '<div id="root"><h1>500 - Internal Server Error</h1></div>',
