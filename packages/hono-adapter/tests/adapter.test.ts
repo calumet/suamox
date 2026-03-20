@@ -329,7 +329,7 @@ describe("createDevHandler /__data endpoint", () => {
 
     expect(response.status).toBe(400);
     const json: unknown = await response.json();
-    expect(json).toEqual({ error: "Invalid path parameter" });
+    expect(json).toEqual({ error: "Missing path parameter" });
   });
 
   it("returns 404 when route is not found", async () => {

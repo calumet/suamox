@@ -354,7 +354,10 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
     }
 
     const path = c.req.query("path");
-    if (!path || !path.startsWith("/") || path.startsWith("//")) {
+    if (!path) {
+      return c.json({ error: "Missing path parameter" }, 400);
+    }
+    if (!path.startsWith("/") || path.startsWith("//")) {
       return c.json({ error: "Invalid path parameter" }, 400);
     }
 
@@ -773,7 +776,10 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     }
 
     const path = c.req.query("path");
-    if (!path || !path.startsWith("/") || path.startsWith("//")) {
+    if (!path) {
+      return c.json({ error: "Missing path parameter" }, 400);
+    }
+    if (!path.startsWith("/") || path.startsWith("//")) {
       return c.json({ error: "Invalid path parameter" }, 400);
     }
 
