@@ -235,10 +235,26 @@ const runMiddleware = async (
 };
 
 /**
+ * Rechaza requests cross-origin al endpoint /__data usando Sec-Fetch-Site.
+ * Retorna true si el request debe ser bloqueado.
+ */
+const isCrossOriginDataRequest = (c: Context): boolean => {
+  const fetchSite = c.req.header("sec-fetch-site");
+  return !!fetchSite && fetchSite !== "same-origin" && fetchSite !== "none";
+};
+
+/**
  * Crea una app de Hono con soporte SSR
  */
 export function createHonoApp(_options: HonoAdapterOptions = {}): Hono {
   const app = new Hono();
+
+  app.use("*", async (c, next) => {
+    await next();
+    c.header("X-Content-Type-Options", "nosniff");
+    c.header("X-Frame-Options", "SAMEORIGIN");
+    c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  });
 
   // Endpoint de health check
   app.get("/health", (c) => {
@@ -331,6 +347,10 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
 
   // Endpoint de datos para client-side navigation
   app.get("/__data", async (c) => {
+    if (isCrossOriginDataRequest(c)) {
+      return c.json({ error: "Cross-origin request blocked" }, 403);
+    }
+
     const path = c.req.query("path");
     if (!path) {
       return c.json({ error: "Missing path parameter" }, 400);
@@ -386,7 +406,10 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
 
       if (hasLayoutLoaders) {
         const stableParam = c.req.query("stableLayouts");
-        const stableSet = stableParam ? new Set(stableParam.split(",")) : new Set<string>();
+        const validIds = new Set(layoutInfos!.map((li: { routeId: string }) => li.routeId));
+        const stableSet = stableParam
+          ? new Set(stableParam.split(",").filter((id) => validIds.has(id)))
+          : new Set<string>();
 
         const layouts: Record<string, unknown> = {};
         for (const info of layoutInfos!) {
@@ -742,6 +765,10 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 
   // Endpoint de datos para client-side navigation
   app.get("/__data", async (c) => {
+    if (isCrossOriginDataRequest(c)) {
+      return c.json({ error: "Cross-origin request blocked" }, 403);
+    }
+
     const path = c.req.query("path");
     if (!path) {
       return c.json({ error: "Missing path parameter" }, 400);
@@ -795,7 +822,10 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 
       if (hasLayoutLoaders) {
         const stableParam = c.req.query("stableLayouts");
-        const stableSet = stableParam ? new Set(stableParam.split(",")) : new Set<string>();
+        const validIds = new Set(layoutInfos!.map((li) => li.routeId));
+        const stableSet = stableParam
+          ? new Set(stableParam.split(",").filter((id) => validIds.has(id)))
+          : new Set<string>();
 
         const layouts: Record<string, unknown> = {};
         for (const info of layoutInfos!) {

@@ -41,3 +41,4 @@ export default function HomePage() {
 - Define `title` y `description` en cada página importante.
 - Usa layouts para metadatos compartidos.
 - Evita meter lógica pesada dentro de `<Head>`.
+- No uses `dangerouslySetInnerHTML` con contenido que provenga del usuario. El componente `<Head>` renderiza HTML directamente en el `<head>` del documento, lo que permite XSS si el contenido no está sanitizado.
