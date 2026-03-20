@@ -354,8 +354,8 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
     }
 
     const path = c.req.query("path");
-    if (!path) {
-      return c.json({ error: "Missing path parameter" }, 400);
+    if (!path || !path.startsWith("/") || path.startsWith("//")) {
+      return c.json({ error: "Invalid path parameter" }, 400);
     }
 
     try {
@@ -514,9 +514,10 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         return c.redirect(result.redirectTo, result.status as 301 | 302 | 303 | 307 | 308);
       }
 
+      const escapeAttr = (v: string): string => v.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
       const devCssLinks = await collectCssImportsFromEntryClient(root, vite);
       const devCssTags = devCssLinks
-        .map((href) => `<link rel="stylesheet" href="${href}">`)
+        .map((href) => `<link rel="stylesheet" href="${escapeAttr(href)}">`)
         .join("\n    ");
 
       // Scripts de cliente: solo para rutas que no son prerender
@@ -772,8 +773,8 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     }
 
     const path = c.req.query("path");
-    if (!path) {
-      return c.json({ error: "Missing path parameter" }, 400);
+    if (!path || !path.startsWith("/") || path.startsWith("//")) {
+      return c.json({ error: "Invalid path parameter" }, 400);
     }
 
     try {

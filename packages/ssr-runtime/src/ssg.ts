@@ -46,6 +46,7 @@ function encodeCatchAll(value: string): string {
   return value
     .split("/")
     .filter(Boolean)
+    .filter((segment) => segment !== ".." && segment !== ".")
     .map((segment) => encodeURIComponent(segment))
     .join("/");
 }
@@ -210,6 +211,11 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
     });
 
     const { dir, filePath } = getOutputPath(normalizedPath);
+    const relToOut = relative(outDir, filePath);
+    if (relToOut.startsWith("..") || isAbsolute(relToOut)) {
+      console.warn(`[suamox] Skipping path traversal attempt: ${pathname}`);
+      return;
+    }
     await mkdir(dir, { recursive: true });
     await writeFile(filePath, html);
   };
