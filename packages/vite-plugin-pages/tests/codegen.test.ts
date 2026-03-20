@@ -34,7 +34,7 @@ describe("generateRoutesModule", () => {
     const code = generateRoutesModule(routes);
 
     expect(code).toContain(
-      "const loadPage0 = () => import('/project/src/pages/about.tsx?__suamox-client-route');",
+      `const loadPage0 = () => import("/project/src/pages/about.tsx?__suamox-client-route");`,
     );
     expect(code).toContain("const loadRoute0 = async () => {");
     expect(code).toContain('path: "/about"');
@@ -187,10 +187,10 @@ describe("generateRoutesModule", () => {
     const code = generateRoutesModule(routes);
 
     expect(code).toContain(
-      "const loadLayout0_0 = () => import('/pages/layout.tsx?__suamox-client-route');",
+      `const loadLayout0_0 = () => import("/pages/layout.tsx?__suamox-client-route");`,
     );
     expect(code).toContain(
-      "const loadLayout0_1 = () => import('/pages/blog/layout.tsx?__suamox-client-route');",
+      `const loadLayout0_1 = () => import("/pages/blog/layout.tsx?__suamox-client-route");`,
     );
     expect(code).toContain("Promise.all([loadLayout0_0(), loadLayout0_1()])");
     expect(code).toContain("layouts: _layoutModules.map((mod) => mod.default)");
@@ -212,7 +212,7 @@ describe("generateRoutesModule", () => {
     const code = generateRoutesModule(routes);
 
     expect(code).toContain(
-      "const loadPage0 = () => import('/home/user/project/src/pages/about.tsx?__suamox-client-route');",
+      `const loadPage0 = () => import("/home/user/project/src/pages/about.tsx?__suamox-client-route");`,
     );
   });
 

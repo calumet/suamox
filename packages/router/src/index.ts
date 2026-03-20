@@ -1,5 +1,6 @@
 import {
   createPageElement,
+  isSafeRedirectUrl,
   matchRoute,
   resolveRouteModule,
   stripBase,
@@ -204,6 +205,11 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
             "__redirect" in (json as Record<string, unknown>)
           ) {
             const redirectData = json as { __redirect: string };
+            if (!isSafeRedirectUrl(redirectData.__redirect)) {
+              throw new Error(
+                `[suamox-router] Blocked redirect to unsafe URL: ${redirectData.__redirect}`,
+              );
+            }
             window.location.assign(redirectData.__redirect);
             return;
           }

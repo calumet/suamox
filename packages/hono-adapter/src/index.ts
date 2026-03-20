@@ -24,6 +24,7 @@ export interface HonoAdapterOptions {
   onRequest?: (c: Context) => void | Promise<void>;
   onBeforeRender?: (ctx: RenderOptions) => RenderOptions | Promise<RenderOptions>;
   onAfterRender?: (result: RenderResult) => RenderResult | Promise<RenderResult>;
+  allowedHosts?: string[];
 }
 
 export interface CreateServerOptions extends HonoAdapterOptions {
@@ -73,9 +74,10 @@ const methodSupportsRequestBody = (method: string): boolean => {
   return normalizedMethod !== "GET" && normalizedMethod !== "HEAD";
 };
 
-const toFetchRequest = (req: IncomingMessage): Request => {
+const toFetchRequest = (req: IncomingMessage, allowedHosts?: string[]): Request => {
   const method = req.method ?? "GET";
-  const requestUrl = `http://${req.headers.host || "localhost"}${req.url || "/"}`;
+  const host = resolveHost(req.headers.host, allowedHosts);
+  const requestUrl = `http://${host}${req.url || "/"}`;
   const init: RequestInit & { duplex?: "half"; body?: unknown } = {
     method,
     headers: toFetchHeaders(req.headers),
@@ -98,6 +100,54 @@ const splitQuery = (value: string): { path: string; query: string } => {
     path: value.slice(0, queryIndex),
     query: value.slice(queryIndex),
   };
+};
+
+const isLocalhost = (hostname: string): boolean =>
+  hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+
+const extractHostname = (hostWithPort: string): string => {
+  if (hostWithPort.startsWith("[")) {
+    const closeBracket = hostWithPort.indexOf("]");
+    return closeBracket > 0 ? hostWithPort.slice(1, closeBracket) : hostWithPort;
+  }
+  return hostWithPort.split(":")[0] ?? hostWithPort;
+};
+
+const matchAllowedHost = (hostname: string, allowedHosts: string[]): boolean =>
+  allowedHosts.some((pattern) => {
+    if (pattern.startsWith("*.")) {
+      const domain = pattern.slice(2);
+      return hostname === domain || hostname.endsWith(`.${domain}`);
+    }
+    return hostname === pattern;
+  });
+
+/**
+ * Valida el Host header contra una lista de hosts permitidos.
+ * Si no hay lista o el host no es válido, retorna "localhost".
+ */
+const resolveHost = (hostHeader: string | undefined, allowedHosts?: string[]): string => {
+  const raw = hostHeader || "localhost";
+  if (raw.includes("/") || raw.includes("\\")) {
+    return "localhost";
+  }
+  const hostname = extractHostname(raw);
+  if (isLocalhost(hostname)) {
+    return raw;
+  }
+  if (!allowedHosts || allowedHosts.length === 0) {
+    return "localhost";
+  }
+  return matchAllowedHost(hostname, allowedHosts) ? raw : "localhost";
+};
+
+/**
+ * Extrae un origin seguro de un Request, validando contra allowedHosts.
+ */
+const resolveRequestOrigin = (request: Request, allowedHosts?: string[]): string => {
+  const url = new URL(request.url);
+  const validatedHost = resolveHost(url.host, allowedHosts);
+  return `${url.protocol}//${validatedHost}`;
 };
 
 const collectCssImportsFromEntryClient = async (
@@ -228,7 +278,7 @@ export async function createServer(options: CreateServerOptions): Promise<void> 
       // Intentar primero el middleware de Vite
       vite.middlewares(req, res, async () => {
         // Si Vite no lo maneja, usar Hono
-        const request = toFetchRequest(req);
+        const request = toFetchRequest(req, options.allowedHosts);
 
         const response = await app.fetch(request);
         res.writeHead(response.status, Object.fromEntries(response.headers.entries()));
@@ -507,6 +557,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     root = process.cwd(),
     staticDir = "dist/static",
     base = "/",
+    allowedHosts,
   } = options;
 
   const app = createHonoApp(options);
@@ -706,18 +757,22 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 
       const resolved = await entry.resolveRouteModule(match.route);
 
+      const safeOrigin = resolveRequestOrigin(c.req.raw, allowedHosts);
+      const originalUrl = new URL(c.req.url);
+      const safeUrl = new URL(`${safeOrigin}${originalUrl.pathname}${originalUrl.search}`);
+      const safeRequest = new Request(safeUrl, { headers: c.req.raw.headers });
+
       // Ejecutar middleware para obtener locals
       const { locals, response: mwResponse } = await runMiddleware(
         entry.onRequest,
-        c.req.raw,
-        new URL(c.req.url),
+        safeRequest,
+        safeUrl,
       );
       if (mwResponse) {
         return mwResponse;
       }
 
-      const originalUrl = new URL(c.req.url);
-      const loaderUrl = new URL(path, originalUrl.origin);
+      const loaderUrl = new URL(path, safeOrigin);
       originalUrl.searchParams.forEach((value, key) => {
         if (key !== "path" && key !== "stableLayouts") {
           loaderUrl.searchParams.append(key, value);
@@ -795,8 +850,12 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 
       const entry = await loadServerEntry();
 
-      // Ejecutar middleware de usuario
-      const { locals, response: mwResponse } = await runMiddleware(entry.onRequest, c.req.raw, url);
+      // Ejecutar middleware de usuario con origin validado
+      const safeOrigin = resolveRequestOrigin(c.req.raw, allowedHosts);
+      const safeUrl = new URL(`${safeOrigin}${url.pathname}${url.search}`);
+      const safeRequest = new Request(safeUrl, { headers: c.req.raw.headers });
+
+      const { locals, response: mwResponse } = await runMiddleware(entry.onRequest, safeRequest, safeUrl);
       if (mwResponse) {
         return mwResponse;
       }
@@ -806,7 +865,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       // Ejecutar hook onBeforeRender
       let renderContext: RenderOptions = {
         pathname: strippedPathname,
-        request: c.req.raw,
+        request: safeRequest,
         routes: entry.routes,
         locals,
       };

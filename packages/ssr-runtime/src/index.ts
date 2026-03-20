@@ -127,6 +127,34 @@ export function redirect(location: string, status: number = 302): never {
   throw new RedirectResponse(location, status);
 }
 
+/** Protocolos bloqueados para redirects (ref: CVE-2026-22029 en React Router) */
+const UNSAFE_REDIRECT_PROTOCOLS = new Set([
+  "javascript:",
+  "data:",
+  "blob:",
+  "file:",
+  "about:",
+  "chrome:",
+  "chrome-untrusted:",
+  "content:",
+  "devtools:",
+  "filesystem:",
+]);
+
+/**
+ * Valida que una URL de redirect no use protocolos peligrosos.
+ * Usar antes de redirigir con URLs que provienen de input del usuario.
+ */
+export function isSafeRedirectUrl(location: string, baseOrigin?: string): boolean {
+  const base = baseOrigin ?? (typeof window !== "undefined" ? window.location.origin : "http://localhost");
+  try {
+    const url = new URL(location, base);
+    return !UNSAFE_REDIRECT_PROTOCOLS.has(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
 export interface MatchResult {
   route: RouteRecord;
   params: Record<string, string>;
