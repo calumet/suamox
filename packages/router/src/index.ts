@@ -1,5 +1,6 @@
 import {
   createPageElement,
+  isSafeRedirectUrl,
   matchRoute,
   resolveRouteModule,
   stripBase,
@@ -70,7 +71,11 @@ const scrollToLocation = (hash: string): void => {
     window.scrollTo(0, 0);
     return;
   }
-  const target = document.querySelector(hash);
+  const id = hash.slice(1);
+  if (!id) {
+    return;
+  }
+  const target = document.getElementById(id);
   if (target instanceof HTMLElement) {
     target.scrollIntoView();
   }
@@ -204,6 +209,11 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
             "__redirect" in (json as Record<string, unknown>)
           ) {
             const redirectData = json as { __redirect: string };
+            if (!isSafeRedirectUrl(redirectData.__redirect)) {
+              throw new Error(
+                `[suamox-router] Blocked redirect to unsafe URL: ${redirectData.__redirect}`,
+              );
+            }
             window.location.assign(redirectData.__redirect);
             return;
           }

@@ -39,10 +39,13 @@ function isDynamicRoute(route: RouteRecord): boolean {
   return route.path.includes(":") || route.path.includes("*");
 }
 
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 function encodeCatchAll(value: string): string {
   return value
     .split("/")
     .filter(Boolean)
+    .filter((segment) => segment !== ".." && segment !== ".")
     .map((segment) => encodeURIComponent(segment))
     .join("/");
 }
@@ -68,7 +71,7 @@ function resolvePrerenderPath(route: RouteRecord, params: Record<string, string>
         throw new Error(`Missing param "${paramName}" for route ${route.path}`);
       }
       basePath = basePath.replace(
-        new RegExp(`:${paramName}(?=/|$)`, "g"),
+        new RegExp(`:${escapeRegExp(paramName)}(?=/|$)`, "g"),
         encodeURIComponent(paramValue),
       );
     }
@@ -87,7 +90,10 @@ function resolvePrerenderPath(route: RouteRecord, params: Record<string, string>
       throw new Error(`Missing param "${paramName}" for route ${route.path}`);
     }
     const encoded = encodeURIComponent(String(rawValue));
-    resolvedPath = resolvedPath.replace(new RegExp(`:${paramName}(?=/|$)`, "g"), encoded);
+    resolvedPath = resolvedPath.replace(
+      new RegExp(`:${escapeRegExp(paramName)}(?=/|$)`, "g"),
+      encoded,
+    );
   }
 
   return resolvedPath;
@@ -207,6 +213,11 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
     });
 
     const { dir, filePath } = getOutputPath(normalizedPath);
+    const relToOut = relative(outDir, filePath);
+    if (relToOut.startsWith("..") || isAbsolute(relToOut)) {
+      console.warn(`[suamox] Skipping path traversal attempt: ${pathname}`);
+      return;
+    }
     await mkdir(dir, { recursive: true });
     await writeFile(filePath, html);
   };

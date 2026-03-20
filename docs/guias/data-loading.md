@@ -281,3 +281,53 @@ export default function PostPage() {
 
 Si un loader lanza error durante SSR, la respuesta es 500.
 Recomendación: maneja errores en el loader y devuelve estados/control de UI desde `data` cuando sea posible.
+
+## Seguridad
+
+### No retornes datos sensibles desde loaders
+
+Los datos retornados por `loader()` se serializan en `window.__INITIAL_DATA__` durante SSR y se envían como JSON en navegación SPA. Esto significa que **cualquier script en la página** (third-party, extensiones, etc.) puede leerlos.
+
+No retornes desde un loader:
+
+- Tokens de sesión o API keys
+- Secrets del servidor
+- Datos personales que no deban ser visibles en el HTML
+
+Si necesitas datos sensibles en el servidor, úsalos dentro del loader sin retornarlos:
+
+```tsx
+export async function loader(ctx: LoaderContext) {
+  // OK: usar el token internamente
+  const data = await fetchAPI("/posts", { token: process.env.API_SECRET });
+  // Solo retornar lo que el cliente necesita
+  return { posts: data.posts };
+}
+```
+
+### Valida URLs de redirect que vengan del usuario
+
+Si construyes un redirect usando input del usuario (query params, form data, etc.), valida la URL antes de redirigir. Usa `isSafeRedirectUrl()` para bloquear protocolos peligrosos como `javascript:` o `data:`:
+
+```tsx
+import { redirect, isSafeRedirectUrl, type LoaderContext } from "@calumet/suamox";
+
+export async function loader(ctx: LoaderContext) {
+  const returnTo = ctx.query.get("returnTo");
+  if (returnTo && !isSafeRedirectUrl(returnTo, ctx.url.origin)) {
+    redirect("/");
+  }
+  redirect(returnTo || "/");
+}
+```
+
+En código cliente aplica la misma validación:
+
+```tsx
+import { isSafeRedirectUrl } from "@calumet/suamox";
+
+const next = new URLSearchParams(window.location.search).get("next");
+if (next && isSafeRedirectUrl(next)) {
+  window.location.href = next;
+}
+```

@@ -38,14 +38,16 @@ export function generateRoutesModule(
     const importPath = `${rawImportPath}${clientQuery}`;
     const layoutLoadCalls: string[] = [];
 
-    declarations.push(`const ${loadPageName} = () => import('${importPath}');`);
+    declarations.push(`const ${loadPageName} = () => import(${JSON.stringify(importPath)});`);
 
     if (route.layouts) {
       route.layouts.forEach((layoutPath, layoutIndex) => {
         const layoutLoaderName = `loadLayout${index}_${layoutIndex}`;
         const layoutImportPath = `${layoutPath.replace(/\\/g, "/")}${clientQuery}`;
 
-        declarations.push(`const ${layoutLoaderName} = () => import('${layoutImportPath}');`);
+        declarations.push(
+          `const ${layoutLoaderName} = () => import(${JSON.stringify(layoutImportPath)});`,
+        );
         layoutLoadCalls.push(`${layoutLoaderName}()`);
       });
     }

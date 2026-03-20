@@ -57,9 +57,18 @@ const copyTemplate = async (srcDir: string, destDir: string, name: string): Prom
 
 const main = async () => {
   const args = process.argv.slice(2);
-  const name = args[0];
-  if (!name) {
+  const rawName = args[0];
+  if (!rawName) {
     console.log(usage.trim());
+    process.exit(1);
+  }
+
+  const name = rawName.replace(/[^a-zA-Z0-9\-_@]/g, "");
+  if (name !== rawName) {
+    console.log(`[create-suamox] Project name sanitized to: ${name}`);
+  }
+  if (!name) {
+    console.error("[create-suamox] Invalid project name");
     process.exit(1);
   }
 
