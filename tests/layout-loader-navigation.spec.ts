@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test.describe("useLoaderData in layout during client-side navigation", () => {
   test("layout reads loader data on initial SSR load", async ({ page }) => {
     await page.goto("/es/noticias");
-    await expect(page.getByTestId("lang-header")).toContainText("Info: Site Info");
+    await expect(page.getByTestId("lang-header")).toContainText("Info: Suamox Basic Example");
     await expect(page.getByTestId("lang-footer")).toContainText("Footer: Site Footer");
     await expect(page.locator("h1")).toHaveText("Noticias");
     await expect(page.getByTestId("noticias-list")).toBeVisible();
@@ -11,7 +11,7 @@ test.describe("useLoaderData in layout during client-side navigation", () => {
 
   test("layout useLoaderData works after SPA navigation to sibling page", async ({ page }) => {
     await page.goto("/es/noticias");
-    await expect(page.getByTestId("lang-header")).toContainText("Info: Site Info");
+    await expect(page.getByTestId("lang-header")).toContainText("Info: Suamox Basic Example");
     await expect(page.locator("h1")).toHaveText("Noticias");
 
     // SPA navigate to noticia with query param — this is the crash scenario
@@ -20,7 +20,7 @@ test.describe("useLoaderData in layout during client-side navigation", () => {
     await expect(page.getByTestId("noticia-id")).toHaveText("ID: 1");
 
     // Layout components must still have loader data
-    await expect(page.getByTestId("lang-header")).toContainText("Info: Site Info");
+    await expect(page.getByTestId("lang-header")).toContainText("Info: Suamox Basic Example");
     await expect(page.getByTestId("lang-footer")).toContainText("Footer: Site Footer");
   });
 
@@ -31,12 +31,12 @@ test.describe("useLoaderData in layout during client-side navigation", () => {
     // Navigate to noticia 1
     await page.click('a[href="/es/noticias/noticia?id=1"]');
     await expect(page.getByTestId("noticia-title")).toHaveText("Noticia 1");
-    await expect(page.getByTestId("lang-header")).toContainText("Info: Site Info");
+    await expect(page.getByTestId("lang-header")).toContainText("Info: Suamox Basic Example");
 
     // Navigate to noticia 2
     await page.click('a[href="/es/noticias/noticia?id=2"]');
     await expect(page.getByTestId("noticia-title")).toHaveText("Noticia 2");
-    await expect(page.getByTestId("lang-header")).toContainText("Info: Site Info");
+    await expect(page.getByTestId("lang-header")).toContainText("Info: Suamox Basic Example");
     await expect(page.getByTestId("lang-footer")).toContainText("Footer: Site Footer");
   });
 
@@ -50,7 +50,7 @@ test.describe("useLoaderData in layout during client-side navigation", () => {
     // Navigate back to list
     await page.click('a[href="/es/noticias"]');
     await expect(page.locator("h1")).toHaveText("Noticias");
-    await expect(page.getByTestId("lang-header")).toContainText("Info: Site Info");
+    await expect(page.getByTestId("lang-header")).toContainText("Info: Suamox Basic Example");
     await expect(page.getByTestId("lang-footer")).toContainText("Footer: Site Footer");
   });
 
@@ -58,7 +58,7 @@ test.describe("useLoaderData in layout during client-side navigation", () => {
     await page.goto("/es/noticias/noticia?id=1");
     await expect(page.getByTestId("noticia-title")).toHaveText("Noticia 1");
     await expect(page.getByTestId("layout-info-from-page")).toContainText(
-      "Layout info from page: Site Info",
+      "Layout info from page: Suamox Basic Example",
     );
   });
 
@@ -69,7 +69,7 @@ test.describe("useLoaderData in layout during client-side navigation", () => {
     await page.click('a[href="/es/noticias/noticia?id=1"]');
     await expect(page.getByTestId("noticia-title")).toHaveText("Noticia 1");
     await expect(page.getByTestId("layout-info-from-page")).toContainText(
-      "Layout info from page: Site Info",
+      "Layout info from page: Suamox Basic Example",
     );
   });
 
@@ -97,7 +97,7 @@ test.describe("useLoaderData in layout during client-side navigation", () => {
 
     await page.goBack();
     await expect(page.locator("h1")).toHaveText("Noticias");
-    await expect(page.getByTestId("lang-header")).toContainText("Info: Site Info");
+    await expect(page.getByTestId("lang-header")).toContainText("Info: Suamox Basic Example");
     await expect(page.getByTestId("lang-footer")).toContainText("Footer: Site Footer");
   });
 });

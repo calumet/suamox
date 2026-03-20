@@ -5,26 +5,32 @@ test.describe("SPA navigation", () => {
     await page.goto("/time");
     await expect(page.locator("h1")).toContainText("Server Time");
 
-    // Click a link to navigate via SPA
-    await page.click('a[href="/dashboard"]');
+    // Set marker to detect full reload
+    await page.evaluate(() => {
+      // eslint-disable-next-line
+      (window as any).__SPA_MARKER__ = true;
+    });
+
+    // Click nav link to navigate via SPA
+    await page.click('nav a[href="/dashboard"]');
     await expect(page.locator("h1")).toContainText("Dashboard");
 
-    // The layout should persist (SPA, no full reload)
+    // Marker should survive (SPA, no full reload)
+    const marker = await page.evaluate(() => {
+      // eslint-disable-next-line
+      return (window as any).__SPA_MARKER__;
+    });
+    expect(marker).toBe(true);
     await expect(page.locator("header")).toContainText("Suamox");
   });
 
   test("fetches loader data from /__data during SPA navigation", async ({ page }) => {
-    // Visit /time first to warm up module cache, then navigate away
-    await page.goto("/time");
-    await expect(page.locator("h1")).toContainText("Server Time");
-    await page.click('a[href="/dashboard"]');
+    await page.goto("/dashboard");
     await expect(page.locator("h1")).toContainText("Dashboard");
 
-    // Navigate back to /time via SPA — module is cached, /__data should fire
-    const [request] = await Promise.all([
-      page.waitForRequest((req) => req.url().includes("/__data")),
-      page.click('a[href="/time"]'),
-    ]);
+    const requestPromise = page.waitForRequest((req) => req.url().includes("/__data"));
+    await page.click('nav a[href="/time"]');
+    const request = await requestPromise;
     await expect(page.locator("h1")).toContainText("Server Time");
     expect(request.url()).toContain("/__data");
     expect(decodeURIComponent(request.url())).toContain("path=/time");
@@ -34,15 +40,11 @@ test.describe("SPA navigation", () => {
     await page.goto("/time");
     await expect(page.getByTestId("time")).toBeVisible();
 
-    // Navigate to another page
-    await page.click('a[href="/dashboard"]');
-    await expect(page.locator("h1")).toContainText("Dashboard");
+    await page.click('nav a[href="/counter"]');
+    await expect(page.locator("h1")).toContainText("Counter");
 
-    // Go back
     await page.goBack();
     await expect(page.locator("h1")).toContainText("Server Time");
-
-    // Loader data should be present (re-fetched from /__data)
     await expect(page.getByTestId("time")).toBeVisible();
     await expect(page.getByTestId("time")).not.toBeEmpty();
   });
@@ -51,15 +53,11 @@ test.describe("SPA navigation", () => {
     await page.goto("/time");
     await expect(page.locator("h1")).toContainText("Server Time");
 
-    // Navigate to a page that shows 404 content
     await page.goto("/this-does-not-exist");
     await expect(page.locator("h1")).toContainText("404");
 
-    // Go back to the SSR page
     await page.goBack();
     await expect(page.locator("h1")).toContainText("Server Time");
-
-    // Verify loader data is present and hooks work
     await expect(page.getByTestId("time")).toBeVisible();
     await expect(page.getByTestId("time")).not.toBeEmpty();
   });

@@ -1,7 +1,7 @@
 import { parse } from "acorn";
 import { describe, it, expect } from "vitest";
 
-import { generateRoutesModule } from "../src/codegen";
+import { generateClientProxy, generateRoutesModule } from "../src/codegen";
 import type { RouteRecord } from "../src/types";
 
 function assertValidModule(code: string): void {
@@ -33,7 +33,9 @@ describe("generateRoutesModule", () => {
 
     const code = generateRoutesModule(routes);
 
-    expect(code).toContain("const loadPage0 = () => import('/project/src/pages/about.tsx');");
+    expect(code).toContain(
+      "const loadPage0 = () => import('/project/src/pages/about.tsx?__suamox-client-route');",
+    );
     expect(code).toContain("const loadRoute0 = async () => {");
     expect(code).toContain('path: "/about"');
     expect(code).toContain("load: loadRoute0");
@@ -184,8 +186,12 @@ describe("generateRoutesModule", () => {
 
     const code = generateRoutesModule(routes);
 
-    expect(code).toContain("const loadLayout0_0 = () => import('/pages/layout.tsx');");
-    expect(code).toContain("const loadLayout0_1 = () => import('/pages/blog/layout.tsx');");
+    expect(code).toContain(
+      "const loadLayout0_0 = () => import('/pages/layout.tsx?__suamox-client-route');",
+    );
+    expect(code).toContain(
+      "const loadLayout0_1 = () => import('/pages/blog/layout.tsx?__suamox-client-route');",
+    );
     expect(code).toContain("Promise.all([loadLayout0_0(), loadLayout0_1()])");
     expect(code).toContain("layouts: _layoutModules.map((mod) => mod.default)");
   });
@@ -206,7 +212,7 @@ describe("generateRoutesModule", () => {
     const code = generateRoutesModule(routes);
 
     expect(code).toContain(
-      "const loadPage0 = () => import('/home/user/project/src/pages/about.tsx');",
+      "const loadPage0 = () => import('/home/user/project/src/pages/about.tsx?__suamox-client-route');",
     );
   });
 
@@ -492,17 +498,20 @@ describe("generateRoutesModule", () => {
 
   it("exports onRequest from middleware in server target only", () => {
     const routes: RouteRecord[] = [];
+    const mwPath = "/project/src/middleware.ts";
 
     const serverCode = generateRoutesModule(routes, {
       target: "server",
       hasMiddleware: true,
+      middlewarePath: mwPath,
     });
     const clientCode = generateRoutesModule(routes, {
       target: "client",
       hasMiddleware: true,
+      middlewarePath: mwPath,
     });
 
-    expect(serverCode).toContain('export { onRequest } from "../../src/middleware"');
+    expect(serverCode).toContain(`export { onRequest } from "${mwPath}"`);
     expect(clientCode).not.toContain("onRequest");
     expect(clientCode).not.toContain("middleware");
   });
@@ -517,5 +526,62 @@ describe("generateRoutesModule", () => {
 
     expect(code).not.toContain("onRequest");
     expect(code).not.toContain("middleware");
+  });
+});
+
+describe("generateClientProxy", () => {
+  it("returns null when there are no server-only exports", () => {
+    const result = generateClientProxy("/pages/index.tsx", ["default"]);
+    expect(result).toBeNull();
+  });
+
+  it("returns null for only client-safe exports", () => {
+    const result = generateClientProxy("/pages/index.tsx", ["default", "prerender", "csr"]);
+    expect(result).toBeNull();
+  });
+
+  it("generates proxy that strips loader export", () => {
+    const result = generateClientProxy("/pages/index.tsx", ["default", "loader"]);
+    expect(result).not.toBeNull();
+    expect(result).toContain("default");
+    expect(result).not.toContain("loader");
+    expect(result).toContain('from "/pages/index.tsx"');
+  });
+
+  it("generates proxy that strips getStaticPaths export", () => {
+    const result = generateClientProxy("/pages/blog.tsx", [
+      "default",
+      "prerender",
+      "getStaticPaths",
+    ]);
+    expect(result).not.toBeNull();
+    expect(result).toContain("default");
+    expect(result).toContain("prerender");
+    expect(result).not.toContain("getStaticPaths");
+  });
+
+  it("generates proxy that strips both loader and getStaticPaths", () => {
+    const result = generateClientProxy("/pages/blog.tsx", [
+      "default",
+      "loader",
+      "getStaticPaths",
+      "prerender",
+    ]);
+    expect(result).not.toBeNull();
+    expect(result).toContain("default");
+    expect(result).toContain("prerender");
+    expect(result).not.toContain("loader");
+    expect(result).not.toContain("getStaticPaths");
+  });
+
+  it("returns empty export when all exports are server-only", () => {
+    const result = generateClientProxy("/pages/api.tsx", ["loader"]);
+    expect(result).toBe("export {};");
+  });
+
+  it("generates valid JS", () => {
+    const result = generateClientProxy("/pages/index.tsx", ["default", "loader", "prerender"]);
+    expect(result).not.toBeNull();
+    expect(() => parse(result!, { ecmaVersion: "latest", sourceType: "module" })).not.toThrow();
   });
 });

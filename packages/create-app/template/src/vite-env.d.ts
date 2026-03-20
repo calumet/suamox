@@ -11,5 +11,12 @@ declare module "virtual:pages/server" {
   export const matchRoute: typeof import("@calumet/suamox").matchRoute;
   export const resolveRouteModule: typeof import("@calumet/suamox").resolveRouteModule;
   export const RedirectResponse: typeof import("@calumet/suamox").RedirectResponse;
+  export const base: string;
+  export const onRequest:
+    | ((
+        context: import("@calumet/suamox").MiddlewareContext,
+        next: import("@calumet/suamox").MiddlewareNext,
+      ) => Promise<Response>)
+    | undefined;
   export default routes;
 }

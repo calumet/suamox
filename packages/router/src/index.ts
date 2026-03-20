@@ -264,7 +264,29 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     }
   };
 
-  await renderLocation(new URL(window.location.href), { scroll: false, useInitialData: true });
+  const navigate = async (to: string, options?: NavigateOptions): Promise<void> => {
+    const url = new URL(to, origin);
+
+    if (url.origin !== window.location.origin) {
+      window.location.assign(url.toString());
+      return;
+    }
+
+    const match = resolveMatch(routes, stripBase(url.pathname, base));
+    if (!match || match.route.prerender) {
+      window.location.assign(url.toString());
+      return;
+    }
+
+    const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+    if (options?.replace) {
+      window.history.replaceState({}, "", nextUrl);
+    } else {
+      window.history.pushState({}, "", nextUrl);
+    }
+
+    await renderLocation(url, { scroll: options?.scroll ?? true });
+  };
 
   const prefetchRoute = (url: URL): void => {
     if (url.origin !== window.location.origin) {
@@ -352,6 +374,8 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     void renderLocation(new URL(window.location.href), { scroll: false });
   };
 
+  // Registrar event listeners antes de la hidratacion para que los clicks
+  // se intercepten mientras los modulos cargan (especialmente en dev)
   document.addEventListener("click", onClick);
   window.addEventListener("popstate", onPopState);
   if (prefetch) {
@@ -360,29 +384,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     document.addEventListener("touchstart", onPrefetch, { passive: true, capture: true });
   }
 
-  const navigate = async (to: string, options?: NavigateOptions): Promise<void> => {
-    const url = new URL(to, origin);
-
-    if (url.origin !== window.location.origin) {
-      window.location.assign(url.toString());
-      return;
-    }
-
-    const match = resolveMatch(routes, stripBase(url.pathname, base));
-    if (!match || match.route.prerender) {
-      window.location.assign(url.toString());
-      return;
-    }
-
-    const nextUrl = `${url.pathname}${url.search}${url.hash}`;
-    if (options?.replace) {
-      window.history.replaceState({}, "", nextUrl);
-    } else {
-      window.history.pushState({}, "", nextUrl);
-    }
-
-    await renderLocation(url, { scroll: options?.scroll ?? true });
-  };
+  await renderLocation(new URL(window.location.href), { scroll: false, useInitialData: true });
 
   return {
     navigate,

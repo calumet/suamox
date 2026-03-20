@@ -77,6 +77,73 @@ Para páginas SSR (sin `prerender = true`), el runtime genera HTML completo e in
 
 Las páginas con `prerender = true` (SSG) no incluyen scripts de hidratación ni `__INITIAL_DATA__`. Solo se sirve el HTML estático con sus estilos CSS.
 
+## Separacion de codigo servidor/cliente
+
+Durante el build de produccion, Suamox genera dos bundles: uno para el servidor y otro para el cliente. Para evitar que codigo server-only (loaders, getStaticPaths, dependencias de base de datos, API keys) termine en el bundle del cliente, el plugin aplica dos mecanismos:
+
+### Proxy automatico de paginas
+
+Los archivos dentro de `src/pages/` que exportan `loader` o `getStaticPaths` son reemplazados automaticamente en el build del cliente por un modulo proxy que solo re-exporta los exports seguros (`default`, `prerender`, `csr`). Esto garantiza que el loader y sus imports no entran al grafo de dependencias del cliente.
+
+```ts
+// Archivo original: src/pages/blog/[slug].tsx
+export async function loader({ params }) {
+  const post = await db.post.findUnique({ where: { slug: params.slug } });
+  return { post };
+}
+
+export default function BlogPost() {
+  const { post } = useLoaderData();
+  return <h1>{post.title}</h1>;
+}
+
+// Proxy generado automaticamente para el bundle del cliente:
+// export { default } from "/src/pages/blog/[slug].tsx";
+// loader y db nunca entran al bundle
+```
+
+### Convencion `.server.ts`
+
+Los archivos nombrados `*.server.ts` (o `.server.tsx`, `.server.js`, `.server.jsx`) son excluidos del bundle del cliente. Si codigo del cliente intenta importar un archivo `.server.ts`, el build falla con un error explicito.
+
+```
+src/
+  lib/
+    db.server.ts      # solo disponible en el servidor
+    auth.server.ts    # solo disponible en el servidor
+    utils.ts          # disponible en ambos bundles
+  pages/
+    index.tsx
+```
+
+```ts
+// src/pages/index.tsx
+import { getUser } from "../lib/auth.server"; // OK en el loader (server-only)
+
+export async function loader() {
+  const user = await getUser();
+  return { user };
+}
+
+export default function Home() {
+  // getUser nunca llega al cliente gracias al proxy + .server.ts
+  const { user } = useLoaderData();
+  return <p>Hola, {user.name}</p>;
+}
+```
+
+Si por error un componente del cliente importa directamente un `.server.ts`:
+
+```ts
+// Esto falla en build con un error claro:
+import { getUser } from "../lib/auth.server";
+```
+
+```
+[suamox:pages] Cannot import server-only file "auth.server.ts" from client code.
+Files matching *.server.{ts,tsx,js,jsx} are excluded from the client bundle.
+```
+
 ## Notas de desarrollo
 
 ### FOUC en desarrollo

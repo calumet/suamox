@@ -130,6 +130,7 @@ export interface ScanResult {
   routes: RouteRecord[];
   errors: string[];
   hasMiddleware: boolean;
+  middlewarePath?: string;
 }
 
 /**
@@ -224,10 +225,13 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
   // Detectar middleware global (src/middleware.ts o src/middleware/index.ts)
   const srcDir = resolve(absolutePagesDir, "..");
   let hasMiddleware = false;
+  let middlewarePath: string | undefined;
   for (const ext of extensions) {
+    const candidate = resolve(srcDir, `middleware${ext}`);
     try {
-      await access(resolve(srcDir, `middleware${ext}`));
+      await access(candidate);
       hasMiddleware = true;
+      middlewarePath = candidate.replace(/\\/g, "/");
       break;
     } catch {
       // no existe, continuar
@@ -235,9 +239,11 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
   }
   if (!hasMiddleware) {
     for (const ext of extensions) {
+      const candidate = resolve(srcDir, "middleware", `index${ext}`);
       try {
-        await access(resolve(srcDir, "middleware", `index${ext}`));
+        await access(candidate);
         hasMiddleware = true;
+        middlewarePath = candidate.replace(/\\/g, "/");
         break;
       } catch {
         // no existe, continuar
@@ -249,5 +255,6 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     routes: sortedRoutes,
     errors,
     hasMiddleware,
+    middlewarePath,
   };
 }
