@@ -125,7 +125,7 @@ importers:
         specifier: ^19.0.3
         version: 19.2.3(@types/react@19.2.8)
       '@vitest/coverage-v8':
-        specifier: ^2.1.8
+        specifier: ^2.1.9
         version: 2.1.9(vitest@2.1.9(@types/node@22.19.7)(happy-dom@20.3.3))
       happy-dom:
         specifier: ^20.3.3
@@ -143,7 +143,7 @@ importers:
         specifier: ^5.7.3
         version: 5.9.3
       vitest:
-        specifier: ^2.1.8
+        specifier: ^2.1.9
         version: 2.1.9(@types/node@22.19.7)(happy-dom@20.3.3)
 
   packages/hono-adapter:
@@ -162,7 +162,7 @@ importers:
         specifier: ^22.10.5
         version: 22.19.7
       '@vitest/coverage-v8':
-        specifier: ^2.1.8
+        specifier: ^2.1.9
         version: 2.1.9(vitest@2.1.9(@types/node@22.19.7)(happy-dom@20.3.3))
       hono:
         specifier: ^4.6.17
@@ -177,7 +177,7 @@ importers:
         specifier: ^6.0.7
         version: 6.4.1(@types/node@22.19.7)(tsx@4.21.0)
       vitest:
-        specifier: ^2.1.8
+        specifier: ^2.1.9
         version: 2.1.9(@types/node@22.19.7)(happy-dom@20.3.3)
 
   packages/router:
@@ -227,7 +227,7 @@ importers:
         specifier: ^19.0.3
         version: 19.2.3(@types/react@19.2.8)
       '@vitest/coverage-v8':
-        specifier: ^2.1.8
+        specifier: ^2.1.9
         version: 2.1.9(vitest@2.1.9(@types/node@22.19.7)(happy-dom@20.3.3))
       react:
         specifier: ^19.0.0
@@ -242,7 +242,7 @@ importers:
         specifier: ^5.7.3
         version: 5.9.3
       vitest:
-        specifier: ^2.1.8
+        specifier: ^2.1.9
         version: 2.1.9(@types/node@22.19.7)(happy-dom@20.3.3)
 
   packages/vite-plugin-pages:
@@ -264,7 +264,7 @@ importers:
         specifier: ^22.10.5
         version: 22.19.7
       '@vitest/coverage-v8':
-        specifier: ^2.1.8
+        specifier: ^2.1.9
         version: 2.1.9(vitest@2.1.9(@types/node@22.19.7)(happy-dom@20.3.3))
       acorn:
         specifier: ^8.16.0
@@ -279,7 +279,7 @@ importers:
         specifier: ^6.0.7
         version: 6.4.1(@types/node@22.19.7)(tsx@4.21.0)
       vitest:
-        specifier: ^2.1.8
+        specifier: ^2.1.9
         version: 2.1.9(@types/node@22.19.7)(happy-dom@20.3.3)
 
 packages:
