@@ -44,6 +44,26 @@ export default function BlogPage({ data }) {
 }
 ```
 
+## Acceso a cookies y headers
+
+El `request` del loader es el request original del navegador, incluyendo headers y cookies:
+
+```tsx
+export async function loader({ request }) {
+  const cookies = request.headers.get("cookie") ?? "";
+  const token = cookies.split(";").find((c) => c.trim().startsWith("session="));
+
+  if (!token) {
+    return { authenticated: false };
+  }
+
+  const user = await validateSession(token.split("=")[1]);
+  return { authenticated: true, user };
+}
+```
+
+> **Nota:** `request` es de solo lectura. Para compartir datos entre middleware y loaders, usa `locals` en vez de modificar el request.
+
 ## `getStaticPaths()` para rutas dinámicas en SSG
 
 En rutas dinámicas con `prerender = true`, debes exportar `getStaticPaths()`:

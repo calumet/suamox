@@ -398,7 +398,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       });
 
       const loaderContext: LoaderContext = {
-        request: new Request(loaderUrl),
+        request: c.req.raw,
         url: loaderUrl,
         params: match.params,
         query: loaderUrl.searchParams,
@@ -816,7 +816,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       });
 
       const loaderContext: LoaderContext = {
-        request: new Request(loaderUrl),
+        request: c.req.raw,
         url: loaderUrl,
         params: match.params,
         query: loaderUrl.searchParams,

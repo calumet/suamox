@@ -459,6 +459,34 @@ describe("createDevHandler /__data endpoint", () => {
     expect(json).toEqual({ error: "Loader error" });
   });
 
+  it("passes original request with headers and cookies to loader", async () => {
+    let capturedRequest: Request | undefined;
+    const route = {
+      path: "/protected",
+      params: [],
+      loader: vi.fn((ctx: { request: Request }) => {
+        capturedRequest = ctx.request;
+        return { user: "test" };
+      }),
+    };
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const vite = createViteMock([], route);
+    const app = createDevHandler({ vite });
+
+    await app.request("http://localhost/__data?path=/protected", {
+      headers: {
+        cookie: "session=abc123; token=xyz",
+        authorization: "Bearer mytoken",
+      },
+    });
+
+    expect(capturedRequest).toBeDefined();
+    expect(capturedRequest!.headers.get("cookie")).toBe("session=abc123; token=xyz");
+    expect(capturedRequest!.headers.get("authorization")).toBe("Bearer mytoken");
+  });
+
   it("loads routes from virtual:pages/server module", async () => {
     const route = { path: "/about", params: [] };
     mocks.matchRoute.mockReturnValue({ route, params: {} });
