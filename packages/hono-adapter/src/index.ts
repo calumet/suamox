@@ -337,14 +337,10 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
     vite.ssrLoadModule("@calumet/suamox") as Promise<typeof import("@calumet/suamox")>;
 
   const loadMiddleware = async (): Promise<MiddlewareFunction | undefined> => {
-    try {
-      const mod = (await vite.ssrLoadModule("src/middleware")) as {
-        onRequest?: MiddlewareFunction;
-      };
-      return mod.onRequest;
-    } catch {
-      return undefined;
-    }
+    const mod = (await vite.ssrLoadModule("virtual:pages/server")) as {
+      onRequest?: MiddlewareFunction;
+    };
+    return mod.onRequest;
   };
 
   // Endpoint de datos para client-side navigation

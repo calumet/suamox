@@ -43,11 +43,11 @@ const createSsrLoadModule = (routes: unknown[], middlewareFn?: unknown) =>
     if (id === "@calumet/suamox") {
       return Promise.resolve(runtimeModule);
     }
-    if (id === "src/middleware") {
-      if (middlewareFn) {
-        return Promise.resolve({ onRequest: middlewareFn });
-      }
-      return Promise.reject(new Error("no middleware"));
+    if (id === "virtual:pages/server") {
+      return Promise.resolve({
+        routes,
+        ...(middlewareFn ? { onRequest: middlewareFn } : {}),
+      });
     }
     return Promise.resolve({ routes });
   });

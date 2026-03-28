@@ -2,14 +2,20 @@ import { useLoaderData } from "@calumet/suamox";
 import type { LoaderContext } from "@calumet/suamox";
 import type { ReactNode } from "react";
 
-export function loader({ params, locals }: LoaderContext) {
+export function loader({ params, locals, request }: LoaderContext) {
   const siteName = (locals.siteName as string) ?? "Default Site";
-  return { info: siteName, footer: "Site Footer", lang: params.lang };
+  const cookie = request.headers.get("cookie") ?? "none";
+  return { info: siteName, footer: "Site Footer", lang: params.lang, cookie };
 }
 
 function Header() {
-  const { info } = useLoaderData<{ info: string }>();
-  return <header data-testid="lang-header">Info: {info}</header>;
+  const { info, cookie } = useLoaderData<{ info: string; cookie: string }>();
+  return (
+    <header data-testid="lang-header">
+      Info: {info}
+      <span data-testid="cookie-value">{cookie}</span>
+    </header>
+  );
 }
 
 function Footer() {
