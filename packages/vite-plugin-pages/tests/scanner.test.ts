@@ -197,3 +197,109 @@ describe("scanRoutes middleware detection", () => {
     expect(result.hasMiddleware).toBe(false);
   });
 });
+
+describe("API route scanning", () => {
+  it("detects API routes in src/api/ directory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+    const apiDir = join(root, "src", "api");
+
+    await writeFileWithDirs(
+      join(pagesDir, "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+    await writeFileWithDirs(
+      join(apiDir, "health.ts"),
+      "export function GET() { return new Response('ok'); }",
+    );
+
+    const result = await scanRoutes({
+      pagesDir: "src/pages",
+      extensions: [".tsx", ".ts"],
+      root,
+    });
+
+    expect(result.apiRoutes).toHaveLength(1);
+    expect(result.apiRoutes[0].type).toBe("api");
+    expect(normalizePath(result.apiRoutes[0].filePath)).toBe(
+      normalizePath(join(apiDir, "health.ts")),
+    );
+  });
+
+  it("detects HTTP methods (GET, POST, DELETE) from exports", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+    const apiDir = join(root, "src", "api");
+
+    await writeFileWithDirs(
+      join(pagesDir, "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+    await writeFileWithDirs(
+      join(apiDir, "users.ts"),
+      `export function GET() { return new Response('list'); }
+export function POST() { return new Response('create'); }
+export function DELETE() { return new Response('remove'); }`,
+    );
+
+    const result = await scanRoutes({
+      pagesDir: "src/pages",
+      extensions: [".tsx", ".ts"],
+      root,
+    });
+
+    const usersRoute = result.apiRoutes.find((r) => r.path === "/api/users");
+    expect(usersRoute).toBeDefined();
+    expect(usersRoute!.httpMethods).toContain("GET");
+    expect(usersRoute!.httpMethods).toContain("POST");
+    expect(usersRoute!.httpMethods).toContain("DELETE");
+    expect(usersRoute!.httpMethods).not.toContain("PUT");
+  });
+
+  it("prefixes API routes with /api", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+    const apiDir = join(root, "src", "api");
+
+    await writeFileWithDirs(
+      join(pagesDir, "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+    await writeFileWithDirs(
+      join(apiDir, "index.ts"),
+      "export function GET() { return new Response('root'); }",
+    );
+    await writeFileWithDirs(
+      join(apiDir, "items.ts"),
+      "export function GET() { return new Response('items'); }",
+    );
+
+    const result = await scanRoutes({
+      pagesDir: "src/pages",
+      extensions: [".tsx", ".ts"],
+      root,
+    });
+
+    const paths = result.apiRoutes.map((r) => r.path);
+    expect(paths).toContain("/api");
+    expect(paths).toContain("/api/items");
+  });
+
+  it("returns empty apiRoutes when src/api/ does not exist", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+
+    await writeFileWithDirs(
+      join(pagesDir, "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+
+    const result = await scanRoutes({
+      pagesDir: "src/pages",
+      extensions: [".tsx", ".ts"],
+      root,
+    });
+
+    expect(result.apiRoutes).toEqual([]);
+  });
+});

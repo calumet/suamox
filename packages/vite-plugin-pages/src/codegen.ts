@@ -1,4 +1,4 @@
-import type { RouteRecord } from "./types.js";
+import type { ApiRouteRecord, RouteRecord } from "./types.js";
 
 export type DefaultPageMode = "ssr" | "ssg" | "csr";
 
@@ -8,6 +8,7 @@ export interface GenerateRoutesOptions {
   target?: "client" | "server";
   hasMiddleware?: boolean;
   middlewarePath?: string;
+  apiRoutes?: ApiRouteRecord[];
 }
 
 /**
@@ -24,6 +25,7 @@ export function generateRoutesModule(
     hasMiddleware = false,
     middlewarePath,
   } = options;
+  const apiRoutes: ApiRouteRecord[] = options.apiRoutes ?? [];
   const defaultPrerender = defaultMode === "ssg";
   const defaultCsr = defaultMode === "csr";
   const declarations: string[] = [];
@@ -134,6 +136,33 @@ export function generateRoutesModule(
           : "")
       : "";
 
+  // API routes: solo en el modulo del servidor
+  let apiRoutesCode = "";
+  if (target === "server" && apiRoutes && apiRoutes.length > 0) {
+    const apiDeclarations: string[] = [];
+    const apiRouteObjects: string[] = [];
+
+    apiRoutes.forEach((route, index) => {
+      const importPath = route.filePath.replace(/\\/g, "/");
+      apiDeclarations.push(`import * as _api${index} from ${JSON.stringify(importPath)};`);
+
+      const methodsEntries = route.httpMethods.map((m) => `${m}: _api${index}.${m}`).join(", ");
+
+      apiRouteObjects.push(`  {
+    path: ${JSON.stringify(route.path)},
+    type: "api",
+    filePath: ${JSON.stringify(route.filePath)},
+    methods: { ${methodsEntries} },
+    params: ${JSON.stringify(route.params)},
+    isCatchAll: ${route.isCatchAll},
+    isIndex: ${route.isIndex},
+    priority: ${route.priority}
+  }`);
+    });
+
+    apiRoutesCode = `\n${apiDeclarations.join("\n")}\n\nexport const apiRoutes = [\n${apiRouteObjects.join(",\n")}\n];\n`;
+  }
+
   return `${declarations.join("\n")}
 
 export const routes = [
@@ -141,7 +170,7 @@ ${routeObjects.join(",\n")}
 ];
 
 export const base = ${JSON.stringify(normalizedBase)};
-${runtimeReExports}
+${runtimeReExports}${apiRoutesCode}
 export default routes;
 `;
 }

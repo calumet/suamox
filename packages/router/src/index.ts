@@ -282,6 +282,13 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
       return;
     }
 
+    // API routes: delegar al browser
+    const apiPrefix = base === "/" ? "/api" : `${base}/api`;
+    if (url.pathname.startsWith(apiPrefix + "/") || url.pathname === apiPrefix) {
+      window.location.assign(url.toString());
+      return;
+    }
+
     const match = resolveMatch(routes, stripBase(url.pathname, base));
     if (!match || match.route.prerender) {
       window.location.assign(url.toString());
@@ -347,6 +354,12 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     }
 
     if (isSameDocumentHash(url)) {
+      return;
+    }
+
+    // No interceptar links a API routes — requieren request HTTP normal
+    const apiPrefix = base === "/" ? "/api" : `${base}/api`;
+    if (url.pathname.startsWith(apiPrefix + "/") || url.pathname === apiPrefix) {
       return;
     }
 

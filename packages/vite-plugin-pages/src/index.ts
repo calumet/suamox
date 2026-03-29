@@ -6,7 +6,7 @@ import type { Plugin, ResolvedConfig, ViteDevServer } from "vite";
 
 import { generateClientProxy, generateRoutesModule, type DefaultPageMode } from "./codegen.js";
 import { scanRoutes } from "./scanner.js";
-import type { RouteRecord } from "./types.js";
+import type { ApiRouteRecord, RouteRecord } from "./types.js";
 
 export interface SuamoxPagesOptions {
   pagesDir?: string;
@@ -33,6 +33,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
   let resolvedConfig: ResolvedConfig;
   let basePath = "/";
   let routesCache: RouteRecord[] | null = null;
+  let apiRoutesCache: ApiRouteRecord[] = [];
   let clientModuleCode: string | null = null;
   let serverModuleCode: string | null = null;
 
@@ -44,6 +45,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     });
 
     routesCache = result.routes;
+    apiRoutesCache = result.apiRoutes;
     clientModuleCode = generateRoutesModule(result.routes, {
       defaultMode,
       base: basePath,
@@ -55,6 +57,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       target: "server",
       hasMiddleware: result.hasMiddleware,
       middlewarePath: result.middlewarePath,
+      apiRoutes: result.apiRoutes,
     });
 
     if (logErrors && result.errors.length > 0) {
@@ -94,21 +97,28 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     configureServer(_server) {
       server = _server;
 
-      // Observar cambios en el directorio de paginas
       const absolutePagesDir = resolve(root, pagesDir);
+      const absoluteApiDir = resolve(root, "src/api");
 
       server.watcher.add(absolutePagesDir);
+      server.watcher.add(absoluteApiDir);
+
+      const isWatchedFile = (file: string) =>
+        extensions.some((ext) => file.endsWith(ext)) &&
+        (file.startsWith(absolutePagesDir) || file.startsWith(absoluteApiDir));
 
       server.watcher.on("add", (file) => {
-        if (file.startsWith(absolutePagesDir) && extensions.some((ext) => file.endsWith(ext))) {
-          console.log(pc.green(`[suamox:pages] Page added: ${file}`));
+        if (isWatchedFile(file)) {
+          const type = file.startsWith(absoluteApiDir) ? "API route" : "Page";
+          console.log(pc.green(`[suamox:pages] ${type} added: ${file}`));
           void updateRoutes();
         }
       });
 
       server.watcher.on("unlink", (file) => {
-        if (file.startsWith(absolutePagesDir) && extensions.some((ext) => file.endsWith(ext))) {
-          console.log(pc.yellow(`[suamox:pages] Page removed: ${file}`));
+        if (isWatchedFile(file)) {
+          const type = file.startsWith(absoluteApiDir) ? "API route" : "Page";
+          console.log(pc.yellow(`[suamox:pages] ${type} removed: ${file}`));
           void updateRoutes();
         }
       });
@@ -122,6 +132,13 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
         routesCache.forEach((route) => {
           const loaderInfo = route.hasLoader ? pc.green(" [has loader]") : "";
           console.log(pc.dim(`  ${route.path} -> ${route.filePath}${loaderInfo}`));
+        });
+      }
+      if (apiRoutesCache.length > 0) {
+        console.log(pc.cyan(`[suamox:pages] Found ${apiRoutesCache.length} API route(s)`));
+        apiRoutesCache.forEach((route) => {
+          const methods = route.httpMethods.join(", ");
+          console.log(pc.dim(`  ${route.path} [${methods}] -> ${route.filePath}`));
         });
       }
     },
@@ -141,6 +158,16 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
         throw new Error(
           `[suamox:pages] Cannot import server-only file "${cleanId}" from client code (${importerRel}). ` +
             `Files matching *.server.{ts,tsx,js,jsx} are excluded from the client bundle.`,
+        );
+      }
+
+      // Bloquear imports de src/api/ en build del cliente
+      const absoluteApiDir = resolve(root, "src/api");
+      if (!resolvedConfig.build.ssr && cleanId.startsWith(absoluteApiDir.replace(/\\/g, "/"))) {
+        const importerRel = importer ? importer.replace(/\\/g, "/") : "unknown";
+        throw new Error(
+          `[suamox:pages] Cannot import API route "${cleanId}" from client code (${importerRel}). ` +
+            `API routes in src/api/ are server-only.`,
         );
       }
     },

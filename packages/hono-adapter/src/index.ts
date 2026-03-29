@@ -4,7 +4,13 @@ import type { IncomingHttpHeaders, IncomingMessage } from "node:http";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import type { LoaderContext, RenderOptions, RouteRecord, RenderResult } from "@calumet/suamox";
+import type {
+  ApiContext,
+  LoaderContext,
+  RenderOptions,
+  RouteRecord,
+  RenderResult,
+} from "@calumet/suamox";
 import {
   RedirectResponse,
   generateHTML,
@@ -342,6 +348,65 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
     };
     return mod.onRequest;
   };
+
+  // API routes handler (dev)
+  app.all("/api/*", async (c) => {
+    try {
+      const runtime = await loadRuntime();
+      const routesModule = (await vite.ssrLoadModule("virtual:pages/server")) as {
+        routes: RouteRecord[];
+        apiRoutes?: Array<{
+          path: string;
+          methods: Record<string, (ctx: ApiContext) => Response | Promise<Response>>;
+          params: string[];
+          isCatchAll: boolean;
+          isIndex: boolean;
+          priority: number;
+        }>;
+        base?: string;
+      };
+
+      const apiRoutes = routesModule.apiRoutes;
+      if (!apiRoutes || apiRoutes.length === 0) {
+        return c.notFound();
+      }
+
+      const base = routesModule.base ?? "/";
+      const url = new URL(c.req.url);
+      const strippedPathname = stripBase(url.pathname, base);
+
+      const middlewareFn = await loadMiddleware();
+      const { locals, response: mwResponse } = await runMiddleware(middlewareFn, c.req.raw, url);
+      if (mwResponse) return mwResponse;
+
+      const match = runtime.matchRoute(apiRoutes as unknown as RouteRecord[], strippedPathname);
+      if (!match) return c.notFound();
+
+      const method = c.req.method.toUpperCase();
+      const apiRoute = match.route as unknown as {
+        methods: Record<string, (ctx: ApiContext) => Response | Promise<Response>>;
+      };
+      const handler = apiRoute.methods[method];
+      if (!handler) {
+        return new Response("Method Not Allowed", {
+          status: 405,
+          headers: { Allow: Object.keys(apiRoute.methods).join(", ") },
+        });
+      }
+
+      return handler({
+        request: c.req.raw,
+        url,
+        params: match.params,
+        query: url.searchParams,
+        locals,
+      });
+    } catch (error) {
+      vite.ssrFixStacktrace(error as Error);
+      console.error(pc.red("[API Route Error]"), error);
+      return c.json({ error: "Internal server error" }, 500);
+    }
+  });
 
   // Endpoint de datos para client-side navigation
   app.get("/__data", async (c) => {
@@ -736,8 +801,18 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 
   // Carga el runtime desde el server entry para compartir la misma instancia
   // de contextos React (LoaderDataContext, StaticPropsContext) con las páginas.
+  type ApiRouteEntry = {
+    path: string;
+    methods: Record<string, (ctx: ApiContext) => Response | Promise<Response>>;
+    params: string[];
+    isCatchAll: boolean;
+    isIndex: boolean;
+    priority: number;
+  };
+
   type ServerEntryRuntime = {
     routes: RouteRecord[];
+    apiRoutes?: ApiRouteEntry[];
     renderPage: typeof renderPage;
     matchRoute: typeof matchRoute;
     resolveRouteModule: typeof resolveRouteModule;
@@ -756,6 +831,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     const mod = serverModule as Record<string, unknown>;
     return {
       routes,
+      apiRoutes: mod.apiRoutes as ApiRouteEntry[] | undefined,
       renderPage: (mod.renderPage as typeof renderPage) ?? renderPage,
       matchRoute: (mod.matchRoute as typeof matchRoute) ?? matchRoute,
       resolveRouteModule:
@@ -764,6 +840,54 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       onRequest: mod.onRequest as MiddlewareFunction | undefined,
     };
   };
+
+  // API routes handler (prod)
+  app.all("/api/*", async (c) => {
+    try {
+      const entry = await loadServerEntry();
+      const apiRoutes = entry.apiRoutes;
+      if (!apiRoutes || apiRoutes.length === 0) {
+        return c.notFound();
+      }
+
+      const url = new URL(c.req.url);
+      const safeOrigin = resolveRequestOrigin(c.req.raw, allowedHosts);
+      const safeUrl = new URL(`${safeOrigin}${url.pathname}${url.search}`);
+      const safeRequest = new Request(safeUrl, { headers: c.req.raw.headers });
+
+      const { locals, response: mwResponse } = await runMiddleware(
+        entry.onRequest,
+        safeRequest,
+        safeUrl,
+      );
+      if (mwResponse) return mwResponse;
+
+      const strippedPathname = stripBase(url.pathname, base);
+      const match = entry.matchRoute(apiRoutes as unknown as RouteRecord[], strippedPathname);
+      if (!match) return c.notFound();
+
+      const method = c.req.method.toUpperCase();
+      const apiRoute = match.route as unknown as ApiRouteEntry;
+      const handler = apiRoute.methods[method];
+      if (!handler) {
+        return new Response("Method Not Allowed", {
+          status: 405,
+          headers: { Allow: Object.keys(apiRoute.methods).join(", ") },
+        });
+      }
+
+      return handler({
+        request: c.req.raw,
+        url: safeUrl,
+        params: match.params,
+        query: safeUrl.searchParams,
+        locals,
+      });
+    } catch (error) {
+      console.error(pc.red("[API Route Error]"), error);
+      return c.json({ error: "Internal server error" }, 500);
+    }
+  });
 
   // Endpoint de datos para client-side navigation
   app.get("/__data", async (c) => {

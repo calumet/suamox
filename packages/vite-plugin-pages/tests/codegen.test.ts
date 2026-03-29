@@ -2,7 +2,7 @@ import { parse } from "acorn";
 import { describe, it, expect } from "vitest";
 
 import { generateClientProxy, generateRoutesModule } from "../src/codegen";
-import type { RouteRecord } from "../src/types";
+import type { ApiRouteRecord, RouteRecord } from "../src/types";
 
 function assertValidModule(code: string): void {
   parse(code, { ecmaVersion: "latest", sourceType: "module" });
@@ -526,6 +526,61 @@ describe("generateRoutesModule", () => {
 
     expect(code).not.toContain("onRequest");
     expect(code).not.toContain("middleware");
+  });
+});
+
+describe("API routes codegen", () => {
+  it("does NOT include apiRoutes in client target", () => {
+    const apiRoutes: ApiRouteRecord[] = [
+      {
+        path: "/api/users",
+        filePath: "/project/src/api/users.ts",
+        type: "api",
+        httpMethods: ["GET", "POST"],
+        params: [],
+        isCatchAll: false,
+        isIndex: false,
+        priority: 110,
+      },
+    ];
+
+    const code = generateRoutesModule([], { target: "client", apiRoutes });
+
+    expect(code).not.toContain("apiRoutes");
+    expect(code).not.toContain("/project/src/api/users.ts");
+  });
+
+  it("generates apiRoutes with import and methods map in server target", () => {
+    const apiRoutes: ApiRouteRecord[] = [
+      {
+        path: "/api/users",
+        filePath: "/project/src/api/users.ts",
+        type: "api",
+        httpMethods: ["GET", "POST"],
+        params: [],
+        isCatchAll: false,
+        isIndex: false,
+        priority: 110,
+      },
+    ];
+
+    const code = generateRoutesModule([], { target: "server", apiRoutes });
+
+    expect(code).toContain('import * as _api0 from "/project/src/api/users.ts"');
+    expect(code).toContain("export const apiRoutes = [");
+    expect(code).toContain('path: "/api/users"');
+    expect(code).toContain('type: "api"');
+    expect(code).toContain("GET: _api0.GET");
+    expect(code).toContain("POST: _api0.POST");
+
+    assertValidModule(code);
+  });
+
+  it("generates empty when no apiRoutes provided", () => {
+    const code = generateRoutesModule([], { target: "server" });
+
+    expect(code).not.toContain("apiRoutes");
+    expect(code).not.toContain("_api");
   });
 });
 

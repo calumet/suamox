@@ -57,6 +57,27 @@ export type MiddlewareHandler = (
   next: MiddlewareNext,
 ) => Response | Promise<Response>;
 
+export interface ApiContext {
+  request: Request;
+  url: URL;
+  params: Record<string, string>;
+  query: URLSearchParams;
+  locals: Record<string, unknown>;
+}
+
+export type ApiMethodHandler = (ctx: ApiContext) => Response | Promise<Response>;
+
+export interface ApiRouteRecord {
+  path: string;
+  filePath: string;
+  type: "api";
+  methods: Record<string, ApiMethodHandler>;
+  params: string[];
+  isCatchAll: boolean;
+  isIndex: boolean;
+  priority: number;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface PageProps<T = any> {
   data: T;

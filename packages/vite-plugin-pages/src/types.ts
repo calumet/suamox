@@ -39,3 +39,14 @@ export interface StaticPathEntry {
 }
 
 export type GetStaticPaths = () => Promise<StaticPathEntry[]>;
+
+export interface ApiRouteRecord {
+  path: string;
+  filePath: string;
+  type: "api";
+  httpMethods: string[];
+  params: string[];
+  isCatchAll: boolean;
+  isIndex: boolean;
+  priority: number;
+}

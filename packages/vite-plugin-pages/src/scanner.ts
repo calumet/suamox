@@ -6,7 +6,9 @@ import { init, parse } from "es-module-lexer";
 import fg from "fast-glob";
 
 import { parseRoute, sortRoutes, validateRoutes } from "./parser.js";
-import type { LayoutMeta, RouteRecord } from "./types.js";
+import type { ApiRouteRecord, LayoutMeta, RouteRecord } from "./types.js";
+
+const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
 
 const loaderExportPatterns = [
   /\bexport\s+(async\s+)?function\s+loader\b/,
@@ -128,6 +130,7 @@ export interface ScanOptions {
 
 export interface ScanResult {
   routes: RouteRecord[];
+  apiRoutes: ApiRouteRecord[];
   errors: string[];
   hasMiddleware: boolean;
   middlewarePath?: string;
@@ -222,8 +225,60 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
   // Ordenar rutas por prioridad
   const sortedRoutes = sortRoutes(routes);
 
-  // Detectar middleware global (src/middleware.ts o src/middleware/index.ts)
+  // Escanear API routes en src/api/
   const srcDir = resolve(absolutePagesDir, "..");
+  const apiDir = resolve(srcDir, "api");
+  const apiRoutes: ApiRouteRecord[] = [];
+
+  try {
+    await access(apiDir);
+    const apiFiles = await fg(pattern, {
+      cwd: apiDir,
+      absolute: true,
+      ignore: ["**/node_modules/**", "**/.git/**"],
+    });
+
+    for (const file of apiFiles) {
+      const { route, errors: parseErrors } = parseRoute(file, apiDir);
+      if (parseErrors.length > 0) {
+        errors.push(...parseErrors.map((err) => `${file}: ${err}`));
+      }
+
+      // Detectar metodos HTTP exportados
+      let httpMethods: string[] = [];
+      try {
+        const content = await readFile(file, "utf-8");
+        const [, exports] = parse(content);
+        httpMethods = exports
+          .map((exp) => exp.n)
+          .filter((n): n is string => n != null && HTTP_METHODS.includes(n));
+      } catch {
+        // Fallback: regex
+        const content = await readFile(file, "utf-8");
+        httpMethods = HTTP_METHODS.filter((method) =>
+          new RegExp(`\\bexport\\s+(async\\s+)?function\\s+${method}\\b`).test(content),
+        );
+      }
+
+      // Prefixar la ruta con /api
+      const apiPath = route.path === "/" ? "/api" : `/api${route.path}`;
+
+      apiRoutes.push({
+        path: apiPath,
+        filePath: route.filePath,
+        type: "api",
+        httpMethods,
+        params: route.params,
+        isCatchAll: route.isCatchAll,
+        isIndex: route.isIndex,
+        priority: route.priority,
+      });
+    }
+  } catch {
+    // src/api/ no existe, no hay API routes
+  }
+
+  // Detectar middleware global (src/middleware.ts o src/middleware/index.ts)
   let hasMiddleware = false;
   let middlewarePath: string | undefined;
   for (const ext of extensions) {
@@ -253,6 +308,7 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
 
   return {
     routes: sortedRoutes,
+    apiRoutes,
     errors,
     hasMiddleware,
     middlewarePath,

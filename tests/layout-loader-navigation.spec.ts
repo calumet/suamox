@@ -77,6 +77,9 @@ test.describe("useLoaderData in layout during client-side navigation", () => {
     await page.goto("/es/noticias");
     await expect(page.locator("h1")).toHaveText("Noticias");
 
+    // Wait for hydration to complete before intercepting navigation
+    await page.waitForLoadState("networkidle");
+
     // SPA navigate to sibling — should send stableLayouts for [lang] layout
     const [request] = await Promise.all([
       page.waitForRequest((req) => req.url().includes("/__data")),
