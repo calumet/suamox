@@ -225,6 +225,10 @@ export function matchRoute(routes: RouteRecord[], pathname: string): MatchResult
   } catch {
     // Secuencias % inválidas, usar el path original
   }
+  // Normalizar trailing slash (excepto root "/")
+  if (normalizedPath !== "/" && normalizedPath.endsWith("/")) {
+    normalizedPath = normalizedPath.slice(0, -1);
+  }
 
   for (const route of routes) {
     const match = matchPattern(route, normalizedPath);

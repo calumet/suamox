@@ -235,8 +235,9 @@ describe("matchRoute", () => {
       const match1 = matchRoute(routes, "/about/");
       const match2 = matchRoute(routes, "/about");
 
-      expect(match1).toBeNull();
+      expect(match1).toBeTruthy();
       expect(match2).toBeTruthy();
+      expect(match1?.route.path).toBe("/about");
     });
 
     it("should handle routes with multiple segments", () => {
