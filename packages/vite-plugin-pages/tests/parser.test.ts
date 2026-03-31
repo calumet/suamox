@@ -215,6 +215,28 @@ describe("sortRoutes", () => {
   });
 });
 
+describe("static vs dynamic priority", () => {
+  const pagesDir = "/test/src/pages";
+
+  it("should prioritize /admin over /:lang", () => {
+    const { route: adminRoute } = parseRoute(join(pagesDir, "admin/index.tsx"), pagesDir);
+    const { route: langRoute } = parseRoute(join(pagesDir, "[lang]/index.tsx"), pagesDir);
+    const sorted = sortRoutes([langRoute, adminRoute]);
+
+    expect(sorted[0]?.path).toBe("/admin");
+    expect(sorted[1]?.path).toBe("/:lang");
+  });
+
+  it("should prioritize /admin/correos over /:lang/correos", () => {
+    const { route: adminCorreos } = parseRoute(join(pagesDir, "admin/correos.tsx"), pagesDir);
+    const { route: langCorreos } = parseRoute(join(pagesDir, "[lang]/correos.tsx"), pagesDir);
+    const sorted = sortRoutes([langCorreos, adminCorreos]);
+
+    expect(sorted[0]?.path).toBe("/admin/correos");
+    expect(sorted[1]?.path).toBe("/:lang/correos");
+  });
+});
+
 describe("validateRoutes", () => {
   it("should detect duplicate paths", () => {
     const routes: RouteRecord[] = [
