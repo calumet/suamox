@@ -36,6 +36,7 @@ export interface HonoAdapterOptions {
 
 export interface CreateServerOptions extends HonoAdapterOptions {
   port?: number;
+  hostname?: string;
   clientDir?: string;
   serverEntry?: string;
 }
@@ -276,15 +277,16 @@ export function createHonoApp(_options: HonoAdapterOptions = {}): Hono {
  * Crea e inicia un servidor (dev o prod según NODE_ENV)
  */
 export async function createServer(options: CreateServerOptions): Promise<void> {
-  const { port = 3000, ...adapterOptions } = options;
+  const { port = 3000, hostname, ...adapterOptions } = options;
   const isProd = process.env.NODE_ENV === "production";
 
   if (isProd) {
     // Modo producción: usar serve estándar
     const { serve } = await import("@hono/node-server");
     const app = createProdHandler(adapterOptions);
-    console.log(`Production server running at http://localhost:${port}`);
-    serve({ fetch: app.fetch, port });
+    const host = hostname ?? "0.0.0.0";
+    console.log(`Production server running at http://${host}:${port}`);
+    serve({ fetch: app.fetch, port, hostname: host });
   } else {
     // Modo desarrollo: integrar middleware de Vite
     const { createServer: createViteServer } = await import("vite");
