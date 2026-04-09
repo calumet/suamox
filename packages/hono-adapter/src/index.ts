@@ -768,6 +768,9 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     }
     return response;
   });
+  // Servir archivos de public/ que Vite copia a clientDir (img, fonts, etc.)
+  app.use("*", serveStatic({ root: clientDir }));
+
   if (staticFallbackEnabled) {
     app.use("/client/*", serveStatic({ root: staticDir }));
   }
