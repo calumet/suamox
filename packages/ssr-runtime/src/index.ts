@@ -34,6 +34,7 @@ export interface RouteRecord {
   hasLoader?: boolean;
   hasLayoutLoaders?: boolean;
   layoutRouteIds?: string[];
+  layoutFilePaths?: string[];
 }
 
 export interface LoaderContext {

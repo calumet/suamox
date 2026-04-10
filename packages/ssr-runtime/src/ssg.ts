@@ -144,10 +144,6 @@ function collectStylesFromManifest(manifest: Manifest, keys: string[], prefix = 
     for (const importKey of entry.imports ?? []) {
       visit(importKey);
     }
-
-    for (const importKey of entry.dynamicImports ?? []) {
-      visit(importKey);
-    }
   };
 
   for (const key of keys) {
@@ -332,6 +328,12 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
     const keys = ["index.html"];
     if (routeKey) {
       keys.push(routeKey);
+    }
+    for (const layoutPath of route.layoutFilePaths ?? []) {
+      const layoutKey = toManifestKey(rootDir, layoutPath);
+      if (layoutKey) {
+        keys.push(layoutKey);
+      }
     }
 
     const cssPrefix = resolvedBase === "/" ? "/client" : `${resolvedBase}/client`;

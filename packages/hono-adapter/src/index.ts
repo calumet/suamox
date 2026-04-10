@@ -731,9 +731,6 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       for (const importKey of entry.imports ?? []) {
         visit(importKey);
       }
-      for (const importKey of entry.dynamicImports ?? []) {
-        visit(importKey);
-      }
     };
 
     visit("index.html");
@@ -742,6 +739,13 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     const routeKey = matched?.route?.filePath ? toManifestKey(matched.route.filePath) : null;
     if (routeKey) {
       visit(routeKey);
+    }
+
+    for (const layoutPath of matched?.route?.layoutFilePaths ?? []) {
+      const layoutKey = toManifestKey(layoutPath);
+      if (layoutKey) {
+        visit(layoutKey);
+      }
     }
 
     return {

@@ -110,6 +110,10 @@ export function generateRoutesModule(
     const hasLayoutLoadersField = hasLayoutLoaders ? `,\n    hasLayoutLoaders: true` : "";
     const layoutRouteIdsField =
       layoutRouteIds.length > 0 ? `,\n    layoutRouteIds: ${JSON.stringify(layoutRouteIds)}` : "";
+    const layoutFilePathsField =
+      (route.layouts ?? []).length > 0
+        ? `,\n    layoutFilePaths: ${JSON.stringify(route.layouts)}`
+        : "";
     const routeObj = `  {
     path: ${JSON.stringify(route.path)},
     load: ${loadRouteName},
@@ -117,7 +121,7 @@ export function generateRoutesModule(
     params: ${JSON.stringify(route.params)},
     isCatchAll: ${route.isCatchAll},
     isIndex: ${route.isIndex},
-    priority: ${route.priority}${hasLoaderField}${hasLayoutLoadersField}${layoutRouteIdsField}
+    priority: ${route.priority}${hasLoaderField}${hasLayoutLoadersField}${layoutRouteIdsField}${layoutFilePathsField}
   }`;
 
     routeObjects.push(routeObj);
