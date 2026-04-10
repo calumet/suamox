@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { RedirectResponse, stripBase } from "@calumet/suamox";
 import type { RenderOptions, RenderResult } from "@calumet/suamox";
 import type { ViteDevServer } from "vite";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   renderPage: vi.fn(),
@@ -820,4 +820,149 @@ describe("createDevHandler middleware", () => {
     expect(body).not.toContain("server-only-token");
     expect(body).not.toContain("secret");
   });
+});
+
+describe("createProdHandler proxy", () => {
+  let backend: import("node:http").Server;
+  let backendPort: number;
+
+  beforeAll(async () => {
+    const { createServer } = await import("node:http");
+    backend = createServer((req, res) => {
+      const url = new URL(req.url ?? "/", `http://localhost`);
+      res.setHeader("Content-Type", "application/json");
+
+      if (url.pathname === "/api/data") {
+        res.end(JSON.stringify({ source: "backend", cookie: req.headers.cookie ?? null }));
+      } else if (url.pathname === "/api/echo-query") {
+        res.end(JSON.stringify({ search: url.search }));
+      } else if (url.pathname === "/api") {
+        res.end(JSON.stringify({ root: true }));
+      } else if (req.method === "POST" && url.pathname === "/api/submit") {
+        let body = "";
+        req.on("data", (chunk: Buffer) => {
+          body += chunk.toString();
+        });
+        req.on("end", () => {
+          res.end(JSON.stringify({ received: body }));
+        });
+      } else if (url.pathname === "/api/set-cookie") {
+        res.setHeader("Set-Cookie", "session=abc123; Path=/; HttpOnly");
+        res.end(JSON.stringify({ ok: true }));
+      } else {
+        res.statusCode = 404;
+        res.end(JSON.stringify({ error: "not found" }));
+      }
+    });
+
+    await new Promise<void>((resolve) => {
+      backend.listen(0, "127.0.0.1", () => {
+        const addr = backend.address();
+        backendPort = typeof addr === "object" && addr ? addr.port : 0;
+        resolve();
+      });
+    });
+  });
+
+  afterAll(() => {
+    backend.close();
+  });
+
+  const createProxiedApp = async (proxyConfig: import("../src/index").ProxyConfig) => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-proxy-"));
+    const serverDir = join(root, "dist", "server");
+    const clientDir = join(root, "dist", "client", ".vite");
+    const staticDir = join(root, "dist", "static");
+
+    await mkdir(serverDir, { recursive: true });
+    await mkdir(clientDir, { recursive: true });
+    await mkdir(staticDir, { recursive: true });
+    await writeFile(join(serverDir, "entry-server.mjs"), "export const routes = [];");
+    await writeFile(join(clientDir, "manifest.json"), "{}");
+
+    return createProdHandler({
+      root,
+      clientDir: join(root, "dist", "client"),
+      serverEntry: join(root, "dist", "server", "entry-server.mjs"),
+      staticDir,
+      proxy: proxyConfig,
+    });
+  };
+
+  it("forwards GET requests to the target backend", async () => {
+    const app = await createProxiedApp({
+      "/api": `http://127.0.0.1:${backendPort}`,
+    });
+
+    const res = await app.request("http://localhost/api/data");
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { source: string };
+    expect(json.source).toBe("backend");
+  });
+
+  it("forwards cookies from the client to the backend", async () => {
+    const app = await createProxiedApp({
+      "/api": `http://127.0.0.1:${backendPort}`,
+    });
+
+    const res = await app.request("http://localhost/api/data", {
+      headers: { cookie: "JSESSIONID=test123" },
+    });
+    const json = (await res.json()) as { cookie: string };
+    expect(json.cookie).toContain("JSESSIONID=test123");
+  });
+
+  it("forwards Set-Cookie headers from the backend to the client", async () => {
+    const app = await createProxiedApp({
+      "/api": `http://127.0.0.1:${backendPort}`,
+    });
+
+    const res = await app.request("http://localhost/api/set-cookie");
+    expect(res.headers.get("set-cookie")).toContain("session=abc123");
+  });
+
+  it("forwards query string parameters", async () => {
+    const app = await createProxiedApp({
+      "/api": `http://127.0.0.1:${backendPort}`,
+    });
+
+    const res = await app.request("http://localhost/api/echo-query?foo=bar&baz=1");
+    const json = (await res.json()) as { search: string };
+    expect(json.search).toBe("?foo=bar&baz=1");
+  });
+
+  it("forwards POST requests with body", async () => {
+    const app = await createProxiedApp({
+      "/api": `http://127.0.0.1:${backendPort}`,
+    });
+
+    const res = await app.request("http://localhost/api/submit", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "test" }),
+    });
+    const json = (await res.json()) as { received: string };
+    expect(json.received).toBe('{"name":"test"}');
+  });
+
+  it("matches exact proxy path", async () => {
+    const app = await createProxiedApp({
+      "/api": `http://127.0.0.1:${backendPort}`,
+    });
+
+    const res = await app.request("http://localhost/api");
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { root: boolean };
+    expect(json.root).toBe(true);
+  });
+
+  it("returns 404 for non-matching paths on the backend", async () => {
+    const app = await createProxiedApp({
+      "/api": `http://127.0.0.1:${backendPort}`,
+    });
+
+    const res = await app.request("http://localhost/api/nonexistent");
+    expect(res.status).toBe(404);
+  });
+
 });

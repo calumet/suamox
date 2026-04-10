@@ -24,6 +24,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { proxy as honoProxy } from "hono/proxy";
 import pc from "picocolors";
 import type { ViteDevServer } from "vite";
 
@@ -34,11 +35,14 @@ export interface HonoAdapterOptions {
   allowedHosts?: string[];
 }
 
+export type ProxyConfig = Record<string, string>;
+
 export interface CreateServerOptions extends HonoAdapterOptions {
   port?: number;
   hostname?: string;
   clientDir?: string;
   serverEntry?: string;
+  proxy?: ProxyConfig;
 }
 
 export interface DevHandlerOptions extends HonoAdapterOptions {
@@ -52,6 +56,7 @@ export interface ProdHandlerOptions extends HonoAdapterOptions {
   root?: string;
   staticDir?: string;
   base?: string;
+  proxy?: ProxyConfig;
 }
 
 const cssImportPattern = /import\s+(?:[^'"]+\s+from\s+)?['"]([^'"]+\.css(?:\?[^'"]*)?)['"]/g;
@@ -284,9 +289,13 @@ export async function createServer(options: CreateServerOptions): Promise<void> 
     // Modo producción: usar serve estándar
     const { serve } = await import("@hono/node-server");
     const app = createProdHandler(adapterOptions);
-    const host = hostname ?? "0.0.0.0";
-    console.log(`Production server running at http://${host}:${port}`);
-    serve({ fetch: app.fetch, port, hostname: host });
+    if (hostname) {
+      console.log(`Production server running at http://${hostname}:${port}`);
+      serve({ fetch: app.fetch, port, hostname });
+    } else {
+      console.log(`Production server running at http://localhost:${port}`);
+      serve({ fetch: app.fetch, port });
+    }
   } else {
     // Modo desarrollo: integrar middleware de Vite
     const { createServer: createViteServer } = await import("vite");
@@ -650,9 +659,28 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     staticDir = "dist/static",
     base = "/",
     allowedHosts,
+    proxy,
   } = options;
 
   const app = createHonoApp(options);
+
+  // Proxy reverso: reenvía rutas configuradas al backend
+  if (proxy) {
+    for (const [path, target] of Object.entries(proxy)) {
+      const targetOrigin = new URL(target).origin;
+
+      const handler = (c: Context) => {
+        const url = new URL(c.req.url);
+        return honoProxy(`${targetOrigin}${url.pathname}${url.search}`, {
+          ...c.req,
+          headers: c.req.header(),
+        });
+      };
+
+      app.all(`${path}`, handler);
+      app.all(`${path}/*`, handler);
+    }
+  }
 
   // Convertir el path relativo del entry del servidor a URL absoluta para import dinámico
   const serverEntryPath = resolve(root, serverEntry);
