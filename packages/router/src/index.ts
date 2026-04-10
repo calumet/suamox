@@ -137,7 +137,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     };
   }
 
-  const resolvedAdapter = await ensureAdapter(adapter);
+  const adapterPromise = ensureAdapter(adapter);
   const origin = baseUrl ?? window.location.origin;
   let root: Root | null = null;
   let navigationId = 0;
@@ -259,6 +259,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     );
 
     if (!root) {
+      const resolvedAdapter = await adapterPromise;
       if (resolvedRoute.csr) {
         root = resolvedAdapter.createRoot(rootElement);
         root.render(element);
