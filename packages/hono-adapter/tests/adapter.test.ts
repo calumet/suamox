@@ -820,6 +820,116 @@ describe("createDevHandler middleware", () => {
     expect(body).not.toContain("server-only-token");
     expect(body).not.toContain("secret");
   });
+
+  it("middleware can wrap the response returned by next()", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-mw-"));
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "entry-client.tsx"), "void 0;\n");
+
+    const middlewareFn = vi.fn(
+      async (_ctx: { locals: Record<string, unknown> }, next: () => Promise<Response>) => {
+        const response = await next();
+        response.headers.set("x-cache", "MISS");
+        return response;
+      },
+    );
+
+    mocks.renderPage.mockResolvedValue({
+      status: 200,
+      html: "<div>Cached</div>",
+      head: "",
+      initialData: null,
+    });
+
+    const vite = {
+      ssrLoadModule: createSsrLoadModule([], middlewareFn),
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+      ssrFixStacktrace: vi.fn(),
+      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite, root });
+    const response = await app.request("http://localhost/");
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-cache")).toBe("MISS");
+    const body = await response.text();
+    expect(body).toContain("<div>Cached</div>");
+  });
+
+  it("middleware can read the response body from next() and cache it", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-mw-"));
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "entry-client.tsx"), "void 0;\n");
+
+    let cachedHtml = "";
+    const middlewareFn = vi.fn(
+      async (_ctx: { locals: Record<string, unknown> }, next: () => Promise<Response>) => {
+        const response = await next();
+        cachedHtml = await response.clone().text();
+        response.headers.set("x-cache", "MISS");
+        return response;
+      },
+    );
+
+    mocks.renderPage.mockResolvedValue({
+      status: 200,
+      html: "<div>Page</div>",
+      head: "<title>Test</title>",
+      initialData: null,
+    });
+
+    const vite = {
+      ssrLoadModule: createSsrLoadModule([], middlewareFn),
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+      ssrFixStacktrace: vi.fn(),
+      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite, root });
+    const response = await app.request("http://localhost/");
+
+    expect(response.status).toBe(200);
+    expect(cachedHtml).toContain("<div>Page</div>");
+    expect(cachedHtml).toContain("<title>Test</title>");
+    expect(response.headers.get("x-cache")).toBe("MISS");
+  });
+
+  it("short-circuits without calling next() and skips the render pipeline", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-mw-"));
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "entry-client.tsx"), "void 0;\n");
+
+    const middlewareFn = vi.fn(() => {
+      return new Response("cached html", {
+        status: 200,
+        headers: { "content-type": "text/html", "x-cache": "HIT" },
+      });
+    });
+
+    mocks.renderPage.mockResolvedValue({
+      status: 200,
+      html: "<div>Should not render</div>",
+      head: "",
+      initialData: null,
+    });
+
+    const vite = {
+      ssrLoadModule: createSsrLoadModule([], middlewareFn),
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+      ssrFixStacktrace: vi.fn(),
+      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite, root });
+    const response = await app.request("http://localhost/");
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-cache")).toBe("HIT");
+    expect(body).toBe("cached html");
+    expect(mocks.renderPage).not.toHaveBeenCalled();
+  });
 });
 
 describe("createProdHandler proxy", () => {
@@ -964,5 +1074,4 @@ describe("createProdHandler proxy", () => {
     const res = await app.request("http://localhost/api/nonexistent");
     expect(res.status).toBe(404);
   });
-
 });

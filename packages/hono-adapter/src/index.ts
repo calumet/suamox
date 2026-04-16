@@ -213,6 +213,16 @@ const collectCssImportsFromEntryClient = async (
   return Array.from(links);
 };
 
+/**
+ * Middleware function that can intercept and wrap the request/response pipeline.
+ *
+ * `context.locals` is shared by reference with the pipeline. Populate it
+ * **before** calling `next()`, writes made after `next()` resolves will
+ * mutate the same object the pipeline already consumed.
+ *
+ * Calling `next()` executes the full pipeline (loaders + render) and returns
+ * the real `Response`. Not calling `next()` short-circuits the pipeline.
+ */
 type MiddlewareFunction = (
   context: {
     request: Request;
@@ -227,24 +237,16 @@ const runMiddleware = async (
   middlewareFn: MiddlewareFunction | undefined,
   request: Request,
   url: URL,
-): Promise<{ locals: Record<string, unknown>; response?: Response }> => {
-  const locals: Record<string, unknown> = {};
+  params: Record<string, string>,
+  pipeline: (locals: Record<string, unknown>) => Promise<Response>,
+): Promise<Response> => {
   if (!middlewareFn) {
-    return { locals };
+    return pipeline({});
   }
 
-  let nextCalled = false;
-  const context = { request, url, params: {}, locals };
-  const result = await middlewareFn(context, () => {
-    nextCalled = true;
-    return Promise.resolve(new Response(null));
-  });
-
-  if (!nextCalled) {
-    return { locals, response: result };
-  }
-
-  return { locals };
+  const locals: Record<string, unknown> = {};
+  const context = { request, url, params, locals };
+  return middlewareFn(context, () => pipeline(locals));
 };
 
 /**
@@ -386,31 +388,30 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       const url = new URL(c.req.url);
       const strippedPathname = stripBase(url.pathname, base);
 
-      const middlewareFn = await loadMiddleware();
-      const { locals, response: mwResponse } = await runMiddleware(middlewareFn, c.req.raw, url);
-      if (mwResponse) return mwResponse;
-
       const match = runtime.matchRoute(apiRoutes as unknown as RouteRecord[], strippedPathname);
       if (!match) return c.notFound();
 
-      const method = c.req.method.toUpperCase();
-      const apiRoute = match.route as unknown as {
-        methods: Record<string, (ctx: ApiContext) => Response | Promise<Response>>;
-      };
-      const handler = apiRoute.methods[method];
-      if (!handler) {
-        return new Response("Method Not Allowed", {
-          status: 405,
-          headers: { Allow: Object.keys(apiRoute.methods).join(", ") },
-        });
-      }
+      const middlewareFn = await loadMiddleware();
+      return await runMiddleware(middlewareFn, c.req.raw, url, match.params, async (locals) => {
+        const method = c.req.method.toUpperCase();
+        const apiRoute = match.route as unknown as {
+          methods: Record<string, (ctx: ApiContext) => Response | Promise<Response>>;
+        };
+        const handler = apiRoute.methods[method];
+        if (!handler) {
+          return new Response("Method Not Allowed", {
+            status: 405,
+            headers: { Allow: Object.keys(apiRoute.methods).join(", ") },
+          });
+        }
 
-      return handler({
-        request: c.req.raw,
-        url,
-        params: match.params,
-        query: url.searchParams,
-        locals,
+        return handler({
+          request: c.req.raw,
+          url,
+          params: match.params,
+          query: url.searchParams,
+          locals,
+        });
       });
     } catch (error) {
       vite.ssrFixStacktrace(error as Error);
@@ -450,74 +451,67 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
 
       const resolved = await runtime.resolveRouteModule(match.route);
 
-      // Ejecutar middleware para obtener locals
+      // Ejecutar middleware y pipeline de datos
       const middlewareFn = await loadMiddleware();
-      const { locals, response: mwResponse } = await runMiddleware(
-        middlewareFn,
-        c.req.raw,
-        new URL(c.req.url),
-      );
-      if (mwResponse) {
-        return mwResponse;
-      }
+      const reqUrl = new URL(c.req.url);
+      return await runMiddleware(middlewareFn, c.req.raw, reqUrl, match.params, async (locals) => {
+        const loaderUrl = new URL(path, reqUrl.origin);
+        reqUrl.searchParams.forEach((value, key) => {
+          if (key !== "path" && key !== "stableLayouts") {
+            loaderUrl.searchParams.append(key, value);
+          }
+        });
 
-      const originalUrl = new URL(c.req.url);
-      const loaderUrl = new URL(path, originalUrl.origin);
-      originalUrl.searchParams.forEach((value, key) => {
-        if (key !== "path" && key !== "stableLayouts") {
-          loaderUrl.searchParams.append(key, value);
+        const loaderContext: LoaderContext = {
+          request: c.req.raw,
+          url: loaderUrl,
+          params: match.params,
+          query: loaderUrl.searchParams,
+          locals,
+        };
+
+        // Layout loaders + page loader en paralelo
+        const layoutInfos = resolved.layoutInfos;
+        const hasLayoutLoaders = layoutInfos?.some((li: { loader?: unknown }) => li.loader);
+
+        if (hasLayoutLoaders) {
+          const stableParam = c.req.query("stableLayouts");
+          const validIds = new Set(layoutInfos!.map((li: { routeId: string }) => li.routeId));
+          const stableSet = stableParam
+            ? new Set(stableParam.split(",").filter((id) => validIds.has(id)))
+            : new Set<string>();
+
+          const layoutPromises = layoutInfos!
+            .filter((info: { loader?: unknown }) => !!info.loader)
+            .map(async (info) => ({
+              routeId: info.routeId,
+              data: stableSet.has(info.routeId) ? null : await info.loader!(loaderContext),
+            }));
+
+          const pagePromise = resolved.loader
+            ? resolved.loader(loaderContext)
+            : Promise.resolve(null);
+
+          const [layoutResults, pageData] = await Promise.all([
+            Promise.all(layoutPromises),
+            pagePromise,
+          ]);
+
+          const layouts: Record<string, unknown> = {};
+          for (const result of layoutResults) {
+            layouts[result.routeId] = result.data;
+          }
+
+          return c.json({ page: pageData, layouts });
         }
+
+        // Legacy: sin layout loaders
+        if (!resolved.loader) {
+          return c.json(null);
+        }
+        const data = await resolved.loader(loaderContext);
+        return c.json(data);
       });
-
-      const loaderContext: LoaderContext = {
-        request: c.req.raw,
-        url: loaderUrl,
-        params: match.params,
-        query: loaderUrl.searchParams,
-        locals,
-      };
-
-      // Layout loaders + page loader en paralelo
-      const layoutInfos = resolved.layoutInfos;
-      const hasLayoutLoaders = layoutInfos?.some((li: { loader?: unknown }) => li.loader);
-
-      if (hasLayoutLoaders) {
-        const stableParam = c.req.query("stableLayouts");
-        const validIds = new Set(layoutInfos!.map((li: { routeId: string }) => li.routeId));
-        const stableSet = stableParam
-          ? new Set(stableParam.split(",").filter((id) => validIds.has(id)))
-          : new Set<string>();
-
-        const layoutPromises = layoutInfos!
-          .filter((info: { loader?: unknown }) => !!info.loader)
-          .map(async (info) => ({
-            routeId: info.routeId,
-            data: stableSet.has(info.routeId) ? null : await info.loader!(loaderContext),
-          }));
-
-        const pagePromise = resolved.loader
-          ? resolved.loader(loaderContext)
-          : Promise.resolve(null);
-
-        const [layoutResults, pageData] = await Promise.all([
-          Promise.all(layoutPromises),
-          pagePromise,
-        ]);
-
-        const layouts: Record<string, unknown> = {};
-        for (const result of layoutResults) {
-          layouts[result.routeId] = result.data;
-        }
-
-        return c.json({ page: pageData, layouts });
-      }
-
-      // Legacy: sin layout loaders
-      if (!resolved.loader) {
-        return c.json(null);
-      }
-      const data = await resolved.loader(loaderContext);
-      return c.json(data);
     } catch (error) {
       if (error instanceof RedirectResponse) {
         return c.json({ __redirect: error.location, __status: error.status });
@@ -539,13 +533,6 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         await onRequest(c);
       }
 
-      // Ejecutar middleware de usuario
-      const middlewareFn = await loadMiddleware();
-      const { locals, response: mwResponse } = await runMiddleware(middlewareFn, c.req.raw, url);
-      if (mwResponse) {
-        return mwResponse;
-      }
-
       // Cargar runtime y rutas a través de Vite para compartir instancias de contexto
       const runtime = await loadRuntime();
       const routesModule = (await vite.ssrLoadModule("virtual:pages/server")) as {
@@ -555,65 +542,74 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       const routes = routesModule.routes;
       const base = routesModule.base ?? "/";
       const strippedPathname = stripBase(url.pathname, base);
-
-      // Resolver módulo de ruta para detectar prerender y getStaticPaths
-      let staticProps: Record<string, unknown> | undefined;
-      let isPrerender = false;
       const match = runtime.matchRoute(routes, strippedPathname);
-      if (match) {
-        const resolved = await runtime.resolveRouteModule(match.route);
-        isPrerender = resolved.prerender === true;
-        if (resolved.getStaticPaths) {
-          const entries = await resolved.getStaticPaths();
-          const entry = entries.find((e) =>
-            Object.entries(match.params).every(([k, v]) => e.params[k] === v),
-          );
-          if (entry?.props) {
-            staticProps = entry.props;
+
+      // Ejecutar middleware de usuario y pipeline SSR
+      const middlewareFn = await loadMiddleware();
+      return await runMiddleware(
+        middlewareFn,
+        c.req.raw,
+        url,
+        match?.params ?? {},
+        async (locals) => {
+          // Resolver módulo de ruta para detectar prerender y getStaticPaths
+          let staticProps: Record<string, unknown> | undefined;
+          let isPrerender = false;
+          if (match) {
+            const resolved = await runtime.resolveRouteModule(match.route);
+            isPrerender = resolved.prerender === true;
+            if (resolved.getStaticPaths) {
+              const entries = await resolved.getStaticPaths();
+              const entry = entries.find((e) =>
+                Object.entries(match.params).every(([k, v]) => e.params[k] === v),
+              );
+              if (entry?.props) {
+                staticProps = entry.props;
+              }
+            }
           }
-        }
-      }
 
-      // Ejecutar hook onBeforeRender
-      let renderContext: RenderOptions = {
-        pathname: strippedPathname,
-        request: c.req.raw,
-        routes,
-        props: staticProps,
-        locals,
-      };
-      if (onBeforeRender) {
-        renderContext = await onBeforeRender(renderContext);
-      }
+          // Ejecutar hook onBeforeRender
+          let renderContext: RenderOptions = {
+            pathname: strippedPathname,
+            request: c.req.raw,
+            routes,
+            props: staticProps,
+            locals,
+          };
+          if (onBeforeRender) {
+            renderContext = await onBeforeRender(renderContext);
+          }
 
-      // Renderizar página
-      let result = await runtime.renderPage(renderContext);
+          // Renderizar página
+          let result = await runtime.renderPage(renderContext);
 
-      // Ejecutar hook onAfterRender
-      if (onAfterRender) {
-        result = await onAfterRender(result);
-      }
+          // Ejecutar hook onAfterRender
+          if (onAfterRender) {
+            result = await onAfterRender(result);
+          }
 
-      if (result.redirectTo) {
-        return c.redirect(result.redirectTo, result.status as 301 | 302 | 303 | 307 | 308);
-      }
+          if (result.redirectTo) {
+            return c.redirect(result.redirectTo, result.status as 301 | 302 | 303 | 307 | 308);
+          }
 
-      const escapeAttr = (v: string): string => v.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-      const devCssLinks = await collectCssImportsFromEntryClient(root, vite);
-      const devCssTags = devCssLinks
-        .map((href) => `<link rel="stylesheet" href="${escapeAttr(href)}">`)
-        .join("\n    ");
+          const escapeAttr = (v: string): string =>
+            v.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+          const devCssLinks = await collectCssImportsFromEntryClient(root, vite);
+          const devCssTags = devCssLinks
+            .map((href) => `<link rel="stylesheet" href="${escapeAttr(href)}">`)
+            .join("\n    ");
 
-      // Scripts de cliente: solo para rutas que no son prerender
-      const clientScripts = isPrerender
-        ? ""
-        : `<link rel="modulepreload" href="/src/entry-client.tsx">
+          // Scripts de cliente: solo para rutas que no son prerender
+          const clientScripts = isPrerender
+            ? ""
+            : `<link rel="modulepreload" href="/src/entry-client.tsx">
     <script type="module" src="/src/entry-client.tsx"></script>`;
 
-      // Leer y transformar index.html
-      const template = await vite.transformIndexHtml(
-        url.pathname,
-        `<!DOCTYPE html>
+          // Leer y transformar index.html
+          const template = await vite.transformIndexHtml(
+            url.pathname,
+            `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8">
@@ -626,22 +622,24 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
     <div id="root">${result.html}</div>
   </body>
 </html>`,
+          );
+
+          // Inyectar datos iniciales solo para rutas con hidratación
+          let finalHtml = template;
+          if (!isPrerender) {
+            const initialDataPayload = result.layoutData
+              ? { page: result.initialData ?? null, layouts: result.layoutData }
+              : (result.initialData ?? null);
+            const serializedData = serializeData(initialDataPayload);
+            finalHtml = template.replace(
+              "</body>",
+              `<script>window.__INITIAL_DATA__ = ${serializedData};</script></body>`,
+            );
+          }
+
+          return c.html(finalHtml, result.status as 200 | 404 | 500);
+        },
       );
-
-      // Inyectar datos iniciales solo para rutas con hidratación
-      let finalHtml = template;
-      if (!isPrerender) {
-        const initialDataPayload = result.layoutData
-          ? { page: result.initialData ?? null, layouts: result.layoutData }
-          : (result.initialData ?? null);
-        const serializedData = serializeData(initialDataPayload);
-        finalHtml = template.replace(
-          "</body>",
-          `<script>window.__INITIAL_DATA__ = ${serializedData};</script></body>`,
-        );
-      }
-
-      return c.html(finalHtml, result.status as 200 | 404 | 500);
     } catch (error) {
       // Dejar que Vite maneje errores con stack trace
       vite.ssrFixStacktrace(error as Error);
@@ -901,34 +899,35 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       const safeUrl = new URL(`${safeOrigin}${url.pathname}${url.search}`);
       const safeRequest = new Request(safeUrl, { headers: c.req.raw.headers });
 
-      const { locals, response: mwResponse } = await runMiddleware(
-        entry.onRequest,
-        safeRequest,
-        safeUrl,
-      );
-      if (mwResponse) return mwResponse;
-
       const strippedPathname = stripBase(url.pathname, base);
       const match = entry.matchRoute(apiRoutes as unknown as RouteRecord[], strippedPathname);
       if (!match) return c.notFound();
 
-      const method = c.req.method.toUpperCase();
-      const apiRoute = match.route as unknown as ApiRouteEntry;
-      const handler = apiRoute.methods[method];
-      if (!handler) {
-        return new Response("Method Not Allowed", {
-          status: 405,
-          headers: { Allow: Object.keys(apiRoute.methods).join(", ") },
-        });
-      }
+      return await runMiddleware(
+        entry.onRequest,
+        safeRequest,
+        safeUrl,
+        match.params,
+        async (locals) => {
+          const method = c.req.method.toUpperCase();
+          const apiRoute = match.route as unknown as ApiRouteEntry;
+          const handler = apiRoute.methods[method];
+          if (!handler) {
+            return new Response("Method Not Allowed", {
+              status: 405,
+              headers: { Allow: Object.keys(apiRoute.methods).join(", ") },
+            });
+          }
 
-      return handler({
-        request: c.req.raw,
-        url: safeUrl,
-        params: match.params,
-        query: safeUrl.searchParams,
-        locals,
-      });
+          return handler({
+            request: c.req.raw,
+            url: safeUrl,
+            params: match.params,
+            query: safeUrl.searchParams,
+            locals,
+          });
+        },
+      );
     } catch (error) {
       console.error(pc.red("[API Route Error]"), error);
       return c.json({ error: "Internal server error" }, 500);
@@ -964,74 +963,73 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       const safeUrl = new URL(`${safeOrigin}${originalUrl.pathname}${originalUrl.search}`);
       const safeRequest = new Request(safeUrl, { headers: c.req.raw.headers });
 
-      // Ejecutar middleware para obtener locals
-      const { locals, response: mwResponse } = await runMiddleware(
+      // Ejecutar middleware y pipeline de datos
+      return await runMiddleware(
         entry.onRequest,
         safeRequest,
         safeUrl,
+        match.params,
+        async (locals) => {
+          const loaderUrl = new URL(path, safeOrigin);
+          originalUrl.searchParams.forEach((value, key) => {
+            if (key !== "path" && key !== "stableLayouts") {
+              loaderUrl.searchParams.append(key, value);
+            }
+          });
+
+          const loaderContext: LoaderContext = {
+            request: c.req.raw,
+            url: loaderUrl,
+            params: match.params,
+            query: loaderUrl.searchParams,
+            locals,
+          };
+
+          // Layout loaders + page loader en paralelo
+          const layoutInfos = resolved.layoutInfos as
+            | Array<{ loader?: (ctx: LoaderContext) => Promise<unknown>; routeId: string }>
+            | undefined;
+          const hasLayoutLoaders = layoutInfos?.some((li) => li.loader);
+
+          if (hasLayoutLoaders) {
+            const stableParam = c.req.query("stableLayouts");
+            const validIds = new Set(layoutInfos!.map((li) => li.routeId));
+            const stableSet = stableParam
+              ? new Set(stableParam.split(",").filter((id) => validIds.has(id)))
+              : new Set<string>();
+
+            const layoutPromises = layoutInfos!
+              .filter((info) => info.loader)
+              .map(async (info) => ({
+                routeId: info.routeId,
+                data: stableSet.has(info.routeId) ? null : await info.loader!(loaderContext),
+              }));
+
+            const pagePromise = resolved.loader
+              ? resolved.loader(loaderContext)
+              : Promise.resolve(null);
+
+            const [layoutResults, pageData] = await Promise.all([
+              Promise.all(layoutPromises),
+              pagePromise,
+            ]);
+
+            const layouts: Record<string, unknown> = {};
+            for (const result of layoutResults) {
+              layouts[result.routeId] = result.data;
+            }
+
+            return c.json({ page: pageData, layouts });
+          }
+
+          // Legacy: sin layout loaders
+          if (!resolved.loader) {
+            return c.json(null);
+          }
+          const data = await resolved.loader(loaderContext);
+          return c.json(data);
+        },
       );
-      if (mwResponse) {
-        return mwResponse;
-      }
-
-      const loaderUrl = new URL(path, safeOrigin);
-      originalUrl.searchParams.forEach((value, key) => {
-        if (key !== "path" && key !== "stableLayouts") {
-          loaderUrl.searchParams.append(key, value);
-        }
-      });
-
-      const loaderContext: LoaderContext = {
-        request: c.req.raw,
-        url: loaderUrl,
-        params: match.params,
-        query: loaderUrl.searchParams,
-        locals,
-      };
-
-      // Layout loaders + page loader en paralelo
-      const layoutInfos = resolved.layoutInfos as
-        | Array<{ loader?: (ctx: LoaderContext) => Promise<unknown>; routeId: string }>
-        | undefined;
-      const hasLayoutLoaders = layoutInfos?.some((li) => li.loader);
-
-      if (hasLayoutLoaders) {
-        const stableParam = c.req.query("stableLayouts");
-        const validIds = new Set(layoutInfos!.map((li) => li.routeId));
-        const stableSet = stableParam
-          ? new Set(stableParam.split(",").filter((id) => validIds.has(id)))
-          : new Set<string>();
-
-        const layoutPromises = layoutInfos!
-          .filter((info) => info.loader)
-          .map(async (info) => ({
-            routeId: info.routeId,
-            data: stableSet.has(info.routeId) ? null : await info.loader!(loaderContext),
-          }));
-
-        const pagePromise = resolved.loader
-          ? resolved.loader(loaderContext)
-          : Promise.resolve(null);
-
-        const [layoutResults, pageData] = await Promise.all([
-          Promise.all(layoutPromises),
-          pagePromise,
-        ]);
-
-        const layouts: Record<string, unknown> = {};
-        for (const result of layoutResults) {
-          layouts[result.routeId] = result.data;
-        }
-
-        return c.json({ page: pageData, layouts });
-      }
-
-      // Legacy: sin layout loaders
-      if (!resolved.loader) {
-        return c.json(null);
-      }
-      const data = await resolved.loader(loaderContext);
-      return c.json(data);
     } catch (error) {
       if (error instanceof RedirectResponse) {
         return c.json({ __redirect: error.location, __status: error.status });
@@ -1063,70 +1061,68 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       }
 
       const entry = await loadServerEntry();
+      const strippedPathname = stripBase(url.pathname, base);
+      const match = entry.matchRoute(entry.routes, strippedPathname);
 
-      // Ejecutar middleware de usuario con origin validado
+      // Ejecutar middleware de usuario con origin validado y pipeline SSR
       const safeOrigin = resolveRequestOrigin(c.req.raw, allowedHosts);
       const safeUrl = new URL(`${safeOrigin}${url.pathname}${url.search}`);
       const safeRequest = new Request(safeUrl, { headers: c.req.raw.headers });
 
-      const { locals, response: mwResponse } = await runMiddleware(
+      return await runMiddleware(
         entry.onRequest,
         safeRequest,
         safeUrl,
+        match?.params ?? {},
+        async (locals) => {
+          // Ejecutar hook onBeforeRender
+          let renderContext: RenderOptions = {
+            pathname: strippedPathname,
+            request: safeRequest,
+            routes: entry.routes,
+            locals,
+          };
+          if (onBeforeRender) {
+            renderContext = await onBeforeRender(renderContext);
+          }
+
+          // Renderizar página
+          let result = await entry.renderPage(renderContext);
+
+          // Ejecutar hook onAfterRender
+          if (onAfterRender) {
+            result = await onAfterRender(result);
+          }
+
+          if (result.redirectTo) {
+            return c.redirect(result.redirectTo, result.status as 301 | 302 | 303 | 307 | 308);
+          }
+
+          // Detectar si la ruta es prerender
+          const resolvedMatch = match ? await entry.resolveRouteModule(match.route) : null;
+          const isPrerender = resolvedMatch?.prerender === true;
+
+          // Generar HTML completo (sin hidratación para rutas prerender)
+          const { preloadScripts, styles } = collectManifestAssets(entry.routes, strippedPathname);
+          const prodInitialData = isPrerender
+            ? undefined
+            : result.layoutData
+              ? { page: result.initialData ?? null, layouts: result.layoutData }
+              : result.initialData;
+          const html = generateHTML({
+            html: `<div id="root">${result.html}</div>`,
+            head: result.head,
+            initialData: prodInitialData,
+            scripts: isPrerender ? [] : [entryClientScript],
+            preloadScripts: isPrerender ? [] : preloadScripts,
+            styles,
+            scriptPlacement: "head",
+            includeInitialDataScript: !isPrerender,
+          });
+
+          return c.html(html, result.status as 200 | 404 | 500);
+        },
       );
-      if (mwResponse) {
-        return mwResponse;
-      }
-
-      const strippedPathname = stripBase(url.pathname, base);
-
-      // Ejecutar hook onBeforeRender
-      let renderContext: RenderOptions = {
-        pathname: strippedPathname,
-        request: safeRequest,
-        routes: entry.routes,
-        locals,
-      };
-      if (onBeforeRender) {
-        renderContext = await onBeforeRender(renderContext);
-      }
-
-      // Renderizar página
-      let result = await entry.renderPage(renderContext);
-
-      // Ejecutar hook onAfterRender
-      if (onAfterRender) {
-        result = await onAfterRender(result);
-      }
-
-      if (result.redirectTo) {
-        return c.redirect(result.redirectTo, result.status as 301 | 302 | 303 | 307 | 308);
-      }
-
-      // Detectar si la ruta es prerender
-      const matched = entry.matchRoute(entry.routes, strippedPathname);
-      const resolvedMatch = matched ? await entry.resolveRouteModule(matched.route) : null;
-      const isPrerender = resolvedMatch?.prerender === true;
-
-      // Generar HTML completo (sin hidratación para rutas prerender)
-      const { preloadScripts, styles } = collectManifestAssets(entry.routes, strippedPathname);
-      const prodInitialData = isPrerender
-        ? undefined
-        : result.layoutData
-          ? { page: result.initialData ?? null, layouts: result.layoutData }
-          : result.initialData;
-      const html = generateHTML({
-        html: `<div id="root">${result.html}</div>`,
-        head: result.head,
-        initialData: prodInitialData,
-        scripts: isPrerender ? [] : [entryClientScript],
-        preloadScripts: isPrerender ? [] : preloadScripts,
-        styles,
-        scriptPlacement: "head",
-        includeInitialDataScript: !isPrerender,
-      });
-
-      return c.html(html, result.status as 200 | 404 | 500);
     } catch (error) {
       console.error(pc.red("[SSR Error]"), (error as Error).message);
 
