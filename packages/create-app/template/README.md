@@ -47,6 +47,7 @@ Abre `http://localhost:3000`.
 src/
   entry-client.tsx   # Bootstrap del cliente
   entry-server.tsx   # Entry del manifest de rutas del servidor
+  middleware.ts      # Middleware de servidor (locals, auth, etc.)
   styles/
     global.css       # Estilos globales
   pages/

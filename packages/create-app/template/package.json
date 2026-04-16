@@ -11,11 +11,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@calumet/suamox": "^0.2.0",
     "@calumet/suamox-head": "^0.1.0",
-    "@calumet/suamox-hono-adapter": "^0.1.0",
-    "@calumet/suamox-router": "^0.1.0",
-    "@calumet/suamox": "^0.1.0",
-    "@calumet/suamox-vite-plugin-pages": "^0.1.0",
+    "@calumet/suamox-hono-adapter": "^0.3.0",
+    "@calumet/suamox-router": "^0.2.0",
+    "@calumet/suamox-vite-plugin-pages": "^0.2.0",
+    "@hono/node-server": "^1.14.0",
     "hono": "^4.6.17",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

@@ -1,3 +1,5 @@
 import { createServer } from "@calumet/suamox-hono-adapter";
 
-await createServer({ port: 3000 });
+const port = Number(process.env.PORT) || 3000;
+
+await createServer({ port });
