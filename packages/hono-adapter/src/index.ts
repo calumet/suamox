@@ -477,7 +477,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         locals,
       };
 
-      // Layout loaders
+      // Layout loaders + page loader en paralelo
       const layoutInfos = resolved.layoutInfos;
       const hasLayoutLoaders = layoutInfos?.some((li: { loader?: unknown }) => li.loader);
 
@@ -488,18 +488,27 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
           ? new Set(stableParam.split(",").filter((id) => validIds.has(id)))
           : new Set<string>();
 
+        const layoutPromises = layoutInfos!
+          .filter((info: { loader?: unknown }) => !!info.loader)
+          .map(async (info) => ({
+            routeId: info.routeId,
+            data: stableSet.has(info.routeId) ? null : await info.loader!(loaderContext),
+          }));
+
+        const pagePromise = resolved.loader
+          ? resolved.loader(loaderContext)
+          : Promise.resolve(null);
+
+        const [layoutResults, pageData] = await Promise.all([
+          Promise.all(layoutPromises),
+          pagePromise,
+        ]);
+
         const layouts: Record<string, unknown> = {};
-        for (const info of layoutInfos!) {
-          if (info.loader) {
-            if (stableSet.has(info.routeId)) {
-              layouts[info.routeId] = null;
-            } else {
-              layouts[info.routeId] = await info.loader(loaderContext);
-            }
-          }
+        for (const result of layoutResults) {
+          layouts[result.routeId] = result.data;
         }
 
-        const pageData = resolved.loader ? await resolved.loader(loaderContext) : null;
         return c.json({ page: pageData, layouts });
       }
 
@@ -980,7 +989,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         locals,
       };
 
-      // Layout loaders
+      // Layout loaders + page loader en paralelo
       const layoutInfos = resolved.layoutInfos as
         | Array<{ loader?: (ctx: LoaderContext) => Promise<unknown>; routeId: string }>
         | undefined;
@@ -993,18 +1002,27 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
           ? new Set(stableParam.split(",").filter((id) => validIds.has(id)))
           : new Set<string>();
 
+        const layoutPromises = layoutInfos!
+          .filter((info) => info.loader)
+          .map(async (info) => ({
+            routeId: info.routeId,
+            data: stableSet.has(info.routeId) ? null : await info.loader!(loaderContext),
+          }));
+
+        const pagePromise = resolved.loader
+          ? resolved.loader(loaderContext)
+          : Promise.resolve(null);
+
+        const [layoutResults, pageData] = await Promise.all([
+          Promise.all(layoutPromises),
+          pagePromise,
+        ]);
+
         const layouts: Record<string, unknown> = {};
-        for (const info of layoutInfos!) {
-          if (info.loader) {
-            if (stableSet.has(info.routeId)) {
-              layouts[info.routeId] = null;
-            } else {
-              layouts[info.routeId] = await info.loader(loaderContext);
-            }
-          }
+        for (const result of layoutResults) {
+          layouts[result.routeId] = result.data;
         }
 
-        const pageData = resolved.loader ? await resolved.loader(loaderContext) : null;
         return c.json({ page: pageData, layouts });
       }
 

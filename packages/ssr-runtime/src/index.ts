@@ -491,52 +491,49 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
     locals,
   };
 
-  // Ejecutar layout loaders secuencialmente
+  // Ejecutar layout loaders y page loader en paralelo
   let layoutData: Record<string, unknown> | undefined;
+  let data: unknown = null;
   const layoutInfos = resolvedRoute.layoutInfos;
-  if (layoutInfos && layoutInfos.some((li) => li.loader)) {
-    layoutData = {};
-    for (const info of layoutInfos) {
-      if (info.loader) {
-        try {
-          layoutData[info.routeId] = await info.loader(loaderContext);
-        } catch (error) {
-          if (error instanceof RedirectResponse) {
-            return {
-              status: error.status,
-              html: "",
-              redirectTo: error.location,
-            };
-          }
-          console.error("Layout loader error:", error);
-          return {
-            status: 500,
-            html: "<h1>500 - Internal Server Error</h1>",
-          };
-        }
+  const hasLayoutLoaders = layoutInfos && layoutInfos.some((li) => li.loader);
+
+  try {
+    const layoutPromise = hasLayoutLoaders
+      ? Promise.all(
+          layoutInfos
+            .filter((info) => info.loader)
+            .map(async (info) => ({
+              routeId: info.routeId,
+              data: await info.loader!(loaderContext),
+            })),
+        )
+      : null;
+
+    const pagePromise = resolvedRoute.loader ? resolvedRoute.loader(loaderContext) : null;
+
+    const [layoutResults, pageData] = await Promise.all([layoutPromise, pagePromise]);
+
+    if (layoutResults) {
+      layoutData = {};
+      for (const result of layoutResults) {
+        layoutData[result.routeId] = result.data;
       }
     }
-  }
 
-  // Ejecutar page loader si existe
-  let data: unknown = null;
-  if (resolvedRoute.loader) {
-    try {
-      data = await resolvedRoute.loader(loaderContext);
-    } catch (error) {
-      if (error instanceof RedirectResponse) {
-        return {
-          status: error.status,
-          html: "",
-          redirectTo: error.location,
-        };
-      }
-      console.error("Loader error:", error);
+    data = pageData;
+  } catch (error) {
+    if (error instanceof RedirectResponse) {
       return {
-        status: 500,
-        html: "<h1>500 - Internal Server Error</h1>",
+        status: error.status,
+        html: "",
+        redirectTo: error.location,
       };
     }
+    console.error("Loader error:", error);
+    return {
+      status: 500,
+      html: "<h1>500 - Internal Server Error</h1>",
+    };
   }
 
   // Renderizar componente con React SSR
