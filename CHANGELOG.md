@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.3.0 (2026-04-16)
+
+### Breaking Changes
+
+- **Middleware `next()` ahora ejecuta el pipeline real.** Antes `next()` devolvia `Response(null)` (un stub vacio) y el adapter ignoraba el return del middleware cuando `next()` era llamado. Ahora `next()` ejecuta loaders + `renderToString` + `generateHTML` y devuelve el `Response` con el HTML renderizado. El middleware puede leer, modificar o reemplazar ese response.
+  - **Impacto**: middleware que llamaba `next()` y dependia de que el return fuera ignorado dejara de funcionar como antes. En la practica ningun middleware conocido depende de esto, ya que el return se descartaba silenciosamente.
+  - **Migracion**: no se requieren cambios si el middleware ya retornaba `next()` directamente (`return next()`). Si el middleware retornaba algo distinto despues de llamar `next()`, ese valor ahora si se usa como response final.
+
+- **`context.params` ahora contiene los params de la ruta.** Antes era siempre `{}`. El route matching se ejecuta antes del middleware para que `context.params` tenga los valores reales (e.g., `context.params.slug`). Middleware que parseaba params manualmente desde el pathname puede simplificarse.
+
+### Features
+
+- **Response wrapping en middleware**: el middleware puede llamar `next()`, leer el body con `response.clone().text()`, agregar headers, cachear el HTML, o reemplazar el response completo. Esto habilita caching de HTML renderizado a nivel de middleware sin forkear el adapter ni usar un reverse proxy externo.
+
+### Packages
+
+| Paquete                        | Version anterior | Nueva version |
+| ------------------------------ | ---------------- | ------------- |
+| `@calumet/suamox-hono-adapter` | 0.2.14           | 0.3.0         |
+
+---
+
 ## 0.2.6 (2026-03-20)
 
 ### Security

@@ -107,6 +107,10 @@ Usa mensajes claros y descriptivos:
   - `patch` para correcciones (`0.1.0 -> 0.1.1`)
   - `minor` para features retrocompatibles (`0.1.x -> 0.2.0`)
   - `major` para cambios incompatibles (o un minor bien documentado mientras sigas en `0.x`)
+- **Breaking changes** requieren:
+  1. Bump de `minor` (en `0.x`) o `major` (post `1.0`).
+  2. Entrada en `CHANGELOG.md` bajo `### Breaking Changes` con: que cambio, cual es el impacto, y pasos de migracion.
+  3. Si el cambio afecta la API publica de un paquete (`MiddlewareFunction`, `createServer`, etc.), actualizar los JSDoc correspondientes.
 - Las dependencias del template de `create-app` deben mantenerse con rango semver (`^0.1.0`) para evitar cambios del template en cada patch.
 - Ejemplos de publicación:
   - Paquete único: `pnpm --filter @calumet/suamox-cli publish --no-git-checks`
