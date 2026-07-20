@@ -38,7 +38,7 @@ const runtimeModule = {
   RedirectResponse,
 };
 
-const createSsrLoadModule = (routes: unknown[], middlewareFn?: unknown) =>
+const createSsrImport = (routes: unknown[], middlewareFn?: unknown) =>
   vi.fn((id: string) => {
     if (id === "@calumet/suamox") {
       return Promise.resolve(runtimeModule);
@@ -93,10 +93,11 @@ describe("createDevHandler", () => {
     const routes: unknown[] = [];
     const transformIndexHtml = vi.fn((_url: string, html: string) => Promise.resolve(html));
     const vite = {
-      ssrLoadModule: createSsrLoadModule(routes),
+      environments: {
+        ssr: { runner: { import: createSsrImport(routes) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
       transformIndexHtml,
-      ssrFixStacktrace: vi.fn(),
-      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
     } as unknown as ViteDevServer;
 
     const onBeforeRender = vi.fn((ctx: RenderOptions) => ({ ...ctx, pathname: "/changed" }));
@@ -137,10 +138,11 @@ describe("createDevHandler", () => {
       initialData: null,
     });
     const vite = {
-      ssrLoadModule: createSsrLoadModule([]),
+      environments: {
+        ssr: { runner: { import: createSsrImport([]) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
-      ssrFixStacktrace: vi.fn(),
-      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
     } as unknown as ViteDevServer;
 
     const app = createDevHandler({ vite, root });
@@ -167,10 +169,11 @@ describe("createDevHandler", () => {
     });
 
     const vite = {
-      ssrLoadModule: createSsrLoadModule([]),
+      environments: {
+        ssr: { runner: { import: createSsrImport([]) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.reject(new Error("missing"))) },
+      },
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
-      ssrFixStacktrace: vi.fn(),
-      transformRequest: vi.fn((_url: string) => Promise.reject(new Error("missing"))),
     } as unknown as ViteDevServer;
 
     const app = createDevHandler({ vite, root });
@@ -199,10 +202,11 @@ describe("createDevHandler", () => {
     });
 
     const vite = {
-      ssrLoadModule: createSsrLoadModule([]),
+      environments: {
+        ssr: { runner: { import: createSsrImport([]) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
-      ssrFixStacktrace: vi.fn(),
-      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
     } as unknown as ViteDevServer;
 
     const app = createDevHandler({ vite, root });
@@ -252,10 +256,11 @@ describe("createDevHandler", () => {
     });
 
     const vite = {
-      ssrLoadModule: createSsrLoadModule([route]),
+      environments: {
+        ssr: { runner: { import: createSsrImport([route]) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
-      ssrFixStacktrace: vi.fn(),
-      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
     } as unknown as ViteDevServer;
 
     const app = createDevHandler({ vite, root });
@@ -286,10 +291,11 @@ describe("createDevHandler", () => {
     });
 
     const vite = {
-      ssrLoadModule: createSsrLoadModule([route]),
+      environments: {
+        ssr: { runner: { import: createSsrImport([route]) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
-      ssrFixStacktrace: vi.fn(),
-      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
     } as unknown as ViteDevServer;
 
     const app = createDevHandler({ vite, root });
@@ -307,10 +313,11 @@ describe("createDevHandler /__data endpoint", () => {
   const createViteMock = (routes: unknown[] = [], loaderRoute?: unknown) => {
     const resolvedRoutes = loaderRoute ? [loaderRoute] : routes;
     return {
-      ssrLoadModule: createSsrLoadModule(resolvedRoutes),
+      environments: {
+        ssr: { runner: { import: createSsrImport(resolvedRoutes) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
-      ssrFixStacktrace: vi.fn(),
-      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
     } as unknown as ViteDevServer;
   };
 
@@ -492,18 +499,19 @@ describe("createDevHandler /__data endpoint", () => {
     mocks.matchRoute.mockReturnValue({ route, params: {} });
     mocks.resolveRouteModule.mockResolvedValue(route);
 
-    const ssrLoadModuleFn = createSsrLoadModule([route]);
+    const ssrImportFn = createSsrImport([route]);
     const vite = {
-      ssrLoadModule: ssrLoadModuleFn,
+      environments: {
+        ssr: { runner: { import: ssrImportFn } },
+        client: { transformRequest: vi.fn() },
+      },
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
-      ssrFixStacktrace: vi.fn(),
-      transformRequest: vi.fn(),
     } as unknown as ViteDevServer;
 
     const app = createDevHandler({ vite });
     await app.request("http://localhost/__data?path=/about");
 
-    expect(ssrLoadModuleFn).toHaveBeenCalledWith("virtual:pages/server");
+    expect(ssrImportFn).toHaveBeenCalledWith("virtual:pages/server");
   });
 });
 
@@ -744,10 +752,11 @@ describe("createDevHandler middleware", () => {
     );
 
     const vite = {
-      ssrLoadModule: createSsrLoadModule([route], middlewareFn),
+      environments: {
+        ssr: { runner: { import: createSsrImport([route], middlewareFn) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
-      ssrFixStacktrace: vi.fn(),
-      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
     } as unknown as ViteDevServer;
 
     const app = createDevHandler({ vite, root });
@@ -772,10 +781,11 @@ describe("createDevHandler middleware", () => {
     });
 
     const vite = {
-      ssrLoadModule: createSsrLoadModule([], middlewareFn),
+      environments: {
+        ssr: { runner: { import: createSsrImport([], middlewareFn) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
-      ssrFixStacktrace: vi.fn(),
-      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
     } as unknown as ViteDevServer;
 
     const app = createDevHandler({ vite, root });
@@ -806,10 +816,11 @@ describe("createDevHandler middleware", () => {
     });
 
     const vite = {
-      ssrLoadModule: createSsrLoadModule([], middlewareFn),
+      environments: {
+        ssr: { runner: { import: createSsrImport([], middlewareFn) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
-      ssrFixStacktrace: vi.fn(),
-      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
     } as unknown as ViteDevServer;
 
     const app = createDevHandler({ vite, root });
@@ -842,10 +853,11 @@ describe("createDevHandler middleware", () => {
     });
 
     const vite = {
-      ssrLoadModule: createSsrLoadModule([], middlewareFn),
+      environments: {
+        ssr: { runner: { import: createSsrImport([], middlewareFn) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
-      ssrFixStacktrace: vi.fn(),
-      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
     } as unknown as ViteDevServer;
 
     const app = createDevHandler({ vite, root });
@@ -880,10 +892,11 @@ describe("createDevHandler middleware", () => {
     });
 
     const vite = {
-      ssrLoadModule: createSsrLoadModule([], middlewareFn),
+      environments: {
+        ssr: { runner: { import: createSsrImport([], middlewareFn) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
-      ssrFixStacktrace: vi.fn(),
-      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
     } as unknown as ViteDevServer;
 
     const app = createDevHandler({ vite, root });
@@ -915,10 +928,11 @@ describe("createDevHandler middleware", () => {
     });
 
     const vite = {
-      ssrLoadModule: createSsrLoadModule([], middlewareFn),
+      environments: {
+        ssr: { runner: { import: createSsrImport([], middlewareFn) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
       transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
-      ssrFixStacktrace: vi.fn(),
-      transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })),
     } as unknown as ViteDevServer;
 
     const app = createDevHandler({ vite, root });

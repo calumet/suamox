@@ -72,9 +72,7 @@ export default function Page({ data }: { data: any }) {
 
 ```tsx
 export async function loader(ctx: LoaderContext) {
-  return {
-    /* datos */
-  };
+  return {/* datos */};
 }
 ```
 

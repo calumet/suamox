@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.4.0 (2026-07-20)
+
+Actualizacion mayor del toolchain. Sin cambios en la API publica del framework.
+
+### Dependencias
+
+- **Vite 6 -> 8** (Rolldown/Oxc), **Vitest 2 -> 4**, **@vitejs/plugin-react 4 -> 6** (requiere Vite 8), **@hono/node-server 1 -> 2** (requiere Node >= 20).
+- React 19.2, Hono 4.12, TypeScript 5.9.3 (unificado), tsup 8.5, Playwright 1.61, Prettier 3.9.
+
+### Migracion a la Environment API
+
+Se dejaron de usar las APIs de Vite que la Environment API reemplaza:
+
+| Antes                        | Ahora                                         |
+| ---------------------------- | --------------------------------------------- |
+| `vite.ssrLoadModule(url)`    | `vite.environments.ssr.runner.import(url)`    |
+| `vite.ssrFixStacktrace(err)` | (se elimina: el runner corrige los traces)    |
+| `server.moduleGraph.*`       | `environment.moduleGraph.*` por entorno       |
+| `vite.transformRequest(url)` | `vite.environments.client.transformRequest()` |
+| `server.ws.send(...)`        | `server.environments.client.hot.send(...)`    |
+
+El entorno SSR se detecta por duck typing; si no expone `runner` (p. ej. un runtime tipo Cloudflare Workers) se lanza un error explicito. Compatible con Vite 6, 7 y 8.
+
+### Optimizaciones
+
+- **Deteccion de exports con el parser Oxc (`parseSync`) en vez de es-module-lexer.** Corrige un bug: es-module-lexer no parsea `.tsx`, asi que la deteccion de `loader`/`getStaticPaths`/`prerender` caia a un regex con falsos positivos (reconocia `loader` en comentarios o strings). Se elimina `es-module-lexer` de las dependencias.
+- **Guard client/server por entorno** via `this.environment.config.consumer` en vez de un `build.ssr` global.
+- **CSS por pagina en dev**: se recorre el grafo del entorno SSR de la pagina renderizada e inyecta su CSS, no solo el global de `entry-client.tsx` (evita flash sin estilos). Solo dev.
+
+### Compatibilidad
+
+- **`peerDependencies` de vite ampliadas** en `suamox-vite-plugin-pages` y `suamox-hono-adapter`: `^6.0.0 || ^7.0.0 || ^8.0.0`.
+- Los proyectos nuevos de `create-app` requieren **Node `^20.19.0 || >=22.12.0`** (el template usa Vite 8). Los proyectos existentes no se ven afectados hasta que suban Vite.
+
+### Sin actualizar (deliberado)
+
+- **TypeScript 7.0** (port a Go): rompe `tsup --dts` y `typescript-eslint` no lo soporta. Se mantiene 5.9.3 hasta TS 7.1.
+- **ESLint 10**: `@calumet/elise-linter` arrastra `eslint-plugin-react@7.37.5`, incompatible con ESLint 10. Se mantiene ESLint 9.
+
+### Bug Fixes
+
+- `eslint.config.js` ahora ignora `coverage/` y `test-results/` (antes `pnpm lint` fallaba tras `pnpm test:coverage`).
+- Eliminadas dos aserciones de tipo que `@types/node` volvio redundantes.
+
+### Packages
+
+| Paquete                             | Version anterior | Nueva version |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox`                   | 0.2.9            | 0.2.10        |
+| `@calumet/suamox-cli`               | 0.1.2            | 0.1.3         |
+| `@calumet/suamox-create-app`        | 0.2.5            | 0.3.0         |
+| `@calumet/suamox-head`              | 0.1.0            | 0.1.1         |
+| `@calumet/suamox-hono-adapter`      | 0.3.0            | 0.4.0         |
+| `@calumet/suamox-router`            | 0.2.7            | 0.2.8         |
+| `@calumet/suamox-vite-plugin-pages` | 0.2.10           | 0.3.0         |
+
+---
+
 ## 0.3.0 (2026-04-16)
 
 ### Breaking Changes

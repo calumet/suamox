@@ -11,24 +11,24 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hono/node-server": "^1.14.0",
+    "@hono/node-server": "^2.0.10",
     "@calumet/suamox-head": "workspace:*",
     "@calumet/suamox-hono-adapter": "workspace:*",
     "@calumet/suamox-router": "workspace:*",
     "@calumet/suamox": "workspace:*",
     "@calumet/suamox-vite-plugin-pages": "workspace:*",
-    "hono": "^4.6.17",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "hono": "^4.12.31",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@types/node": "^22.10.5",
-    "@types/react": "^19.0.6",
-    "@types/react-dom": "^19.0.3",
-    "@vitejs/plugin-react": "^4.3.4",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
     "cross-env": "^10.1.0",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.3",
-    "vite": "^6.0.7"
+    "tsx": "^4.23.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.1.5"
   }
 }
