@@ -1,8 +1,7 @@
 import { resolve } from "node:path";
 
-import { init, parse } from "es-module-lexer";
 import pc from "picocolors";
-import type { Plugin, ResolvedConfig, ViteDevServer } from "vite";
+import { parseSync, type Plugin, type ViteDevServer } from "vite";
 
 import { generateClientProxy, generateRoutesModule, type DefaultPageMode } from "./codegen.js";
 import { scanRoutes } from "./scanner.js";
@@ -30,7 +29,6 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
 
   let server: ViteDevServer | undefined;
   let root: string;
-  let resolvedConfig: ResolvedConfig;
   let basePath = "/";
   let routesCache: RouteRecord[] | null = null;
   let apiRoutesCache: ApiRouteRecord[] = [];
@@ -68,16 +66,21 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     }
 
     if (server) {
-      const clientModule = server.moduleGraph.getModuleById(RESOLVED_VIRTUAL_MODULE_ID);
-      if (clientModule) {
-        server.moduleGraph.invalidateModule(clientModule);
+      // Cada entorno (client, ssr, ...) tiene su propio module graph. El modulo
+      // virtual del cliente vive en `client` y el del servidor en `ssr`, asi que
+      // hay que invalidarlos entorno por entorno.
+      let invalidated = false;
+      for (const environment of Object.values(server.environments)) {
+        for (const id of [RESOLVED_VIRTUAL_MODULE_ID, RESOLVED_VIRTUAL_SERVER_MODULE_ID]) {
+          const mod = environment.moduleGraph.getModuleById(id);
+          if (mod) {
+            environment.moduleGraph.invalidateModule(mod);
+            invalidated = true;
+          }
+        }
       }
-      const serverModule = server.moduleGraph.getModuleById(RESOLVED_VIRTUAL_SERVER_MODULE_ID);
-      if (serverModule) {
-        server.moduleGraph.invalidateModule(serverModule);
-      }
-      if (clientModule || serverModule) {
-        server.ws.send({
+      if (invalidated) {
+        server.environments.client.hot.send({
           type: "full-reload",
           path: "*",
         });
@@ -90,7 +93,6 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
 
     configResolved(config) {
       root = config.root;
-      resolvedConfig = config;
       basePath = config.base.replace(/\/+$/, "") || "/";
     },
 
@@ -151,9 +153,17 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
         return RESOLVED_VIRTUAL_SERVER_MODULE_ID;
       }
 
-      // Bloquear imports de .server.ts/.server.tsx en build del cliente
+      // El stripping de server code solo aplica al bundle del cliente. Se
+      // consulta el entorno actual (`this.environment.config.consumer`) en vez
+      // de un `build.ssr` global capturado una vez: distingue client de ssr por
+      // entorno y funciona igual en dev que en build.
+      if (this.environment.config.consumer !== "client") {
+        return;
+      }
+
+      // Bloquear imports de .server.ts/.server.tsx desde el cliente
       const cleanId = id.split("?")[0] ?? id;
-      if (!resolvedConfig.build.ssr && isServerFile(cleanId)) {
+      if (isServerFile(cleanId)) {
         const importerRel = importer ? importer.replace(/\\/g, "/") : "unknown";
         throw new Error(
           `[suamox:pages] Cannot import server-only file "${cleanId}" from client code (${importerRel}). ` +
@@ -161,9 +171,9 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
         );
       }
 
-      // Bloquear imports de src/api/ en build del cliente
+      // Bloquear imports de src/api/ desde el cliente
       const absoluteApiDir = resolve(root, "src/api");
-      if (!resolvedConfig.build.ssr && cleanId.startsWith(absoluteApiDir.replace(/\\/g, "/"))) {
+      if (cleanId.startsWith(absoluteApiDir.replace(/\\/g, "/"))) {
         const importerRel = importer ? importer.replace(/\\/g, "/") : "unknown";
         throw new Error(
           `[suamox:pages] Cannot import API route "${cleanId}" from client code (${importerRel}). ` +
@@ -187,35 +197,48 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       }
     },
 
-    async transform(code, id) {
+    transform(code, id) {
       // Solo aplicar a modulos con el query string del client route
       if (!id.includes(`?${CLIENT_ROUTE_QUERY}`)) return;
 
-      // En este punto Vite ya transformo TSX/TS a JS, asi que es-module-lexer funciona
+      // En este punto Vite ya transformo TSX/TS a JS. Se usa el parser Oxc de
+      // Vite para extraer los exports con precision de AST.
       const filePath = (id.split("?")[0] ?? id).replace(/\\/g, "/");
 
-      await init;
+      const result = parseSync(filePath, code);
 
-      try {
-        const [, exports] = parse(code);
-        const exportNames = exports.map((exp) => exp.n).filter((n): n is string => n != null);
-
-        const proxy = generateClientProxy(filePath, exportNames);
-        if (proxy) {
-          return {
-            code: proxy,
-            map: null,
-          };
-        }
-      } catch (err) {
+      // Fail-safe: si el codigo no parsea limpio no se puede garantizar que el
+      // stripping de server code sea correcto, asi que se aborta el build.
+      if (result.errors.length > 0) {
         this.error(
           `[suamox:pages] Failed to parse exports from "${filePath}". ` +
             `Cannot guarantee server code won't leak to the client bundle.\n` +
             `To fix this, you can:\n` +
             `  1. Move server-only imports to a *.server.ts file (automatically excluded from client)\n` +
             `  2. Check the file for syntax errors\n` +
-            `Error: ${err instanceof Error ? err.message : String(err)}`,
+            `Error: ${result.errors[0]?.message ?? "unknown parse error"}`,
         );
+      }
+
+      // El default export llega sin `name` (kind "Default"); generateClientProxy
+      // lo espera como "default" para re-exportar el componente de pagina.
+      const exportNames: string[] = [];
+      for (const statement of result.module.staticExports) {
+        for (const entry of statement.entries) {
+          if (entry.exportName.name) {
+            exportNames.push(entry.exportName.name);
+          } else if (entry.exportName.kind === "Default") {
+            exportNames.push("default");
+          }
+        }
+      }
+
+      const proxy = generateClientProxy(filePath, exportNames);
+      if (proxy) {
+        return {
+          code: proxy,
+          map: null,
+        };
       }
     },
   };

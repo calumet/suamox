@@ -2,13 +2,42 @@ import { access } from "node:fs/promises";
 import { readFile } from "node:fs/promises";
 import { basename, dirname, relative, resolve } from "node:path";
 
-import { init, parse } from "es-module-lexer";
 import fg from "fast-glob";
+import { parseSync } from "vite";
 
 import { parseRoute, sortRoutes, validateRoutes } from "./parser.js";
 import type { ApiRouteRecord, LayoutMeta, RouteRecord } from "./types.js";
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
+
+/**
+ * Extrae los nombres de export de un modulo con el parser Oxc de Vite.
+ *
+ * Reemplaza a es-module-lexer, que solo lexa JS y fallaba en todos los .tsx
+ * (cayendo siempre al fallback de regex). Oxc parsea TS/TSX nativamente y hace
+ * error-recovery, asi que ni las anotaciones de tipo ni un `loader` dentro de un
+ * comentario o string se confunden con un export real.
+ *
+ * Captura el nombre *exportado* (no el local), asi que `export { x as loader }`
+ * y `export { loader } from "./m"` cuentan. Devuelve `null` solo si el parser
+ * lanza (caso extremo); el caller usa entonces el fallback de regex.
+ */
+function parseExports(file: string, content: string): Set<string> | null {
+  try {
+    const result = parseSync(file, content);
+    const names = new Set<string>();
+    for (const statement of result.module.staticExports) {
+      for (const entry of statement.entries) {
+        if (entry.exportName.name) {
+          names.add(entry.exportName.name);
+        }
+      }
+    }
+    return names;
+  } catch {
+    return null;
+  }
+}
 
 const loaderExportPatterns = [
   /\bexport\s+(async\s+)?function\s+loader\b/,
@@ -143,9 +172,6 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
   const { pagesDir, extensions, root = process.cwd() } = options;
   const absolutePagesDir = resolve(root, pagesDir);
 
-  // Inicializar es-module-lexer (solo se hace una vez)
-  await init;
-
   // Construir patrón glob
   const extPattern = extensions.length === 1 ? extensions[0] : `{${extensions.join(",")}}`;
   const pattern = `**/*${extPattern}`;
@@ -169,17 +195,9 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
   // Detectar loaders en layout files
   await Promise.all(
     layoutFiles.map(async (file) => {
-      let content = "";
-      try {
-        content = await readFile(file, "utf-8");
-        const [, exports] = parse(content);
-        layoutLoaderMap.set(
-          file,
-          exports.some((exp) => exp.n === "loader"),
-        );
-      } catch {
-        layoutLoaderMap.set(file, fallbackHasLoader(content));
-      }
+      const content = await readFile(file, "utf-8");
+      const exports = parseExports(file, content);
+      layoutLoaderMap.set(file, exports ? exports.has("loader") : fallbackHasLoader(content));
     }),
   );
 
@@ -200,15 +218,14 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
         absolutePagesDir,
       );
 
-      // Verificar exports con es-module-lexer cuando el archivo sea parseable como ESM.
-      let content = "";
-      try {
-        content = await readFile(file, "utf-8");
-        const [, exports] = parse(content);
-        route.hasLoader = exports.some((exp) => exp.n === "loader");
-        route.hasGetStaticPaths = exports.some((exp) => exp.n === "getStaticPaths");
-        route.hasPrerender = exports.some((exp) => exp.n === "prerender");
-      } catch {
+      // Detectar loader / getStaticPaths / prerender via AST (Oxc).
+      const content = await readFile(file, "utf-8");
+      const exports = parseExports(file, content);
+      if (exports) {
+        route.hasLoader = exports.has("loader");
+        route.hasGetStaticPaths = exports.has("getStaticPaths");
+        route.hasPrerender = exports.has("prerender");
+      } else {
         route.hasLoader = fallbackHasLoader(content);
         route.hasGetStaticPaths = fallbackHasGetStaticPaths(content);
         route.hasPrerender = fallbackHasPrerender(content);
@@ -245,20 +262,13 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
       }
 
       // Detectar metodos HTTP exportados
-      let httpMethods: string[] = [];
-      try {
-        const content = await readFile(file, "utf-8");
-        const [, exports] = parse(content);
-        httpMethods = exports
-          .map((exp) => exp.n)
-          .filter((n): n is string => n != null && HTTP_METHODS.includes(n));
-      } catch {
-        // Fallback: regex
-        const content = await readFile(file, "utf-8");
-        httpMethods = HTTP_METHODS.filter((method) =>
-          new RegExp(`\\bexport\\s+(async\\s+)?function\\s+${method}\\b`).test(content),
-        );
-      }
+      const content = await readFile(file, "utf-8");
+      const exports = parseExports(file, content);
+      const httpMethods = exports
+        ? HTTP_METHODS.filter((method) => exports.has(method))
+        : HTTP_METHODS.filter((method) =>
+            new RegExp(`\\bexport\\s+(async\\s+)?function\\s+${method}\\b`).test(content),
+          );
 
       // Prefixar la ruta con /api
       const apiPath = route.path === "/" ? "/api" : `/api${route.path}`;

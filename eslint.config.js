@@ -17,6 +17,8 @@ export default [
   {
     ignores: [
       "**/dist/**",
+      "**/coverage/**",
+      "**/test-results/**",
       "**/node_modules/**",
       "**/*.config.js",
       "**/*.config.ts",

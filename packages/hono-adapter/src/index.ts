@@ -26,7 +26,8 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { proxy as honoProxy } from "hono/proxy";
 import pc from "picocolors";
-import type { ViteDevServer } from "vite";
+import { normalizePath, type EnvironmentModuleNode, type ViteDevServer } from "vite";
+import type { ModuleRunner } from "vite/module-runner";
 
 export interface HonoAdapterOptions {
   onRequest?: (c: Context) => void | Promise<void>;
@@ -101,7 +102,7 @@ const toFetchRequest = (req: IncomingMessage, allowedHosts?: string[]): Request 
     init.duplex = "half";
   }
 
-  return new Request(requestUrl, init as RequestInit);
+  return new Request(requestUrl, init);
 };
 
 const splitQuery = (value: string): { path: string; query: string } => {
@@ -199,9 +200,12 @@ const collectCssImportsFromEntryClient = async (
       continue;
     }
 
-    if (typeof vite?.transformRequest === "function") {
+    // El CSS se sirve al navegador, asi que se transforma en el entorno client.
+    // `vite.transformRequest` esta marcado para eliminarse en Vite 9.
+    const clientEnvironment = vite?.environments?.client;
+    if (typeof clientEnvironment?.transformRequest === "function") {
       try {
-        await vite.transformRequest(href);
+        await clientEnvironment.transformRequest(href);
       } catch {
         continue;
       }
@@ -211,6 +215,46 @@ const collectCssImportsFromEntryClient = async (
   }
 
   return Array.from(links);
+};
+
+/**
+ * Recolecta el CSS que importa la pagina renderizada, recorriendo el grafo de
+ * modulos del entorno SSR desde su archivo.
+ *
+ * El regex sobre entry-client.tsx solo ve el CSS global; el CSS que importa una
+ * pagina concreta (o sus componentes) no aparece ahi y causaria un flash sin
+ * estilos en dev. Tras renderizar, ese CSS ya esta en el grafo SSR de la
+ * pagina, asi que se recorre `importedModules` transitivamente y se toman las
+ * URLs `.css` (que Vite sirve directamente como `<link>` en dev).
+ *
+ * Solo aplica a dev; en produccion el CSS lo emite el build del cliente.
+ */
+const collectPageCssFromSsrGraph = (vite: ViteDevServer, filePath: string): string[] => {
+  const graph = vite.environments?.ssr?.moduleGraph;
+  const mods = graph?.getModulesByFile(normalizePath(filePath));
+  if (!mods) {
+    return [];
+  }
+
+  const seen = new Set<EnvironmentModuleNode>();
+  const css = new Set<string>();
+  const walk = (mod: EnvironmentModuleNode): void => {
+    if (seen.has(mod)) {
+      return;
+    }
+    seen.add(mod);
+    for (const dep of mod.importedModules) {
+      if (dep.url && /\.css($|\?)/.test(dep.url)) {
+        css.add(dep.url);
+      }
+      walk(dep);
+    }
+  };
+  for (const mod of mods) {
+    walk(mod);
+  }
+
+  return Array.from(css);
 };
 
 /**
@@ -344,6 +388,38 @@ export async function createServer(options: CreateServerOptions): Promise<void> 
 }
 
 /**
+ * Obtiene el module runner del entorno SSR de Vite.
+ *
+ * Reemplaza a `vite.ssrLoadModule()`, que la Environment API deja obsoleto.
+ * Disponible desde Vite 6: `defaultCreateDevEnvironment()` ya construye un
+ * `RunnableDevEnvironment` para todo entorno que no sea el cliente.
+ *
+ * Se detecta por duck typing en vez de con `isRunnableDevEnvironment()` porque
+ * ese guard usa `instanceof`, lo que impediria inyectar un servidor de prueba.
+ *
+ * El caso realista de fallo no es una version vieja de Vite sino un entorno SSR
+ * no ejecutable en proceso: si el usuario configura un runtime tipo Cloudflare
+ * Workers, ese entorno no expone `runner` y el render debe fallar con un
+ * mensaje claro en vez de un `TypeError` dentro del framework.
+ */
+const ssrRunner = (vite: ViteDevServer): ModuleRunner => {
+  const environment = vite.environments?.ssr as unknown as { runner?: ModuleRunner } | undefined;
+  const runner = environment?.runner;
+
+  if (!runner || typeof runner.import !== "function") {
+    throw new Error(
+      "[suamox] El entorno SSR de Vite no expone un module runner. " +
+        "El adapter de Hono renderiza en el mismo proceso que Vite, asi que " +
+        "requiere un RunnableDevEnvironment (el que Vite crea por defecto). " +
+        "Si configuraste un runtime externo (Cloudflare Workers, workerd, etc.) " +
+        "ese entorno no es compatible con este adapter.",
+    );
+  }
+
+  return runner;
+};
+
+/**
  * Crea el handler de desarrollo con integración de Vite
  */
 export function createDevHandler(options: DevHandlerOptions): Hono {
@@ -353,12 +429,12 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
   // Carga @calumet/suamox a través de Vite para compartir la misma instancia
   // de contextos React (LoaderDataContext, StaticPropsContext) con las páginas.
   const loadRuntime = () =>
-    vite.ssrLoadModule("@calumet/suamox") as Promise<typeof import("@calumet/suamox")>;
+    ssrRunner(vite).import<typeof import("@calumet/suamox")>("@calumet/suamox");
 
   const loadMiddleware = async (): Promise<MiddlewareFunction | undefined> => {
-    const mod = (await vite.ssrLoadModule("virtual:pages/server")) as {
-      onRequest?: MiddlewareFunction;
-    };
+    const mod = await ssrRunner(vite).import<{ onRequest?: MiddlewareFunction }>(
+      "virtual:pages/server",
+    );
     return mod.onRequest;
   };
 
@@ -366,7 +442,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
   app.all("/api/*", async (c) => {
     try {
       const runtime = await loadRuntime();
-      const routesModule = (await vite.ssrLoadModule("virtual:pages/server")) as {
+      const routesModule = await ssrRunner(vite).import<{
         routes: RouteRecord[];
         apiRoutes?: Array<{
           path: string;
@@ -377,7 +453,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
           priority: number;
         }>;
         base?: string;
-      };
+      }>("virtual:pages/server");
 
       const apiRoutes = routesModule.apiRoutes;
       if (!apiRoutes || apiRoutes.length === 0) {
@@ -414,7 +490,6 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         });
       });
     } catch (error) {
-      vite.ssrFixStacktrace(error as Error);
       console.error(pc.red("[API Route Error]"), error);
       return c.json({ error: "Internal server error" }, 500);
     }
@@ -436,10 +511,10 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
 
     try {
       const runtime = await loadRuntime();
-      const routesModule = (await vite.ssrLoadModule("virtual:pages/server")) as {
+      const routesModule = await ssrRunner(vite).import<{
         routes: RouteRecord[];
         base?: string;
-      };
+      }>("virtual:pages/server");
       const routes = routesModule.routes;
       const routeBase = routesModule.base ?? "/";
       const strippedPathname = stripBase(path, routeBase);
@@ -516,7 +591,6 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       if (error instanceof RedirectResponse) {
         return c.json({ __redirect: error.location, __status: error.status });
       }
-      vite.ssrFixStacktrace(error as Error);
       console.error(pc.red("[Data Endpoint Error]"), error);
       return c.json({ error: "Loader error" }, 500);
     }
@@ -535,10 +609,10 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
 
       // Cargar runtime y rutas a través de Vite para compartir instancias de contexto
       const runtime = await loadRuntime();
-      const routesModule = (await vite.ssrLoadModule("virtual:pages/server")) as {
+      const routesModule = await ssrRunner(vite).import<{
         routes: RouteRecord[];
         base?: string;
-      };
+      }>("virtual:pages/server");
       const routes = routesModule.routes;
       const base = routesModule.base ?? "/";
       const strippedPathname = stripBase(url.pathname, base);
@@ -595,7 +669,10 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
 
           const escapeAttr = (v: string): string =>
             v.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-          const devCssLinks = await collectCssImportsFromEntryClient(root, vite);
+          const entryCssLinks = await collectCssImportsFromEntryClient(root, vite);
+          // CSS que importa la pagina renderizada (no visible desde entry-client)
+          const pageCssLinks = match ? collectPageCssFromSsrGraph(vite, match.route.filePath) : [];
+          const devCssLinks = Array.from(new Set([...entryCssLinks, ...pageCssLinks]));
           const devCssTags = devCssLinks
             .map((href) => `<link rel="stylesheet" href="${escapeAttr(href)}">`)
             .join("\n    ");
@@ -641,8 +718,6 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         },
       );
     } catch (error) {
-      // Dejar que Vite maneje errores con stack trace
-      vite.ssrFixStacktrace(error as Error);
       console.error(pc.red("[SSR Error]"), error);
 
       return c.html("<h1>500 - Internal Server Error</h1>", 500);

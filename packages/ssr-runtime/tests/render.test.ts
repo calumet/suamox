@@ -558,8 +558,7 @@ describe("useLoaderData", () => {
         "useStaticProps() is server-only. Use useLoaderData() on the client instead.",
       );
     } finally {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
-      globalThis.window = originalWindow as any;
+      globalThis.window = originalWindow;
     }
   });
 });

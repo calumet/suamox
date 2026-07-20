@@ -132,6 +132,33 @@ export default function Page() {
     expect(route?.hasGetStaticPaths).toBe(true);
     expect(route?.hasPrerender).toBe(true);
   });
+
+  it("does not treat loader in comments or strings as a real export (AST, not regex)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+    const page = join(pagesDir, "trap.tsx");
+
+    await writeFileWithDirs(
+      page,
+      `// export function loader() { return null; }
+const docs = "export const getStaticPaths = () => []";
+export default function Page() {
+  return null;
+}
+`,
+    );
+
+    const result = await scanRoutes({
+      pagesDir: "src/pages",
+      extensions: [".tsx"],
+      root,
+    });
+
+    const route = result.routes.find((item) => item.path === "/trap");
+    expect(route).toBeDefined();
+    expect(route?.hasLoader).toBe(false);
+    expect(route?.hasGetStaticPaths).toBe(false);
+  });
 });
 
 describe("scanRoutes middleware detection", () => {
