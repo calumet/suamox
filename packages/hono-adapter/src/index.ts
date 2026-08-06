@@ -882,8 +882,24 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     }
     return response;
   });
-  // Servir archivos de public/ que Vite copia a clientDir (img, fonts, etc.)
-  app.use("*", serveStatic({ root: clientDir }));
+  /* Servir archivos de public/ que Vite copia a clientDir (img, fonts, etc.).
+
+     Las rutas de directorio se saltan. Vite emite su `index.html` en este mismo
+     directorio, y servirlo como índice de `/` responde antes de llegar al
+     renderizador: la raíz se queda sin SSR y sin su HTML prerenderizado. El
+     resto de las rutas nunca lo notaron porque no resuelven a ningún archivo y
+     caen a `next()`. */
+  const publicHandler = serveStatic({ root: clientDir }) as (
+    c: Context,
+    next: () => Promise<void>,
+  ) => Promise<Response | void>;
+  app.use("*", async (c, next) => {
+    if (c.req.path.endsWith("/")) {
+      return next();
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    return publicHandler(c, next);
+  });
 
   if (staticFallbackEnabled) {
     app.use("/client/*", serveStatic({ root: staticDir }));

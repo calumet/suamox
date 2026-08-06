@@ -23,6 +23,15 @@ test.describe("SSR rendering", () => {
     await expect(page.locator("footer")).toContainText("Suamox example layout");
   });
 
+  test("serves server-rendered HTML at the root path", async ({ page }) => {
+    const response = await page.goto("/");
+    const html = await response!.text();
+
+    // The index.html Vite emits into dist/client has an empty root element, so
+    // if that file answers the request the markup only exists after hydration.
+    expect(html).toContain("Welcome to Suamox");
+  });
+
   test("renders 404 page content for unmatched routes", async ({ page }) => {
     await page.goto("/this-does-not-exist");
 

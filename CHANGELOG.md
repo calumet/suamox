@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 (2026-08-06)
+
+### Correcciones
+
+- **`hono-adapter`: la ruta raiz se servia sin SSR.** El middleware que sirve los archivos de `public/` desde `dist/client` resolvia las rutas de directorio contra su indice, y Vite emite su `index.html` en ese mismo directorio. Una peticion a `/` daba con ese archivo y respondia antes de llegar al renderizador, asi que la raiz se entregaba como un cascaron vacio: sin SSR y, en rutas con `prerender`, sin su HTML prerenderizado. Las demas rutas nunca lo notaron porque no resuelven a ningun archivo y caen al renderizador. Ahora el middleware ignora las rutas de directorio.
+
 ## 0.4.0 (2026-07-20)
 
 Actualizacion mayor del toolchain. Sin cambios en la API publica del framework.
