@@ -264,6 +264,10 @@ const collectPageCssFromSsrGraph = (vite: ViteDevServer, filePath: string): stri
  * **before** calling `next()`, writes made after `next()` resolves will
  * mutate the same object the pipeline already consumed.
  *
+ * `context.pathname` is the requested page route without `base`. Use it to
+ * guard routes: on the `/__data` endpoint `url.pathname` is `/__data`, so a
+ * guard reading `url` never fires during client-side navigation.
+ *
  * Calling `next()` executes the full pipeline (loaders + render) and returns
  * the real `Response`. Not calling `next()` short-circuits the pipeline.
  */
@@ -271,6 +275,7 @@ type MiddlewareFunction = (
   context: {
     request: Request;
     url: URL;
+    pathname: string;
     params: Record<string, string>;
     locals: Record<string, unknown>;
   },
@@ -281,6 +286,7 @@ const runMiddleware = async (
   middlewareFn: MiddlewareFunction | undefined,
   request: Request,
   url: URL,
+  pathname: string,
   params: Record<string, string>,
   pipeline: (locals: Record<string, unknown>) => Promise<Response>,
 ): Promise<Response> => {
@@ -289,7 +295,7 @@ const runMiddleware = async (
   }
 
   const locals: Record<string, unknown> = {};
-  const context = { request, url, params, locals };
+  const context = { request, url, pathname, params, locals };
   return middlewareFn(context, () => pipeline(locals));
 };
 
@@ -468,28 +474,38 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       if (!match) return c.notFound();
 
       const middlewareFn = await loadMiddleware();
-      return await runMiddleware(middlewareFn, c.req.raw, url, match.params, async (locals) => {
-        const method = c.req.method.toUpperCase();
-        const apiRoute = match.route as unknown as {
-          methods: Record<string, (ctx: ApiContext) => Response | Promise<Response>>;
-        };
-        const handler = apiRoute.methods[method];
-        if (!handler) {
-          return new Response("Method Not Allowed", {
-            status: 405,
-            headers: { Allow: Object.keys(apiRoute.methods).join(", ") },
-          });
-        }
+      return await runMiddleware(
+        middlewareFn,
+        c.req.raw,
+        url,
+        strippedPathname,
+        match.params,
+        async (locals) => {
+          const method = c.req.method.toUpperCase();
+          const apiRoute = match.route as unknown as {
+            methods: Record<string, (ctx: ApiContext) => Response | Promise<Response>>;
+          };
+          const handler = apiRoute.methods[method];
+          if (!handler) {
+            return new Response("Method Not Allowed", {
+              status: 405,
+              headers: { Allow: Object.keys(apiRoute.methods).join(", ") },
+            });
+          }
 
-        return handler({
-          request: c.req.raw,
-          url,
-          params: match.params,
-          query: url.searchParams,
-          locals,
-        });
-      });
+          return handler({
+            request: c.req.raw,
+            url,
+            params: match.params,
+            query: url.searchParams,
+            locals,
+          });
+        },
+      );
     } catch (error) {
+      if (error instanceof RedirectResponse) {
+        return c.redirect(error.location, error.status as 301 | 302 | 303 | 307 | 308);
+      }
       console.error(pc.red("[API Route Error]"), error);
       return c.json({ error: "Internal server error" }, 500);
     }
@@ -529,64 +545,71 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       // Ejecutar middleware y pipeline de datos
       const middlewareFn = await loadMiddleware();
       const reqUrl = new URL(c.req.url);
-      return await runMiddleware(middlewareFn, c.req.raw, reqUrl, match.params, async (locals) => {
-        const loaderUrl = new URL(path, reqUrl.origin);
-        reqUrl.searchParams.forEach((value, key) => {
-          if (key !== "path" && key !== "stableLayouts") {
-            loaderUrl.searchParams.append(key, value);
+      return await runMiddleware(
+        middlewareFn,
+        c.req.raw,
+        reqUrl,
+        strippedPathname,
+        match.params,
+        async (locals) => {
+          const loaderUrl = new URL(path, reqUrl.origin);
+          reqUrl.searchParams.forEach((value, key) => {
+            if (key !== "path" && key !== "stableLayouts") {
+              loaderUrl.searchParams.append(key, value);
+            }
+          });
+
+          const loaderContext: LoaderContext = {
+            request: c.req.raw,
+            url: loaderUrl,
+            params: match.params,
+            query: loaderUrl.searchParams,
+            locals,
+          };
+
+          // Layout loaders + page loader en paralelo
+          const layoutInfos = resolved.layoutInfos;
+          const hasLayoutLoaders = layoutInfos?.some((li: { loader?: unknown }) => li.loader);
+
+          if (hasLayoutLoaders) {
+            const stableParam = c.req.query("stableLayouts");
+            const validIds = new Set(layoutInfos!.map((li: { routeId: string }) => li.routeId));
+            const stableSet = stableParam
+              ? new Set(stableParam.split(",").filter((id) => validIds.has(id)))
+              : new Set<string>();
+
+            const layoutPromises = layoutInfos!
+              .filter((info: { loader?: unknown }) => !!info.loader)
+              .map(async (info) => ({
+                routeId: info.routeId,
+                data: stableSet.has(info.routeId) ? null : await info.loader!(loaderContext),
+              }));
+
+            const pagePromise = resolved.loader
+              ? resolved.loader(loaderContext)
+              : Promise.resolve(null);
+
+            const [layoutResults, pageData] = await Promise.all([
+              Promise.all(layoutPromises),
+              pagePromise,
+            ]);
+
+            const layouts: Record<string, unknown> = {};
+            for (const result of layoutResults) {
+              layouts[result.routeId] = result.data;
+            }
+
+            return c.json({ page: pageData, layouts });
           }
-        });
 
-        const loaderContext: LoaderContext = {
-          request: c.req.raw,
-          url: loaderUrl,
-          params: match.params,
-          query: loaderUrl.searchParams,
-          locals,
-        };
-
-        // Layout loaders + page loader en paralelo
-        const layoutInfos = resolved.layoutInfos;
-        const hasLayoutLoaders = layoutInfos?.some((li: { loader?: unknown }) => li.loader);
-
-        if (hasLayoutLoaders) {
-          const stableParam = c.req.query("stableLayouts");
-          const validIds = new Set(layoutInfos!.map((li: { routeId: string }) => li.routeId));
-          const stableSet = stableParam
-            ? new Set(stableParam.split(",").filter((id) => validIds.has(id)))
-            : new Set<string>();
-
-          const layoutPromises = layoutInfos!
-            .filter((info: { loader?: unknown }) => !!info.loader)
-            .map(async (info) => ({
-              routeId: info.routeId,
-              data: stableSet.has(info.routeId) ? null : await info.loader!(loaderContext),
-            }));
-
-          const pagePromise = resolved.loader
-            ? resolved.loader(loaderContext)
-            : Promise.resolve(null);
-
-          const [layoutResults, pageData] = await Promise.all([
-            Promise.all(layoutPromises),
-            pagePromise,
-          ]);
-
-          const layouts: Record<string, unknown> = {};
-          for (const result of layoutResults) {
-            layouts[result.routeId] = result.data;
+          // Legacy: sin layout loaders
+          if (!resolved.loader) {
+            return c.json(null);
           }
-
-          return c.json({ page: pageData, layouts });
-        }
-
-        // Legacy: sin layout loaders
-        if (!resolved.loader) {
-          return c.json(null);
-        }
-        const data = await resolved.loader(loaderContext);
-        return c.json(data);
-      });
+          const data = await resolved.loader(loaderContext);
+          return c.json(data);
+        },
+      );
     } catch (error) {
       if (error instanceof RedirectResponse) {
         return c.json({ __redirect: error.location, __status: error.status });
@@ -624,6 +647,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         middlewareFn,
         c.req.raw,
         url,
+        strippedPathname,
         match?.params ?? {},
         async (locals) => {
           // Resolver módulo de ruta para detectar prerender y getStaticPaths
@@ -718,6 +742,9 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         },
       );
     } catch (error) {
+      if (error instanceof RedirectResponse) {
+        return c.redirect(error.location, error.status as 301 | 302 | 303 | 307 | 308);
+      }
       console.error(pc.red("[SSR Error]"), error);
 
       return c.html("<h1>500 - Internal Server Error</h1>", 500);
@@ -951,7 +978,6 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     renderPage: typeof renderPage;
     matchRoute: typeof matchRoute;
     resolveRouteModule: typeof resolveRouteModule;
-    RedirectResponse: typeof RedirectResponse;
     onRequest?: MiddlewareFunction;
   };
 
@@ -971,7 +997,6 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       matchRoute: (mod.matchRoute as typeof matchRoute) ?? matchRoute,
       resolveRouteModule:
         (mod.resolveRouteModule as typeof resolveRouteModule) ?? resolveRouteModule,
-      RedirectResponse: (mod.RedirectResponse as typeof RedirectResponse) ?? RedirectResponse,
       onRequest: mod.onRequest as MiddlewareFunction | undefined,
     };
   };
@@ -998,6 +1023,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         entry.onRequest,
         safeRequest,
         safeUrl,
+        strippedPathname,
         match.params,
         async (locals) => {
           const method = c.req.method.toUpperCase();
@@ -1020,6 +1046,9 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         },
       );
     } catch (error) {
+      if (error instanceof RedirectResponse) {
+        return c.redirect(error.location, error.status as 301 | 302 | 303 | 307 | 308);
+      }
       console.error(pc.red("[API Route Error]"), error);
       return c.json({ error: "Internal server error" }, 500);
     }
@@ -1059,6 +1088,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         entry.onRequest,
         safeRequest,
         safeUrl,
+        strippedPathname,
         match.params,
         async (locals) => {
           const loaderUrl = new URL(path, safeOrigin);
@@ -1164,6 +1194,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         entry.onRequest,
         safeRequest,
         safeUrl,
+        strippedPathname,
         match?.params ?? {},
         async (locals) => {
           // Ejecutar hook onBeforeRender
@@ -1215,6 +1246,9 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         },
       );
     } catch (error) {
+      if (error instanceof RedirectResponse) {
+        return c.redirect(error.location, error.status as 301 | 302 | 303 | 307 | 308);
+      }
       console.error(pc.red("[SSR Error]"), (error as Error).message);
 
       const errorHtml = generateHTML({

@@ -34,6 +34,8 @@ export interface RouterInstance {
 
 type ResolvedMatch = { route: RouteRecord; params: Record<string, string> };
 
+const MAX_REDIRECTS = 5;
+
 const canUseDOM = (): boolean => typeof window !== "undefined" && typeof document !== "undefined";
 
 const isModifiedEvent = (event: MouseEvent): boolean =>
@@ -152,13 +154,31 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
   let currentLayoutRouteIds: string[] = [];
   let currentLayoutData: Record<string, unknown> = {};
 
+  const isClientNavigable = (target: URL): boolean => {
+    if (target.origin !== window.location.origin) {
+      return false;
+    }
+    const apiPrefix = base === "/" ? "/api" : `${base}/api`;
+    if (target.pathname.startsWith(`${apiPrefix}/`) || target.pathname === apiPrefix) {
+      return false;
+    }
+    const match = matchRoute(routes, stripBase(target.pathname, base));
+    return !!match && !match.route.prerender;
+  };
+
   const renderLocation = async (
     url: URL,
     {
       scroll = true,
       useInitialData = false,
       revalidate = false,
-    }: { scroll?: boolean; useInitialData?: boolean; revalidate?: boolean },
+      redirects = 0,
+    }: {
+      scroll?: boolean;
+      useInitialData?: boolean;
+      revalidate?: boolean;
+      redirects?: number;
+    },
   ): Promise<void> => {
     const activeId = ++navigationId;
     const match = resolveMatch(routes, stripBase(url.pathname, base));
@@ -170,6 +190,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     const resolvedRoute = await resolveRouteModule(match.route);
     let data: unknown = null;
     let layoutData: Record<string, unknown> | undefined;
+    let redirectTo: URL | null = null;
 
     if (!resolvedRoute.csr) {
       if (useInitialData && initialData !== undefined) {
@@ -224,12 +245,8 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
                 `[suamox-router] Blocked redirect to unsafe URL: ${redirectData.__redirect}`,
               );
             }
-            window.location.assign(redirectData.__redirect);
-            return;
-          }
-
-          // Parse segmented vs flat response
-          if (
+            redirectTo = new URL(redirectData.__redirect, origin);
+          } else if (
             json != null &&
             typeof json === "object" &&
             "page" in (json as Record<string, unknown>)
@@ -255,6 +272,19 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     }
 
     if (activeId !== navigationId) {
+      return;
+    }
+
+    if (redirectTo) {
+      if (isClientNavigable(redirectTo)) {
+        if (redirects >= MAX_REDIRECTS) {
+          throw new Error(`[suamox-router] Too many redirects: ${redirectTo.pathname}`);
+        }
+        const nextUrl = `${redirectTo.pathname}${redirectTo.search}${redirectTo.hash}`;
+        window.history.replaceState({}, "", nextUrl);
+        return renderLocation(redirectTo, { scroll, redirects: redirects + 1 });
+      }
+      window.location.assign(redirectTo.toString());
       return;
     }
 

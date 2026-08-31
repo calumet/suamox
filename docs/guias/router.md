@@ -24,6 +24,7 @@ export { routes } from "virtual:pages/server";
 - Intercepta clicks en links internos.
 - Resuelve la ruta desde el manifest `virtual:pages`.
 - Obtiene datos del loader via `/__data?path=...` (los loaders son server-only, nunca se ejecutan en el browser).
+- Sigue las redirecciones del servidor: si el destino es una ruta del cliente navega sin recargar y reemplaza la entrada del historial; si no (ruta SSG, API u otro origen), hace una carga completa.
 - Renderiza/hidrata la página sin recarga completa.
 - Soporta prefetch en hover/focus/touch (activado por defecto).
 

@@ -447,6 +447,38 @@ describe("createDevHandler /__data endpoint", () => {
     expect(json).toEqual({ __redirect: "/new", __status: 301 });
   });
 
+  it("serializes a RedirectResponse thrown by another copy of the module", async () => {
+    class ForeignRedirect extends Error {
+      readonly location = "/login";
+      readonly status = 302;
+
+      constructor() {
+        super("Redirect to /login");
+        this.name = "RedirectResponse";
+        Object.defineProperty(this, Symbol.for("suamox.RedirectResponse"), { value: true });
+      }
+    }
+
+    const route = {
+      path: "/privado",
+      params: [],
+      loader: vi.fn(() => {
+        throw new ForeignRedirect();
+      }),
+    };
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const vite = createViteMock([], route);
+    const app = createDevHandler({ vite });
+
+    const response = await app.request("http://localhost/__data?path=/privado");
+
+    expect(response.status).toBe(200);
+    const json: unknown = await response.json();
+    expect(json).toEqual({ __redirect: "/login", __status: 302 });
+  });
+
   it("returns 500 when loader throws an error", async () => {
     const route = {
       path: "/broken",
@@ -794,6 +826,52 @@ describe("createDevHandler middleware", () => {
     expect(response.status).toBe(401);
     const json: unknown = await response.json();
     expect(json).toEqual({ error: "unauthorized" });
+  });
+
+  it("receives the requested route as pathname on /__data", async () => {
+    const route = { path: "/panel", params: [], loader: vi.fn(() => Promise.resolve(null)) };
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    let pathname: string | undefined;
+    const middlewareFn = vi.fn(async (ctx: { pathname: string }, next: () => Promise<Response>) => {
+      pathname = ctx.pathname;
+      return next();
+    });
+
+    const vite = {
+      environments: {
+        ssr: { runner: { import: createSsrImport([route], middlewareFn) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite });
+    const response = await app.request("http://localhost/__data?path=/panel");
+
+    expect(response.status).toBe(200);
+    expect(pathname).toBe("/panel");
+  });
+
+  it("translates a redirect thrown by the middleware into a 302", async () => {
+    const middlewareFn = vi.fn(() => {
+      throw new RedirectResponse("/login");
+    });
+
+    const vite = {
+      environments: {
+        ssr: { runner: { import: createSsrImport([], middlewareFn) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite });
+    const response = await app.request("http://localhost/panel");
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/login");
   });
 
   it("locals object is not serialized in __INITIAL_DATA__", async () => {

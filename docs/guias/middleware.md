@@ -24,12 +24,15 @@ export async function onRequest(
 
 El objeto `context` contiene:
 
-| Propiedad | Tipo                      | Descripcion                                   |
-| --------- | ------------------------- | --------------------------------------------- |
-| `request` | `Request`                 | La peticion HTTP original                     |
-| `url`     | `URL`                     | La URL parseada                               |
-| `params`  | `Record<string, string>`  | Parametros de la ruta                         |
-| `locals`  | `Record<string, unknown>` | Objeto mutable para pasar datos a los loaders |
+| Propiedad  | Tipo                      | Descripcion                                   |
+| ---------- | ------------------------- | --------------------------------------------- |
+| `request`  | `Request`                 | La peticion HTTP original                     |
+| `url`      | `URL`                     | La URL parseada                               |
+| `pathname` | `string`                  | La ruta de la pagina pedida, sin `base`       |
+| `params`   | `Record<string, string>`  | Parametros de la ruta                         |
+| `locals`   | `Record<string, unknown>` | Objeto mutable para pasar datos a los loaders |
+
+Para cortar rutas usa `context.pathname`, no `context.url.pathname`: en las peticiones al endpoint `/__data` la URL es `/__data` y la ruta pedida viaja en el parametro `path`, asi que un guardia que lea `url` no se dispara en ninguna navegacion del cliente.
 
 ## locals
 
@@ -65,19 +68,20 @@ export async function loader({ locals }: LoaderContext) {
 Si el middleware no llama a `next()`, la peticion se corta y se devuelve la respuesta directamente. Esto permite bloquear rutas sin que los loaders se ejecuten:
 
 ```ts
+import { redirect } from "@calumet/suamox";
+
 export async function onRequest(context, next) {
-  if (context.url.pathname.startsWith("/admin")) {
+  if (context.pathname.startsWith("/admin")) {
     const session = await getSession(context.request);
     if (!session) {
-      return new Response(null, {
-        status: 302,
-        headers: { Location: "/login" },
-      });
+      redirect("/login");
     }
   }
   return next();
 }
 ```
+
+Para redirigir usa `redirect()`. El framework la traduce a un 302 en SSR y al sobre `{ __redirect }` que el router entiende en `/__data`. Una `Response` 302 devuelta a mano solo funciona en SSR: el `fetch` del router la sigue y recibe HTML.
 
 ## Flujo de ejecucion
 
@@ -90,7 +94,7 @@ Peticion HTTP
   -> Render
 ```
 
-El middleware se ejecuta tanto para peticiones SSR como para el endpoint `/__data` (navegacion client-side). Esto garantiza que los loaders siempre reciben los mismos `locals` sin importar si la pagina se carga por primera vez o se navega con el router.
+El middleware se ejecuta tanto para peticiones SSR como para el endpoint `/__data` (navegacion client-side) y para las rutas de API. Esto garantiza que los loaders siempre reciben los mismos `locals` sin importar si la pagina se carga por primera vez o se navega con el router. En los tres casos `context.pathname` es la ruta pedida.
 
 ## Diferencia con onRequest del adapter
 
