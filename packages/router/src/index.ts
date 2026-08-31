@@ -123,6 +123,13 @@ const ensureAdapter = async (adapter?: HydrationAdapter): Promise<HydrationAdapt
   );
 };
 
+let activeRouter: RouterInstance | null = null;
+
+/** Reejecuta los loaders de la ruta activa y sus layouts, sin tener que guardar la instancia. */
+export function revalidar(): Promise<void> {
+  return activeRouter ? activeRouter.revalidar() : Promise.resolve();
+}
+
 export async function startRouter(options: RouterOptions): Promise<RouterInstance> {
   const { routes, adapter, rootElementId = "root", baseUrl, base = "/", prefetch = true } = options;
 
@@ -346,7 +353,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     await renderLocation(url, { scroll: options?.scroll ?? true });
   };
 
-  const revalidar = (): Promise<void> =>
+  const revalidarRuta = (): Promise<void> =>
     renderLocation(new URL(window.location.href), { scroll: false, revalidate: true });
 
   const prefetchRoute = (url: URL): void => {
@@ -453,10 +460,13 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
 
   await renderLocation(new URL(window.location.href), { scroll: false, useInitialData: true });
 
-  return {
+  const instance: RouterInstance = {
     navigate,
-    revalidar,
+    revalidar: revalidarRuta,
     dispose: () => {
+      if (activeRouter === instance) {
+        activeRouter = null;
+      }
       document.removeEventListener("click", onClick);
       window.removeEventListener("popstate", onPopState);
       if (prefetch) {
@@ -466,4 +476,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
       }
     },
   };
+
+  activeRouter = instance;
+  return instance;
 }
