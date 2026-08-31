@@ -151,7 +151,13 @@ export class RedirectResponse extends Error {
 
   // instanceof por marca: el adaptador y la app cargan copias distintas del modulo
   static [Symbol.hasInstance](value: unknown): boolean {
-    return typeof value === "object" && value !== null && REDIRECT_BRAND in value;
+    return (
+      typeof value === "object" &&
+      value !== null &&
+      REDIRECT_BRAND in value &&
+      "location" in value &&
+      typeof value.location === "string"
+    );
   }
 }
 

@@ -479,6 +479,31 @@ describe("createDevHandler /__data endpoint", () => {
     expect(json).toEqual({ __redirect: "/login", __status: 302 });
   });
 
+  it("returns 500 for a branded object without a location", async () => {
+    const malformed = new Error("Redirect to nowhere");
+    malformed.name = "RedirectResponse";
+    Object.defineProperty(malformed, Symbol.for("suamox.RedirectResponse"), { value: true });
+
+    const route = {
+      path: "/malformado",
+      params: [],
+      loader: vi.fn(() => {
+        throw malformed;
+      }),
+    };
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const vite = createViteMock([], route);
+    const app = createDevHandler({ vite });
+
+    const response = await app.request("http://localhost/__data?path=/malformado");
+
+    expect(response.status).toBe(500);
+    const json: unknown = await response.json();
+    expect(json).toEqual({ error: "Loader error" });
+  });
+
   it("returns 500 when loader throws an error", async () => {
     const route = {
       path: "/broken",

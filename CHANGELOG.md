@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.1 (2026-08-31)
+
+### Correcciones
+
+- **`router`: una revalidacion pedida antes de la hidratacion se descartaba.** `revalidar()` resolvia como no-op si todavia no habia router registrado, que es la ventana entre que arranca `startRouter()` y termina el render inicial. Una escritura que caia ahi se guardaba pero la pantalla se quedaba con el dato viejo, sin error y sin señal. Ahora la peticion queda pendiente y corre en cuanto el router se registra. Un handler de React no puede caer en esa ventana (la hidratacion ocurre dentro del render que `startRouter()` espera), pero si lo que no depende de React: `visibilitychange`, un mensaje de websocket, codigo a nivel de modulo. En esa ventana la promesa resuelve antes que la revalidacion; encadenarla a una promesa de "router listo" colgaria para siempre si `startRouter()` nunca resuelve.
+
+- **`RedirectResponse`: la marca tambien comprueba la forma.** Definir `Symbol.hasInstance` hizo que `instanceof` dejara de mirar la cadena de prototipos, asi que pasaba a ser cierto para cualquier objeto con la marca, literales incluidos: la clase validaba pertenencia, no forma. Un objeto marcado sin `location` producia el sobre igual, y peor de lo que parece, porque `c.json({ __redirect: undefined })` serializa a `{}`: el cliente no ve la clave, cae por la rama de datos planos y renderiza con `{}` sin redirigir ni fallar. Ahora la marca exige ademas que `location` sea un string, con lo que un objeto marcado y malformado es un error 500 normal en vez de un redirect fantasma.
+
+### Packages
+
+| Paquete                  | Version anterior | Nueva version |
+| ------------------------ | ---------------- | ------------- |
+| `@calumet/suamox`        | 0.2.11           | 0.2.12        |
+| `@calumet/suamox-router` | 0.4.0            | 0.4.1         |
+
 ## 0.6.0 (2026-08-31)
 
 ### Features

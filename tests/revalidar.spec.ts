@@ -28,4 +28,19 @@ test.describe("revalidar()", () => {
     });
     expect(marker).toBe(true);
   });
+
+  test("una revalidacion pedida antes de la hidratacion no se pierde", async ({ page }) => {
+    const dataRequests: string[] = [];
+    page.on("request", (req) => {
+      if (req.url().includes("/__data")) {
+        dataRequests.push(req.url());
+      }
+    });
+
+    await page.goto("/es/revalidar?revalidar-temprano");
+    await expect(page.locator("h1")).toHaveText("Revalidar");
+
+    // Sin la revalidacion encolada esta pagina no pide datos: los trae el SSR
+    await expect.poll(() => dataRequests.length).toBe(1);
+  });
 });
