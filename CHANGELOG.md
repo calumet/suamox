@@ -13,7 +13,7 @@
   await revalidar();
   ```
 
-  Es la misma funcion que expone la instancia; `router.revalidar()` sigue existiendo. Sin router activo (SSR, o antes de que `startRouter()` resuelva) es un no-op que resuelve. `dispose()` suelta la referencia.
+  Es la misma funcion que expone la instancia; `router.revalidar()` sigue existiendo. Si se pide antes de que el router se registre (durante la hidratacion) la revalidacion queda pendiente y corre en cuanto hay router, en vez de descartarse en silencio: una escritura que termina en esa ventana no deja la pantalla con el dato viejo. `dispose()` suelta la referencia.
 
 ### Packages
 

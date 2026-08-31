@@ -74,7 +74,7 @@ async function guardar(body: FormData) {
 }
 ```
 
-`revalidar()` del paquete apunta al router activo, así que puedes llamarlo desde cualquier componente sin guardar la instancia de `startRouter()`. La instancia también lo expone (`router.revalidar()`); es la misma función.
+`revalidar()` del paquete apunta al router activo, así que puedes llamarlo desde cualquier componente sin guardar la instancia de `startRouter()`. La instancia también lo expone (`router.revalidar()`); es la misma función. Si lo llamas antes de que el router se registre, la revalidación queda pendiente y corre en cuanto hay router.
 
 La promesa resuelve cuando la pantalla ya tiene los datos nuevos, así que sirve para pintar un estado de pendiente. Si un loader falla, la promesa rechaza y los datos anteriores se quedan en pantalla.
 

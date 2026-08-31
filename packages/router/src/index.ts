@@ -124,10 +124,16 @@ const ensureAdapter = async (adapter?: HydrationAdapter): Promise<HydrationAdapt
 };
 
 let activeRouter: RouterInstance | null = null;
+let revalidacionPendiente = false;
 
 /** Reejecuta los loaders de la ruta activa y sus layouts, sin tener que guardar la instancia. */
 export function revalidar(): Promise<void> {
-  return activeRouter ? activeRouter.revalidar() : Promise.resolve();
+  if (activeRouter) {
+    return activeRouter.revalidar();
+  }
+  // Sin router todavia (hidratacion en curso): se corre al registrarse, no se descarta
+  revalidacionPendiente = true;
+  return Promise.resolve();
 }
 
 export async function startRouter(options: RouterOptions): Promise<RouterInstance> {
@@ -478,5 +484,9 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
   };
 
   activeRouter = instance;
+  if (revalidacionPendiente) {
+    revalidacionPendiente = false;
+    void instance.revalidar();
+  }
   return instance;
 }
