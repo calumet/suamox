@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.6.0 (2026-08-31)
+
+### Features
+
+- **`router`: `revalidar()` tambien se exporta del paquete.** Antes solo salia de la instancia que devuelve `startRouter()`, asi que llamarlo desde un componente obligaba a guardar esa instancia en un modulo aparte: cinco lineas de pegamento que toda app tenia que repetir. Ahora se importa directo y apunta al router activo:
+
+  ```tsx
+  import { revalidar } from "@calumet/suamox-router";
+
+  await fetch("/api/portal/configuracion", { method: "PUT", body });
+  await revalidar();
+  ```
+
+  Es la misma funcion que expone la instancia; `router.revalidar()` sigue existiendo. Sin router activo (SSR, o antes de que `startRouter()` resuelva) es un no-op que resuelve. `dispose()` suelta la referencia.
+
+### Packages
+
+| Paquete                  | Version anterior | Nueva version |
+| ------------------------ | ---------------- | ------------- |
+| `@calumet/suamox-router` | 0.3.1            | 0.4.0         |
+
 ## 0.5.1 (2026-08-31)
 
 ### Correcciones

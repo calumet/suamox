@@ -1,7 +1,6 @@
 import type { LoaderContext } from "@calumet/suamox";
+import { revalidar } from "@calumet/suamox-router";
 import { useEffect, useState } from "react";
-
-import { revalidar } from "../../lib/router";
 
 let ticks = 0;
 
