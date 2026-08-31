@@ -10,7 +10,9 @@
 
 - **`MiddlewareContext` recibe `pathname`.** En las peticiones a `/__data` la URL es `/__data` y la ruta pedida viaja en el parametro `path`, asi que un guardia escrito como `context.url.pathname.startsWith("/admin")` -- el ejemplo de la guia -- no se disparaba en ninguna navegacion del cliente y dejaba pasar la autorizacion. `context.pathname` trae la ruta de la pagina ya resuelta, sin `base`, y vale lo mismo en SSR, en `/__data` y en las rutas de API. `docs/guias/middleware.md` se actualizo para usarla y para explicar que se corta con `redirect()`, no devolviendo una `Response` 302 a mano (el `fetch` del router la sigue y recibe HTML).
 
-Los dos paquetes se actualizan juntos: el adaptador pasa `pathname` y el runtime lo declara.
+- **`router`: un redirect interno ya no recarga la pagina entera.** Al recibir el sobre `{ __redirect }` el router hacia siempre `window.location.assign()`. Ahora, si el destino es una ruta del cliente (mismo origen, no SSG, no API), navega a ella sin recargar y reemplaza la entrada del historial, asi que el boton de atras no vuelve a la URL que redirige. Para cualquier otro destino sigue haciendo la carga completa, que es lo correcto. Las cadenas de redirects estan acotadas a 5.
+
+Los dos paquetes del servidor se actualizan juntos: el adaptador pasa `pathname` y el runtime lo declara.
 
 ### Packages
 
@@ -18,6 +20,7 @@ Los dos paquetes se actualizan juntos: el adaptador pasa `pathname` y el runtime
 | ------------------------------ | ---------------- | ------------- |
 | `@calumet/suamox`              | 0.2.10           | 0.2.11        |
 | `@calumet/suamox-hono-adapter` | 0.4.1            | 0.4.2         |
+| `@calumet/suamox-router`       | 0.3.0            | 0.3.1         |
 
 ## 0.5.0 (2026-08-31)
 

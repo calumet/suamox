@@ -9,6 +9,7 @@ export default function DashboardPage() {
       </Head>
       <h1>Dashboard</h1>
       <p>Admin dashboard - route group example</p>
+      <a href="/redirigeme">Redirigeme</a>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { redirect } from "@calumet/suamox";
 
 export function loader() {
-  redirect("/");
+  redirect("/time");
 }
 
 export default function RedirigemePage() {
