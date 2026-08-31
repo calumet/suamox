@@ -24,6 +24,30 @@ test.describe("/__data endpoint", () => {
     expect(response.status()).toBe(400);
   });
 
+  test("returns the __redirect envelope when the loader redirects", async ({ request }) => {
+    const response = await request.get("/__data?path=/redirigeme", { maxRedirects: 0 });
+
+    expect(response.status()).toBe(200);
+    expect(await response.json()).toEqual({ __redirect: "/", __status: 302 });
+  });
+
+  test("returns 302 on the SSR path when the loader redirects", async ({ request }) => {
+    const response = await request.get("/redirigeme", { maxRedirects: 0 });
+
+    expect(response.status()).toBe(302);
+    expect(response.headers().location).toBe("/");
+  });
+
+  test("the middleware guard also cuts off requests to /__data", async ({ request }) => {
+    const data = await request.get("/__data?path=/protegido", { maxRedirects: 0 });
+    expect(data.status()).toBe(200);
+    expect(await data.json()).toEqual({ __redirect: "/", __status: 302 });
+
+    const ssr = await request.get("/protegido", { maxRedirects: 0 });
+    expect(ssr.status()).toBe(302);
+    expect(ssr.headers().location).toBe("/");
+  });
+
   test("executes loader on server with access to server-only values", async ({ request }) => {
     const response = await request.get("/__data?path=/time");
     const json = await response.json();

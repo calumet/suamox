@@ -48,6 +48,8 @@ export interface LoaderContext {
 export interface MiddlewareContext {
   request: Request;
   url: URL;
+  /** Ruta de la pagina pedida, sin `base`. En `/__data` es la ruta pedida, no `/__data`. */
+  pathname: string;
   params: Record<string, string>;
   locals: Record<string, unknown>;
 }
@@ -133,6 +135,8 @@ export function stripBase(pathname: string, base: string): string {
   return pathname;
 }
 
+const REDIRECT_BRAND = Symbol.for("suamox.RedirectResponse");
+
 export class RedirectResponse extends Error {
   readonly location: string;
   readonly status: number;
@@ -142,6 +146,12 @@ export class RedirectResponse extends Error {
     this.name = "RedirectResponse";
     this.location = location;
     this.status = status;
+    Object.defineProperty(this, REDIRECT_BRAND, { value: true });
+  }
+
+  // instanceof por marca: el adaptador y la app cargan copias distintas del modulo
+  static [Symbol.hasInstance](value: unknown): boolean {
+    return typeof value === "object" && value !== null && REDIRECT_BRAND in value;
   }
 }
 

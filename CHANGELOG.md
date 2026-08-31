@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.1 (2026-08-31)
+
+### Correcciones
+
+- **`hono-adapter`: el endpoint `/__data` convertia cualquier redirect en un 500.** El `catch` comparaba el error contra la copia de `RedirectResponse` que importa el adaptador, pero el codigo de la aplicacion lanza la de su propia copia del modulo (en dev la resuelve el runner de Vite, en prod el bundle del servidor). Eran dos clases distintas y el `instanceof` daba falso, asi que una redireccion desde un loader o desde el middleware llegaba al router del cliente como `{"error":"Loader error"}` con 500: la primera carga redirigia y la navegacion siguiente no. `RedirectResponse` ahora se marca con `Symbol.for("suamox.RedirectResponse")` y resuelve `instanceof` por esa marca, asi que cualquier copia del modulo se reconoce. Se elimina el `RedirectResponse: mod.RedirectResponse ?? RedirectResponse` del entry del servidor, que existia por este mismo motivo y nadie leia.
+
+- **`hono-adapter`: un `redirect()` lanzado desde el middleware daba 500.** Solo el endpoint `/__data` traducia la redireccion; los caminos de SSR y de las rutas de API la trataban como error. Los cuatro handlers (dev y prod) la traducen ahora: 302 en SSR y en API, sobre `{ __redirect }` en `/__data`.
+
+- **`MiddlewareContext` recibe `pathname`.** En las peticiones a `/__data` la URL es `/__data` y la ruta pedida viaja en el parametro `path`, asi que un guardia escrito como `context.url.pathname.startsWith("/admin")` -- el ejemplo de la guia -- no se disparaba en ninguna navegacion del cliente y dejaba pasar la autorizacion. `context.pathname` trae la ruta de la pagina ya resuelta, sin `base`, y vale lo mismo en SSR, en `/__data` y en las rutas de API. `docs/guias/middleware.md` se actualizo para usarla y para explicar que se corta con `redirect()`, no devolviendo una `Response` 302 a mano (el `fetch` del router la sigue y recibe HTML).
+
+Los dos paquetes se actualizan juntos: el adaptador pasa `pathname` y el runtime lo declara.
+
+### Packages
+
+| Paquete                        | Version anterior | Nueva version |
+| ------------------------------ | ---------------- | ------------- |
+| `@calumet/suamox`              | 0.2.10           | 0.2.11        |
+| `@calumet/suamox-hono-adapter` | 0.4.1            | 0.4.2         |
+
 ## 0.5.0 (2026-08-31)
 
 ### Features

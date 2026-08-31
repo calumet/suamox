@@ -1,3 +1,4 @@
+import { redirect } from "@calumet/suamox";
 import type { MiddlewareContext, MiddlewareNext } from "@calumet/suamox";
 
 export async function onRequest(
@@ -6,5 +7,10 @@ export async function onRequest(
 ): Promise<Response> {
   context.locals.siteName = "Suamox Basic Example";
   context.locals.requestTime = Date.now();
+
+  if (context.pathname.startsWith("/protegido")) {
+    redirect("/");
+  }
+
   return next();
 }

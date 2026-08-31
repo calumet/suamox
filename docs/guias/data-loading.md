@@ -250,7 +250,7 @@ export async function loader({ params }: LoaderContext) {
 
 ### Notas
 
-- `redirect()` funciona solo dentro de loaders (server-only). En navegación SPA, el servidor ejecuta la redirección y la respuesta se propaga al cliente via `/__data`.
+- `redirect()` funciona en loaders, en el middleware y en las rutas de API (server-only). En navegación SPA, el servidor ejecuta la redirección y la respuesta se propaga al cliente via `/__data`.
 - Puede redirigir a rutas internas (`/es`) o URLs externas (`https://example.com`).
 - La función nunca retorna. Internamente lanza una excepción que el framework captura.
 
