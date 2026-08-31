@@ -130,6 +130,10 @@ Durante navegacion SPA entre paginas que comparten el mismo layout, el framework
 
 Por ejemplo, al navegar de `/es/about` a `/es/contact`, el layout `[lang]/layout.tsx` es estable, asi que su loader no se vuelve a ejecutar. Solo se ejecuta el loader de la pagina destino.
 
+### Revalidar
+
+`revalidar()` del router vuelve a ejecutar los loaders de la ruta activa, layouts incluidos, sin el smart refetch. Ver [Router](./router.md#revalidar).
+
 ## `useLoaderData()`
 
 Cualquier componente hijo (dentro de una pagina o layout) puede acceder a los datos del loader sin recibirlos por props:

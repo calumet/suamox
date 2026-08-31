@@ -27,6 +27,8 @@ export interface NavigateOptions {
 
 export interface RouterInstance {
   navigate: (to: string, options?: NavigateOptions) => Promise<void>;
+  /** Reejecuta los loaders de la ruta activa y sus layouts. */
+  revalidar: () => Promise<void>;
   dispose: () => void;
 }
 
@@ -125,6 +127,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
   if (!canUseDOM()) {
     return {
       navigate: async () => {},
+      revalidar: async () => {},
       dispose: () => {},
     };
   }
@@ -133,6 +136,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
   if (!rootElement) {
     return {
       navigate: async () => {},
+      revalidar: async () => {},
       dispose: () => {},
     };
   }
@@ -150,7 +154,11 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
 
   const renderLocation = async (
     url: URL,
-    { scroll = true, useInitialData = false }: { scroll?: boolean; useInitialData?: boolean },
+    {
+      scroll = true,
+      useInitialData = false,
+      revalidate = false,
+    }: { scroll?: boolean; useInitialData?: boolean; revalidate?: boolean },
   ): Promise<void> => {
     const activeId = ++navigationId;
     const match = resolveMatch(routes, stripBase(url.pathname, base));
@@ -183,9 +191,11 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
             (match.route as ResolvedMatch["route"] & { layoutRouteIds?: string[] })
               .layoutRouteIds ?? [];
           const stableLayouts: string[] = [];
-          for (const id of newLayoutRouteIds) {
-            if (currentLayoutRouteIds.includes(id) && id in currentLayoutData) {
-              stableLayouts.push(id);
+          if (!revalidate) {
+            for (const id of newLayoutRouteIds) {
+              if (currentLayoutRouteIds.includes(id) && id in currentLayoutData) {
+                stableLayouts.push(id);
+              }
             }
           }
 
@@ -306,6 +316,9 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     await renderLocation(url, { scroll: options?.scroll ?? true });
   };
 
+  const revalidar = (): Promise<void> =>
+    renderLocation(new URL(window.location.href), { scroll: false, revalidate: true });
+
   const prefetchRoute = (url: URL): void => {
     if (url.origin !== window.location.origin) {
       return;
@@ -412,6 +425,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
 
   return {
     navigate,
+    revalidar,
     dispose: () => {
       document.removeEventListener("click", onClick);
       window.removeEventListener("popstate", onPopState);
