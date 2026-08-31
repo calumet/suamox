@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.5.0 (2026-08-31)
+
+### Features
+
+- **`router`: `revalidar()`.** El router expone `revalidar()` junto a `navigate()` y `dispose()`. Vuelve a ejecutar los loaders de la ruta activa, incluidos los de sus layouts, y actualiza lo que devuelve `useLoaderData()`. Antes, despues de una escritura la pantalla se quedaba con lo que trajo el loader y la unica salida era recargar entera.
+
+  ```ts
+  const { revalidar } = await startRouter({ routes });
+
+  await fetch("/api/portal/configuracion", { method: "PUT", body });
+  await revalidar();
+  ```
+
+  La promesa resuelve cuando la pantalla ya tiene los datos nuevos, asi que sirve para pintar un estado de pendiente. Si un loader falla, la promesa rechaza y los datos anteriores se quedan en pantalla. No toca la URL ni el historial y no hace scroll. El smart refetch de layouts (`stableLayouts`) no aplica: los loaders de los layouts se re-ejecutan tambien.
+
+### Packages
+
+| Paquete                  | Version anterior | Nueva version |
+| ------------------------ | ---------------- | ------------- |
+| `@calumet/suamox-router` | 0.2.8            | 0.3.0         |
+
 ## 0.4.1 (2026-08-06)
 
 ### Correcciones

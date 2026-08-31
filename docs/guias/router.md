@@ -44,6 +44,7 @@ startRouter(options): Promise<RouterInstance>
 `RouterInstance`:
 
 - `navigate(to, options?)`: navegación programática.
+- `revalidar()`: vuelve a ejecutar los loaders de la ruta activa.
 - `dispose()`: limpia listeners del router.
 
 ## Navegación programática
@@ -58,6 +59,21 @@ await router.navigate("/perfil", { replace: true, scroll: false });
 
 - `replace`: usa `history.replaceState` en vez de `pushState`.
 - `scroll`: controla scroll automático tras navegar (`true` por defecto).
+
+## Revalidar
+
+Vuelve a ejecutar los loaders de la ruta activa, incluidos los de sus layouts, y actualiza lo que devuelve `useLoaderData()`. Sirve para refrescar la pantalla después de una escritura sin recargarla entera:
+
+```ts
+const { revalidar } = await startRouter({ routes });
+
+await fetch("/api/configuracion", { method: "PUT", body });
+await revalidar();
+```
+
+La promesa resuelve cuando la pantalla ya tiene los datos nuevos, así que sirve para pintar un estado de pendiente. Si un loader falla, la promesa rechaza y los datos anteriores se quedan en pantalla.
+
+No toca la URL ni el historial y no hace scroll. El smart refetch de layouts (`stableLayouts`) no aplica: los loaders de los layouts se re-ejecutan también.
 
 ## Opt-out por enlace
 
