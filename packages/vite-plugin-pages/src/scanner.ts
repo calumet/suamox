@@ -5,7 +5,7 @@ import { basename, dirname, relative, resolve } from "node:path";
 import fg from "fast-glob";
 import { parseSync } from "vite";
 
-import { parseRoute, sortRoutes, validateRoutes } from "./parser.js";
+import { expandOptionalSegment, parseRoute, sortRoutes, validateRoutes } from "./parser.js";
 import type { ApiRouteRecord, LayoutMeta, RouteRecord } from "./types.js";
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
@@ -202,8 +202,8 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
   );
 
   const errors: string[] = [];
-  const routes = await Promise.all(
-    pageFiles.map(async (file): Promise<RouteRecord> => {
+  const parsedRoutes = await Promise.all(
+    pageFiles.map(async (file): Promise<RouteRecord[]> => {
       const { route, errors: parseErrors } = parseRoute(file, absolutePagesDir);
 
       if (parseErrors.length > 0) {
@@ -231,9 +231,10 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
         route.hasPrerender = fallbackHasPrerender(content);
       }
 
-      return route;
+      return expandOptionalSegment(route);
     }),
   );
+  const routes = parsedRoutes.flat();
 
   // Validar rutas
   const validationErrors = validateRoutes(routes);
@@ -256,7 +257,7 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     });
 
     for (const file of apiFiles) {
-      const { route, errors: parseErrors } = parseRoute(file, apiDir);
+      const { route: parsedApiRoute, errors: parseErrors } = parseRoute(file, apiDir);
       if (parseErrors.length > 0) {
         errors.push(...parseErrors.map((err) => `${file}: ${err}`));
       }
@@ -270,19 +271,21 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
             new RegExp(`\\bexport\\s+(async\\s+)?function\\s+${method}\\b`).test(content),
           );
 
-      // Prefixar la ruta con /api
-      const apiPath = route.path === "/" ? "/api" : `/api${route.path}`;
+      for (const route of expandOptionalSegment(parsedApiRoute)) {
+        // Prefixar la ruta con /api
+        const apiPath = route.path === "/" ? "/api" : `/api${route.path}`;
 
-      apiRoutes.push({
-        path: apiPath,
-        filePath: route.filePath,
-        type: "api",
-        httpMethods,
-        params: route.params,
-        isCatchAll: route.isCatchAll,
-        isIndex: route.isIndex,
-        priority: route.priority,
-      });
+        apiRoutes.push({
+          path: apiPath,
+          filePath: route.filePath,
+          type: "api",
+          httpMethods,
+          params: route.params,
+          isCatchAll: route.isCatchAll,
+          isIndex: route.isIndex,
+          priority: route.priority,
+        });
+      }
     }
   } catch {
     // src/api/ no existe, no hay API routes

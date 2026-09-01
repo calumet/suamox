@@ -2,7 +2,7 @@ import { join } from "node:path";
 
 import { describe, it, expect } from "vitest";
 
-import { parseRoute, sortRoutes, validateRoutes } from "../src/parser";
+import { expandOptionalSegment, parseRoute, sortRoutes, validateRoutes } from "../src/parser";
 import type { RouteRecord } from "../src/types";
 
 describe("parseRoute", () => {
@@ -112,6 +112,50 @@ describe("parseRoute", () => {
     expect(errors).toEqual([]);
   });
 
+  it("should parse optional segment", () => {
+    const filePath = join(pagesDir, "[[lang]]", "ingresar.tsx");
+    const { route, errors } = parseRoute(filePath, pagesDir);
+
+    expect(route.path).toBe("/:lang/ingresar");
+    expect(route.params).toEqual(["lang"]);
+    expect(errors).toEqual([]);
+  });
+
+  it("should report error for two optional segments", () => {
+    const filePath = join(pagesDir, "[[lang]]", "[[region]]", "ingresar.tsx");
+    const { errors } = parseRoute(filePath, pagesDir);
+
+    expect(errors[0]).toContain("Only one optional segment");
+  });
+
+  it("should report error when the optional segment is followed by a param", () => {
+    const filePath = join(pagesDir, "[[lang]]", "[producto].tsx");
+    const { errors } = parseRoute(filePath, pagesDir);
+
+    expect(errors[0]).toContain("must be followed by a static segment");
+  });
+
+  it("should report error when the optional segment is followed by a catch-all", () => {
+    const filePath = join(pagesDir, "[[lang]]", "[...resto].tsx");
+    const { errors } = parseRoute(filePath, pagesDir);
+
+    expect(errors[0]).toContain("must be followed by a static segment");
+  });
+
+  it("should report error for optional catch-all syntax", () => {
+    const filePath = join(pagesDir, "[[...resto]].tsx");
+    const { errors } = parseRoute(filePath, pagesDir);
+
+    expect(errors[0]).toContain("Optional catch-all segment is not supported");
+  });
+
+  it("should report error for empty optional segment", () => {
+    const filePath = join(pagesDir, "[[]]", "ingresar.tsx");
+    const { errors } = parseRoute(filePath, pagesDir);
+
+    expect(errors[0]).toContain("Invalid optional segment");
+  });
+
   it("should report error for catch-all not at end", () => {
     const filePath = join(pagesDir, "[...all]", "invalid.tsx");
     const { errors } = parseRoute(filePath, pagesDir);
@@ -134,6 +178,50 @@ describe("parseRoute", () => {
 
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0]).toContain("Invalid catch-all segment");
+  });
+});
+
+describe("expandOptionalSegment", () => {
+  const pagesDir = "/test/src/pages";
+
+  const expand = (...parts: string[]) =>
+    expandOptionalSegment(parseRoute(join(pagesDir, ...parts), pagesDir).route);
+
+  it("should return the route untouched when there is no optional segment", () => {
+    const routes = expand("blog", "[slug].tsx");
+
+    expect(routes).toHaveLength(1);
+    expect(routes[0]!.path).toBe("/blog/:slug");
+  });
+
+  it("should generate the route without the param and the one with it", () => {
+    const routes = expand("[[lang]]", "ingresar.tsx");
+
+    expect(routes.map((route) => route.path)).toEqual(["/ingresar", "/:lang/ingresar"]);
+    expect(routes[0]!.params).toEqual([]);
+    expect(routes[1]!.params).toEqual(["lang"]);
+  });
+
+  it("should generate the root path for an optional index", () => {
+    const routes = expand("[[lang]]", "index.tsx");
+
+    expect(routes.map((route) => route.path)).toEqual(["/", "/:lang"]);
+  });
+
+  it("should keep both routes pointing at the same file", () => {
+    const routes = expand("[[lang]]", "ingresar.tsx");
+
+    expect(routes[0]!.filePath).toBe(routes[1]!.filePath);
+  });
+
+  it("should give the route without the param a lower priority than a static sibling", () => {
+    const [sinParam] = expand("[[lang]]", "index.tsx");
+    const estatica = parseRoute(join(pagesDir, "ingresar.tsx"), pagesDir).route;
+    const conParam = expand("[[lang]]", "index.tsx")[1]!;
+
+    // /ingresar tiene que ganarle a /:lang o se resolveria como el idioma "ingresar"
+    expect(estatica.priority).toBeGreaterThan(conParam.priority);
+    expect(sinParam!.path).toBe("/");
   });
 });
 

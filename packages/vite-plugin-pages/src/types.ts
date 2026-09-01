@@ -23,7 +23,7 @@ export interface RouteRecord {
 }
 
 export interface RouteSegment {
-  type: "static" | "param" | "catchAll";
+  type: "static" | "param" | "catchAll" | "optional";
   value: string;
   paramName?: string;
 }
