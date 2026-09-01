@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.7.0 (2026-09-01)
+
+### Features
+
+- **`vite-plugin-pages`: segmento opcional `[[param]]`.** Un archivo compila a dos rutas, una sin el parametro y otra con el, asi que un idioma por defecto sin prefijo deja de necesitar un espejo por pantalla:
+
+  ```txt
+  src/pages/[[lang]]/ingresar.tsx  ->  /ingresar  y  /:lang/ingresar
+  src/pages/[[lang]]/index.tsx     ->  /          y  /:lang
+  ```
+
+  Las dos rutas comparten archivo, layouts y loader. En la ruta sin prefijo el parametro llega indefinido, no como cadena vacia, asi que `params.lang ?? "es"` es la forma natural de leerlo. La sintaxis es la de SvelteKit: los parentesis ya estan tomados por los grupos de rutas.
+
+  Antes `[[lang]]` no daba error, caia por la rama de `[param]` y producia un parametro llamado literalmente `[lang]`: `[[lang]]/ingresar.tsx` compilaba a `/:[lang]/ingresar`.
+
+  Dos restricciones, las dos con error de compilacion:
+
+  - Un solo opcional por ruta.
+  - Lo que sigue al opcional tiene que ser estatico. `[[lang]]/[producto].tsx` generaria `/:producto` y `/:lang/:producto`, que casan las mismas URLs sin forma de saber si `/bandera` es el producto o el idioma. Es la ambiguedad que arrastra Remix con `($lang)`, y resolverla pide restringir los valores del parametro, que es otra pieza. `[[...resto]]` tampoco existe: un catch-all ya casa cero segmentos.
+
+  No cambia el matcher ni la prioridad: las dos rutas del mismo archivo tienen distinto numero de segmentos y nunca compiten, y frente a otras rutas la regla de siempre ya hace lo correcto, `/ingresar` (estatico) le gana a `/:lang` (dinamico) a igual profundidad.
+
+### Packages
+
+| Paquete                             | Version anterior | Nueva version |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox-vite-plugin-pages` | 0.3.0            | 0.4.0         |
+
 ## 0.6.1 (2026-08-31)
 
 ### Correcciones

@@ -10,13 +10,43 @@ Suamox usa enrutado por sistema de archivos con base en `src/pages`.
 - `src/pages/blog/[slug].tsx` -> `/blog/:slug`
 - `src/pages/[...all].tsx` -> `/*`
 - `src/pages/(admin)/dashboard.tsx` -> `/dashboard`
+- `src/pages/[[lang]]/ingresar.tsx` -> `/ingresar` y `/:lang/ingresar`
 
 ## Segmentos soportados
 
 - Estático: `about.tsx` -> `/about`
 - Dinámico: `[id].tsx` -> `/:id`
+- Opcional: `[[lang]]/about.tsx` -> `/about` y `/:lang/about`
 - Catch-all: `[...rest].tsx` -> `/*`
 - Grupo de rutas: `(grupo)` (no aparece en URL)
+
+## Segmento opcional
+
+Un segmento entre dobles corchetes es opcional: el archivo compila a dos rutas, una sin el parámetro y otra con él.
+
+```txt
+src/pages/[[lang]]/ingresar.tsx  ->  /ingresar  y  /:lang/ingresar
+src/pages/[[lang]]/index.tsx     ->  /          y  /:lang
+```
+
+Sirve para tener un idioma por defecto sin prefijo sin duplicar la pantalla. Las dos rutas comparten archivo, layouts y loader. En la ruta sin prefijo el parámetro llega **indefinido**, no como cadena vacía:
+
+```tsx
+export function loader({ params }: LoaderContext) {
+  const lang = params.lang ?? "es";
+  return { lang };
+}
+```
+
+### Reglas
+
+- **Uno por ruta.** Varios opcionales multiplican las rutas generadas.
+- **Lo que sigue tiene que ser estático.** `[[lang]]/[producto].tsx` y `[[lang]]/[...resto].tsx` dan error: generarían `/:producto` y `/:lang/:producto`, que casan las mismas URLs, y nada permite saber si `/bandera` es el producto `bandera` o el idioma `bandera`. Distinguirlos pide poder restringir qué valores acepta el parámetro, que es otra pieza.
+- `[[...resto]]` no existe: un catch-all ya casa cero segmentos.
+
+### Prioridad
+
+Las dos rutas del mismo archivo nunca compiten, porque tienen distinto número de segmentos. Frente a otras rutas manda la regla de siempre, estático antes que dinámico: `/ingresar` le gana a `/:lang`.
 
 ## Layouts por carpeta
 
