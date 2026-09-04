@@ -205,7 +205,11 @@ Los datos del loader llegan al cliente serializados: en el HTML inicial dentro d
 | clave con una funcion o `undefined` | la clave no existe                                   |
 | `Map`, `Set`                        | `{}`                                                 |
 
-Un `publicado: new Date()` se declara `string`, y `data.publicado.toISOString()` es un error de compilacion en vez de una pantalla rota despues de hidratar. El render del servidor si recibe el `Date` vivo, porque el componente corre antes de serializar; el tipo declara lo que vale en los dos lados.
+Un `publicado: new Date()` se declara `string`, y `data.publicado.toISOString()` es un error de compilacion en vez de una pantalla rota despues de hidratar.
+
+El framework serializa el resultado del loader **antes** de renderizar, asi que esto no es solo una convencion del tipo: el componente ve exactamente lo mismo en el servidor, al hidratar y en navegacion SPA. Sin eso el render del servidor recibiria el `Date` vivo y el cliente un `string`, con el mismo componente dando resultados distintos en cada lado.
+
+Lo que esto implica al escribir un loader: devuelve la forma serializada tu mismo cuando te importe el detalle. Una fecha viaja mejor como `fecha.toISOString()` explicito que dejandola convertir; un `Map` como `Object.fromEntries(mapa)`.
 
 La conversion esta exportada como `Serialized<T>` por si necesitas la forma serializada de un tipo suelto:
 

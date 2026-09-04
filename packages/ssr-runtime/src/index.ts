@@ -495,6 +495,15 @@ export async function hydrateApp(
 }
 
 /**
+ * Deja los datos del loader como los recibe el cliente. El HTML inicial y `/__data` viajan
+ * por `JSON.stringify`, asi que sin esto el render del servidor veria valores (`Date`, `Map`)
+ * que ya no existen al hidratar. Es la contraparte en runtime de `Serialized<T>`.
+ */
+function serializeLoaderData<T>(value: T): Serialized<T> {
+  return JSON.parse(JSON.stringify(value) ?? "null") as Serialized<T>;
+}
+
+/**
  * Renderiza una página con SSR
  */
 export async function renderPage(options: RenderOptions): Promise<RenderResult> {
@@ -560,11 +569,11 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
     if (layoutResults) {
       layoutData = {};
       for (const result of layoutResults) {
-        layoutData[result.routeId] = result.data;
+        layoutData[result.routeId] = serializeLoaderData(result.data);
       }
     }
 
-    data = pageData;
+    data = serializeLoaderData(pageData);
   } catch (error) {
     if (error instanceof RedirectResponse) {
       return {

@@ -86,12 +86,14 @@ export async function loader(ctx: LoaderContext) {
     url: URL; // URL parseada
     params: Record<string, string>; // Parámetros de ruta
     query: URLSearchParams; // Query params
+    locals: Record<string, unknown>; // Datos del middleware
   }
   ```
 - **Return:** cualquier objeto JSON-serializable
 - **Notas:**
   - El resultado se pasa al componente como `data` prop
   - En SSR, se serializa en `window.__INITIAL_DATA__`
+  - El resultado se serializa **antes** de renderizar, así que el componente ve lo mismo en el servidor y al hidratar. Lo que quede fuera del contrato (un `Date`, un `Map`) llega igual de convertido en los dos lados
 
 ### 2.3 `getStaticPaths()` (opcional, solo para rutas dinámicas en SSG)
 
@@ -368,6 +370,7 @@ export interface LoaderContext {
   url: URL;
   params: Record<string, string>;
   query: URLSearchParams;
+  locals: Record<string, unknown>;
 }
 
 export type LoaderData<L> = L extends (...args: never[]) => infer R ? Serialized<Awaited<R>> : L;

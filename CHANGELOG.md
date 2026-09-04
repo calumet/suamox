@@ -20,7 +20,27 @@
 
   Lo que se infiere es la forma que sobrevive al JSON, no la que devuelve el loader. Los datos llegan al cliente por `JSON.stringify`, en `window.__INITIAL_DATA__` y en `/__data`, asi que un `publicado: new Date()` se declara `string` y `data.publicado.toISOString()` pasa a ser un error de compilacion en vez de una pantalla rota al hidratar. Tambien desaparecen las claves con funcion o `undefined`, `Map` y `Set` quedan en `{}`, y cualquier `toJSON()` colapsa a lo que devuelve, con lo que un `Decimal` de Prisma queda en `string`. La conversion se exporta como `Serialized<T>`. React Router se pudo quitar `SerializeFrom` de encima porque paso a turbo-stream, que si preserva `Date`; aqui la serializacion es JSON y el desajuste es real.
 
-  Serializar es solo lo que declara el tipo: el render del servidor sigue recibiendo el valor vivo, porque el componente corre antes de serializar. El tipo declara lo que vale en los dos lados.
+  Y no se queda en el tipo: el runtime serializa el resultado del loader antes de renderizar, asi que el componente ve lo mismo en el servidor, al hidratar y en navegacion SPA. Ver el breaking change de abajo.
+
+### Breaking Changes
+
+- **`ssr-runtime`: el resultado de un loader se serializa antes del render del servidor.** Hasta ahora el componente recibia en SSR el valor vivo que devolvia el loader, y al hidratar el que sale de `JSON.parse`. Eran dos valores distintos para el mismo componente:
+
+  ```txt
+  SSR html:            <p>4/9/2026</p>
+  typeof en servidor:  Date
+  __INITIAL_DATA__:    {"publicado":"2026-09-04T10:00:00.000Z"}
+  typeof en cliente:   string
+  hidratacion:         TypeError: data.publicado.toLocaleDateString is not a function
+  ```
+
+  El servidor pintaba bien la pantalla y el error salia despues, en el navegador. Ahora `renderPage()` pasa los datos por `JSON.parse(JSON.stringify(...))` antes de renderizar, lo mismo que ya hacian `window.__INITIAL_DATA__` y `/__data`: de los tres caminos, el render inicial era el unico que no lo hacia. Es tambien lo que `CONVENTIONS_v1.md` §2.2 ya congelaba como contrato del loader, "cualquier objeto JSON-serializable"; un `Date` nunca estuvo dentro.
+
+  **Impacto.** Una pagina que llama metodos de `Date` (o usa un `Map`, un `Set`, una instancia de clase) sobre `data` pasa de renderizar en el servidor y romperse al hidratar, a devolver un 500. Es mas ruidoso, y es el mismo fallo que ya tenia: se adelanta al servidor en vez de esperar al navegador. Las paginas con `prerender` que nunca hidratan son el unico caso donde esto funcionaba de verdad, y son las que hay que revisar.
+
+  **Migracion.** Con los tipos nuevos (`useLoaderData<typeof loader>()`) `tsc` marca cada sitio antes de que llegue a runtime. En cada uno, o reconstruyes el valor en el componente (`new Date(data.publicado)`) o, mejor, devuelves ya la forma serializada desde el loader (`publicado: publicado.toISOString()`).
+
+  `useStaticProps()` no cambia: sus props son server-only, no se serializan y siguen llegando vivas.
 
 ### Packages
 

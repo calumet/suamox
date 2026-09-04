@@ -736,3 +736,107 @@ describe("useRouteLoaderData", () => {
     expect(html).toContain("Data: undefined");
   });
 });
+
+describe("serializacion de los datos del loader", () => {
+  it("el componente ve en el servidor lo mismo que vera al hidratar", async () => {
+    const PageComponent = () => {
+      const data = useLoaderData<{ publicado: string; etiquetas: string[] }>();
+      return createElement("p", null, `${typeof data.publicado}|${data.etiquetas.join(",")}`);
+    };
+
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/nota",
+        component: PageComponent,
+        // eslint-disable-next-line @typescript-eslint/require-await
+        loader: async () => ({
+          publicado: new Date("2026-09-04T10:00:00Z"),
+          etiquetas: ["a", "b"],
+        }),
+      }),
+    ];
+
+    const result = await renderPage({
+      pathname: "/nota",
+      request: createMockRequest("http://localhost:3000/nota"),
+      routes,
+    });
+
+    expect(result.html).toContain("string|a,b");
+    expect(result.initialData).toEqual({
+      publicado: "2026-09-04T10:00:00.000Z",
+      etiquetas: ["a", "b"],
+    });
+  });
+
+  it("descarta lo que JSON.stringify descarta", async () => {
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/descartes",
+        // eslint-disable-next-line @typescript-eslint/require-await
+        loader: async () => ({
+          ok: 1,
+          sinValor: undefined,
+          fn: () => "no viaja",
+          conjunto: new Set(["a"]),
+        }),
+      }),
+    ];
+
+    const result = await renderPage({
+      pathname: "/descartes",
+      request: createMockRequest("http://localhost:3000/descartes"),
+      routes,
+    });
+
+    expect(result.initialData).toEqual({ ok: 1, conjunto: {} });
+  });
+
+  it("tambien serializa los datos de los layout loaders", async () => {
+    const Layout = ({ children }: { children: ReactNode }) =>
+      createElement("div", { id: "layout" }, children);
+
+    const layoutInfo: LayoutInfo = {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+      component: Layout as any,
+      routeId: "layout:root",
+      // eslint-disable-next-line @typescript-eslint/require-await
+      loader: async () => ({ desde: new Date("2026-09-04T10:00:00Z") }),
+      hasLoader: true,
+    };
+
+    const routes: RouteRecord[] = [
+      createMockRoute({ path: "/con-layout", layoutInfos: [layoutInfo] }),
+    ];
+
+    const result = await renderPage({
+      pathname: "/con-layout",
+      request: createMockRequest("http://localhost:3000/con-layout"),
+      routes,
+    });
+
+    expect(result.layoutData).toEqual({
+      "layout:root": { desde: "2026-09-04T10:00:00.000Z" },
+    });
+  });
+
+  it("no toca los static props, que son server-only", async () => {
+    const PageComponent = () => {
+      const props = useStaticProps<{ generado: Date }>();
+      return createElement("p", null, props.generado instanceof Date ? "Date" : "otro");
+    };
+
+    const routes: RouteRecord[] = [
+      createMockRoute({ path: "/estatica", component: PageComponent }),
+    ];
+
+    const result = await renderPage({
+      pathname: "/estatica",
+      request: createMockRequest("http://localhost:3000/estatica"),
+      routes,
+      props: { generado: new Date("2026-09-04T10:00:00Z") },
+    });
+
+    expect(result.html).toContain("Date");
+  });
+});
