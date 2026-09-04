@@ -102,6 +102,107 @@ export default function Layout({ children }) { return children; }`,
     expect(route?.layoutMetas?.[1]?.hasLoader).toBe(true);
   });
 
+  it("skips the layout chain for a page that exports layout = false", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+
+    const rootLayout = join(pagesDir, "layout.tsx");
+    const portalLayout = join(pagesDir, "portal", "layout.tsx");
+    const conLayout = join(pagesDir, "portal", "index.tsx");
+    const sinLayout = join(pagesDir, "portal", "ingresar.tsx");
+
+    await writeFileWithDirs(
+      rootLayout,
+      "export default function Layout({ children }) { return children; }",
+    );
+    await writeFileWithDirs(
+      portalLayout,
+      `export function loader() { return { info: 'test' }; }
+export default function Layout({ children }) { return children; }`,
+    );
+    await writeFileWithDirs(conLayout, "export default function Page() { return null; }");
+    await writeFileWithDirs(
+      sinLayout,
+      `export const layout = false;
+export default function Page() { return null; }`,
+    );
+
+    const result = await scanRoutes({
+      pagesDir: "src/pages",
+      extensions: [".tsx"],
+      root,
+    });
+
+    const findRoute = (path: string) => result.routes.find((route) => route.path === path);
+
+    // La hermana de la misma carpeta conserva la cadena entera
+    expect(normalizeList(findRoute("/portal")?.layouts)).toEqual(
+      [rootLayout, portalLayout].map(normalizePath),
+    );
+
+    const ingresar = findRoute("/portal/ingresar");
+    expect(ingresar?.layouts).toEqual([]);
+    expect(ingresar?.layoutMetas).toEqual([]);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("does not skip layouts when layout is exported as true", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+
+    const rootLayout = join(pagesDir, "layout.tsx");
+    const page = join(pagesDir, "index.tsx");
+
+    await writeFileWithDirs(
+      rootLayout,
+      "export default function Layout({ children }) { return children; }",
+    );
+    await writeFileWithDirs(
+      page,
+      `export const layout = true;
+export default function Page() { return null; }`,
+    );
+
+    const result = await scanRoutes({
+      pagesDir: "src/pages",
+      extensions: [".tsx"],
+      root,
+    });
+
+    expect(normalizeList(result.routes.find((route) => route.path === "/")?.layouts)).toEqual(
+      [rootLayout].map(normalizePath),
+    );
+  });
+
+  it("does not treat layout = false in a comment or string as the flag", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+
+    const rootLayout = join(pagesDir, "layout.tsx");
+    const page = join(pagesDir, "index.tsx");
+
+    await writeFileWithDirs(
+      rootLayout,
+      "export default function Layout({ children }) { return children; }",
+    );
+    await writeFileWithDirs(
+      page,
+      `// export const layout = false;
+const nota = "export const layout = false";
+export default function Page() { return nota; }`,
+    );
+
+    const result = await scanRoutes({
+      pagesDir: "src/pages",
+      extensions: [".tsx"],
+      root,
+    });
+
+    expect(normalizeList(result.routes.find((route) => route.path === "/")?.layouts)).toEqual(
+      [rootLayout].map(normalizePath),
+    );
+  });
+
   it("detects loader, getStaticPaths and prerender exports in tsx pages", async () => {
     const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
     const pagesDir = join(root, "src", "pages");

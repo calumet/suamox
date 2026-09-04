@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.8.0 (2026-09-01)
+
+### Features
+
+- **`vite-plugin-pages`: `export const layout = false` saca a una pagina de su cadena de layouts.** Los layouts se recogen subiendo por la cadena de carpetas hasta `pages/`, y un grupo no corta ese ascenso, asi que una pantalla no podia salirse del layout de su carpeta: la unica salida era sacarla de la carpeta y duplicar el segmento padre.
+
+  ```tsx
+  // src/pages/[[lang]]/ingresar.tsx
+  export const layout = false;
+  ```
+
+  Es por pagina, asi que sus hermanas de la misma carpeta conservan el layout. Los loaders de los layouts que se salta tampoco se ejecutan: la decision se toma al escanear, no al renderizar, asi que el modulo de rutas no los declara y ni el endpoint `/__data` ni el SSR los llaman.
+
+  El valor tiene que ser el literal `false`. A diferencia de `prerender` y `csr`, que se leen en tiempo de ejecucion, la cadena de layouts se resuelve al generar el modulo de rutas, asi que el valor se lee del AST de Oxc en el mismo parseo que ya detectaba los exports. Un `layout = false` dentro de un comentario o de un string no cuenta, y `layout = true` no desactiva nada.
+
+### Packages
+
+| Paquete                             | Version anterior | Nueva version |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox-vite-plugin-pages` | 0.4.0            | 0.5.0         |
+
 ## 0.7.0 (2026-09-01)
 
 ### Features

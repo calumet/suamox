@@ -22,7 +22,13 @@ const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"
  * y `export { loader } from "./m"` cuentan. Devuelve `null` solo si el parser
  * lanza (caso extremo); el caller usa entonces el fallback de regex.
  */
-function parseExports(file: string, content: string): Set<string> | null {
+interface ModuleExports {
+  names: Set<string>;
+  /** `export const layout = false`: la pagina se sale de la cadena de layouts */
+  layoutDisabled: boolean;
+}
+
+function parseExports(file: string, content: string): ModuleExports | null {
   try {
     const result = parseSync(file, content);
     const names = new Set<string>();
@@ -33,10 +39,39 @@ function parseExports(file: string, content: string): Set<string> | null {
         }
       }
     }
-    return names;
+    return { names, layoutDisabled: hasLayoutFalse(result.program.body) };
   } catch {
     return null;
   }
+}
+
+/**
+ * Busca `export const layout = false`. El valor se lee aqui y no en tiempo de
+ * ejecucion como `prerender` o `csr`, porque la cadena de layouts se resuelve
+ * al generar el modulo de rutas.
+ */
+function hasLayoutFalse(body: ReturnType<typeof parseSync>["program"]["body"]): boolean {
+  for (const node of body) {
+    if (
+      node.type !== "ExportNamedDeclaration" ||
+      node.declaration?.type !== "VariableDeclaration"
+    ) {
+      continue;
+    }
+
+    for (const declarator of node.declaration.declarations) {
+      if (
+        declarator.id.type === "Identifier" &&
+        declarator.id.name === "layout" &&
+        declarator.init?.type === "Literal" &&
+        declarator.init.value === false
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 const loaderExportPatterns = [
@@ -66,6 +101,10 @@ function fallbackHasGetStaticPaths(content: string): boolean {
 
 function fallbackHasPrerender(content: string): boolean {
   return prerenderExportPatterns.some((pattern) => pattern.test(content));
+}
+
+function fallbackLayoutDisabled(content: string): boolean {
+  return /\bexport\s+const\s+layout\s*(?::[^=]+)?=\s*false\b/.test(content);
 }
 
 function isLayoutFile(filePath: string, extensions: string[]): boolean {
@@ -197,7 +236,7 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     layoutFiles.map(async (file) => {
       const content = await readFile(file, "utf-8");
       const exports = parseExports(file, content);
-      layoutLoaderMap.set(file, exports ? exports.has("loader") : fallbackHasLoader(content));
+      layoutLoaderMap.set(file, exports ? exports.names.has("loader") : fallbackHasLoader(content));
     }),
   );
 
@@ -210,21 +249,22 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
         errors.push(...parseErrors.map((err) => `${file}: ${err}`));
       }
 
-      route.layouts = collectLayoutsForFile(file, layoutMap, absolutePagesDir);
-      route.layoutMetas = collectLayoutMetasForFile(
-        file,
-        layoutMap,
-        layoutLoaderMap,
-        absolutePagesDir,
-      );
-
-      // Detectar loader / getStaticPaths / prerender via AST (Oxc).
+      // Detectar loader / getStaticPaths / prerender / layout via AST (Oxc).
       const content = await readFile(file, "utf-8");
       const exports = parseExports(file, content);
+      const layoutDisabled = exports ? exports.layoutDisabled : fallbackLayoutDisabled(content);
+
+      route.layouts = layoutDisabled
+        ? []
+        : collectLayoutsForFile(file, layoutMap, absolutePagesDir);
+      route.layoutMetas = layoutDisabled
+        ? []
+        : collectLayoutMetasForFile(file, layoutMap, layoutLoaderMap, absolutePagesDir);
+
       if (exports) {
-        route.hasLoader = exports.has("loader");
-        route.hasGetStaticPaths = exports.has("getStaticPaths");
-        route.hasPrerender = exports.has("prerender");
+        route.hasLoader = exports.names.has("loader");
+        route.hasGetStaticPaths = exports.names.has("getStaticPaths");
+        route.hasPrerender = exports.names.has("prerender");
       } else {
         route.hasLoader = fallbackHasLoader(content);
         route.hasGetStaticPaths = fallbackHasGetStaticPaths(content);
@@ -266,7 +306,7 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
       const content = await readFile(file, "utf-8");
       const exports = parseExports(file, content);
       const httpMethods = exports
-        ? HTTP_METHODS.filter((method) => exports.has(method))
+        ? HTTP_METHODS.filter((method) => exports.names.has(method))
         : HTTP_METHODS.filter((method) =>
             new RegExp(`\\bexport\\s+(async\\s+)?function\\s+${method}\\b`).test(content),
           );
