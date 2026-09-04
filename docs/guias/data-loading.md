@@ -140,10 +140,14 @@ Por ejemplo, al navegar de `/es/about` a `/es/contact`, el layout `[lang]/layout
 Cualquier componente hijo (dentro de una pagina o layout) puede acceder a los datos del loader sin recibirlos por props:
 
 ```tsx
-import { useLoaderData } from "@calumet/suamox";
+import { useLoaderData, type LoaderContext } from "@calumet/suamox";
+
+export async function loader({ params }: LoaderContext) {
+  return { categories: await fetchCategories(params.lang) };
+}
 
 function Sidebar() {
-  const { categories } = useLoaderData<{ categories: string[] }>();
+  const { categories } = useLoaderData<typeof loader>();
   return (
     <ul>
       {categories.map((c) => (
@@ -164,6 +168,57 @@ El hook lee del `LoaderDataContext` mas cercano. Si se llama desde un componente
 - Funciona en SSR, SSG y navegacion SPA por igual.
 - En navegacion SPA, los datos se obtienen automaticamente del servidor via `/__data?path=...`.
 
+### Tipado
+
+`useLoaderData()`, `useRouteLoaderData()` y `PageProps` toman la funcion del loader y sacan de ahi el tipo de los datos, asi que no hay que repetir la forma a mano:
+
+```tsx
+import { useLoaderData, type LoaderContext, type PageProps } from "@calumet/suamox";
+
+export async function loader({ params }: LoaderContext) {
+  return { producto: await fetchProducto(params.id) };
+}
+
+export default function ProductoPage({ data }: PageProps<typeof loader>) {
+  const { producto } = useLoaderData<typeof loader>();
+  return <h1>{data.producto.nombre}</h1>;
+}
+```
+
+Para leer el loader de otro archivo, importa su tipo. `import type` no deja rastro en el bundle:
+
+```tsx
+import type { loader as layoutLoader } from "../layout";
+
+const layoutData = useRouteLoaderData<typeof layoutLoader>("layout:[lang]");
+```
+
+Pasar el tipo de los datos en vez de la funcion sigue valiendo (`useLoaderData<{ categories: string[] }>()`) y devuelve exactamente ese tipo. Solo que la forma escrita a mano compila igual cuando el loader pasa a devolver otra cosa, y nadie se entera hasta que la pagina lee `undefined`.
+
+### El tipo es el que sobrevive al JSON
+
+Los datos del loader llegan al cliente serializados: en el HTML inicial dentro de `window.__INITIAL_DATA__`, y en navegacion SPA por `/__data`. Las dos rutas pasan por `JSON.stringify`, asi que al inferir del loader lo que se declara es la forma serializada:
+
+| En el loader                        | En el componente                                     |
+| ----------------------------------- | ---------------------------------------------------- |
+| `Date`, o cualquier `toJSON()`      | lo que devuelve `toJSON()` (`string` para una fecha) |
+| clave con una funcion o `undefined` | la clave no existe                                   |
+| `Map`, `Set`                        | `{}`                                                 |
+
+Un `publicado: new Date()` se declara `string`, y `data.publicado.toISOString()` es un error de compilacion en vez de una pantalla rota despues de hidratar. El render del servidor si recibe el `Date` vivo, porque el componente corre antes de serializar; el tipo declara lo que vale en los dos lados.
+
+La conversion esta exportada como `Serialized<T>` por si necesitas la forma serializada de un tipo suelto:
+
+```tsx
+import type { Serialized } from "@calumet/suamox";
+
+function Tarjeta({ producto }: { producto: Serialized<Producto> }) {
+  return <span>{producto.publicado}</span>;
+}
+```
+
+`useStaticProps()` no pasa por esto: es server-only y sus props no se serializan.
+
 ## `useRouteLoaderData(routeId)`
 
 `useLoaderData()` siempre lee los datos del loader mas cercano (el del layout o el de la pagina, dependiendo de donde se llame). Pero a veces un componente dentro de una pagina necesita leer datos que vienen del layout, o viceversa.
@@ -173,12 +228,14 @@ El hook lee del `LoaderDataContext` mas cercano. Si se llama desde un componente
 ```tsx
 import { useLoaderData, useRouteLoaderData } from "@calumet/suamox";
 
+import type { loader as rootLoader } from "../layout";
+
 export default function ProductPage() {
   // Datos del page loader (nivel actual)
-  const { product } = useLoaderData<{ product: { name: string } }>();
+  const { product } = useLoaderData<typeof loader>();
 
   // Datos del layout loader (otro nivel)
-  const layoutData = useRouteLoaderData<{ siteName: string }>("layout:root");
+  const layoutData = useRouteLoaderData<typeof rootLoader>("layout:root");
 
   return (
     <div>
@@ -207,7 +264,7 @@ Los layouts usan el prefijo `layout:` seguido de su ruta relativa al directorio 
 
 - Retorna `undefined` si el route ID no existe o no tiene loader.
 - Funciona en SSR y en navegacion SPA.
-- Es tipable con generics: `useRouteLoaderData<MiTipo>("layout:[lang]")`.
+- Toma el tipo del loader del otro nivel: `useRouteLoaderData<typeof layoutLoader>("layout:[lang]")`. Ver [Tipado](#tipado).
 - Cualquier componente en el arbol puede leer datos de cualquier nivel activo.
 
 ### Cuando usar cada hook
@@ -278,7 +335,7 @@ export async function loader({ params }: LoaderContext) {
 }
 
 export default function PostPage() {
-  const { slug } = useLoaderData<{ slug: string }>();
+  const { slug } = useLoaderData<typeof loader>();
   const { title, content } = useStaticProps<{ title: string; content: string }>();
 
   return (

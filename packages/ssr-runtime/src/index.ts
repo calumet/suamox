@@ -81,9 +81,37 @@ export interface ApiRouteRecord {
   priority: number;
 }
 
+type JsonPrimitive = string | number | boolean | null;
+type NonSerializable = ((...args: never[]) => unknown) | symbol | undefined | void;
+
+/**
+ * Forma en que un valor sobrevive a `JSON.stringify`: `Date` y cualquier `toJSON()`
+ * colapsan a lo que devuelve ese metodo, las claves con funcion o `undefined`
+ * desaparecen, y `Map` y `Set` quedan en `{}`.
+ */
+export type Serialized<T> = T extends JsonPrimitive
+  ? T
+  : T extends { toJSON(): infer R }
+    ? Serialized<R>
+    : T extends NonSerializable
+      ? undefined
+      : T extends Map<unknown, unknown> | Set<unknown>
+        ? Record<string, never>
+        : T extends readonly unknown[]
+          ? { [K in keyof T]: Serialized<T[K]> }
+          : T extends object
+            ? { [K in keyof T as [T[K]] extends [NonSerializable] ? never : K]: Serialized<T[K]> }
+            : unknown;
+
+/**
+ * Datos que llegan al componente. Con una funcion (`typeof loader`) infiere su retorno ya
+ * serializado; con un tipo de datos lo devuelve tal cual.
+ */
+export type LoaderData<L> = L extends (...args: never[]) => infer R ? Serialized<Awaited<R>> : L;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export interface PageProps<T = any> {
-  data: T;
+export interface PageProps<L = any> {
+  data: LoaderData<L>;
 }
 
 export interface StaticPathEntry {
@@ -110,13 +138,13 @@ const StaticPropsContext = createContext<Record<string, unknown>>({});
 const AllRouteDataContext = createContext<Record<string, unknown>>({});
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function useLoaderData<T = any>(): T {
-  return useContext(LoaderDataContext) as T;
+export function useLoaderData<L = any>(): LoaderData<L> {
+  return useContext(LoaderDataContext) as LoaderData<L>;
 }
 
-export function useRouteLoaderData<T = unknown>(routeId: string): T | undefined {
+export function useRouteLoaderData<L = unknown>(routeId: string): LoaderData<L> | undefined {
   const allData = useContext(AllRouteDataContext);
-  return allData[routeId] as T | undefined;
+  return allData[routeId] as LoaderData<L> | undefined;
 }
 
 export function useStaticProps<T = Record<string, unknown>>(): T {

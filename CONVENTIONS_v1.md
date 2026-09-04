@@ -370,12 +370,16 @@ export interface LoaderContext {
   query: URLSearchParams;
 }
 
-export type PageProps<T = any> = {
-  data: T;
+export type LoaderData<L> = L extends (...args: never[]) => infer R ? Serialized<Awaited<R>> : L;
+
+export type PageProps<L = any> = {
+  data: LoaderData<L>;
 };
 
 export type GetStaticPaths = () => Promise<Array<{ params: Record<string, string> }>>;
 ```
+
+`PageProps`, `useLoaderData()` y `useRouteLoaderData()` aceptan la funcion del loader (`PageProps<typeof loader>`), y en ese caso el tipo es la forma que sobrevive a `JSON.stringify`, no la que devuelve el loader. Pasar el tipo de los datos, que es lo que documentaba esta version, sigue devolviendo ese mismo tipo: el generico no cambio de significado, se amplio. Ver [Tipado](./docs/guias/data-loading.md#tipado).
 
 ### 10.2 Configuración recomendada (en consumer project)
 

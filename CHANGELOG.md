@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.9.0 (2026-09-04)
+
+### Features
+
+- **`ssr-runtime`: `useLoaderData()`, `useRouteLoaderData()` y `PageProps` toman el tipo del loader.** El generico tomaba el tipo de los datos, asi que cada pagina derivaba la conversion a mano (`type Datos = Awaited<ReturnType<typeof loader>>`) o repetia la forma, que es peor: el tipo escrito a mano compila igual cuando el loader pasa a devolver otra cosa, y nadie se entera hasta que la pagina lee `undefined`. Ahora se pasa la funcion, como en Remix y React Router:
+
+  ```tsx
+  export async function loader({ params }: LoaderContext) {
+    return { producto: await fetchProducto(params.id) };
+  }
+
+  export default function ProductoPage({ data }: PageProps<typeof loader>) {
+    const { producto } = useLoaderData<typeof loader>();
+  }
+  ```
+
+  No rompe nada y no hace falta ni una mayor ni un nombre nuevo conviviendo. `LoaderData<L>` solo infiere cuando `L` es una funcion y devuelve el tipo tal cual cuando no lo es, asi que las llamadas que hoy pasan el tipo de los datos (`useLoaderData<{ categories: string[] }>()`) siguen dando exactamente lo mismo. Es la forma del `SerializeFrom` de React Router. Para leer el loader de otro nivel, `import type { loader as layoutLoader } from "../layout"` no deja rastro en el bundle.
+
+  Lo que se infiere es la forma que sobrevive al JSON, no la que devuelve el loader. Los datos llegan al cliente por `JSON.stringify`, en `window.__INITIAL_DATA__` y en `/__data`, asi que un `publicado: new Date()` se declara `string` y `data.publicado.toISOString()` pasa a ser un error de compilacion en vez de una pantalla rota al hidratar. Tambien desaparecen las claves con funcion o `undefined`, `Map` y `Set` quedan en `{}`, y cualquier `toJSON()` colapsa a lo que devuelve, con lo que un `Decimal` de Prisma queda en `string`. La conversion se exporta como `Serialized<T>`. React Router se pudo quitar `SerializeFrom` de encima porque paso a turbo-stream, que si preserva `Date`; aqui la serializacion es JSON y el desajuste es real.
+
+  Serializar es solo lo que declara el tipo: el render del servidor sigue recibiendo el valor vivo, porque el componente corre antes de serializar. El tipo declara lo que vale en los dos lados.
+
+### Packages
+
+| Paquete           | Version anterior | Nueva version |
+| ----------------- | ---------------- | ------------- |
+| `@calumet/suamox` | 0.2.12           | 0.3.0         |
+
 ## 0.8.0 (2026-09-01)
 
 ### Features
