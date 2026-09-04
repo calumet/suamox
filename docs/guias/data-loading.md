@@ -82,6 +82,7 @@ Si falta `getStaticPaths()` en una ruta dinámica marcada para prerender, el bui
 
 - `export const prerender = true`: incluye la ruta en salida estática.
 - `export const csr = true`: desactiva SSR de esa ruta y renderiza en cliente.
+- `export const layout = false`: renderiza la ruta sin la cadena de layouts de su carpeta.
 
 Comportamiento por defecto:
 

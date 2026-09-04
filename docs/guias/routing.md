@@ -69,6 +69,21 @@ La página `blog/[slug].tsx` se renderiza envuelta por:
 2. `src/pages/blog/layout.tsx`
 3. `src/pages/blog/[slug].tsx`
 
+### Salirse del layout
+
+Una página puede exportar `layout = false` para renderizarse sin la cadena de layouts de su carpeta:
+
+```tsx
+// src/pages/[[lang]]/ingresar.tsx
+export const layout = false;
+
+export default function Ingresar() {
+  return <h1>Ingresar</h1>;
+}
+```
+
+Es por página: sus hermanas de la misma carpeta conservan el layout. El valor tiene que ser el literal `false`, no una variable ni una expresión, porque se lee al generar las rutas y no en tiempo de ejecución. Los loaders de los layouts que se salta tampoco se ejecutan.
+
 ## Página 404
 
 Si defines `src/pages/404.tsx`, Suamox la usa para rutas no encontradas.
