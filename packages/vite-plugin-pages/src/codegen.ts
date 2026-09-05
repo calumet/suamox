@@ -2,6 +2,9 @@ import type { ApiRouteRecord, RouteRecord } from "./types.js";
 
 export type DefaultPageMode = "ssr" | "ssg" | "csr";
 
+/** Query string que el codegen agrega a los imports del cliente para activar el stripping */
+export const CLIENT_ROUTE_QUERY = "__suamox-client-route";
+
 export interface GenerateRoutesOptions {
   defaultMode?: DefaultPageMode;
   base?: string;
@@ -36,7 +39,7 @@ export function generateRoutesModule(
     const loadLayoutsName = `loadLayouts${index}`;
     const loadRouteName = `loadRoute${index}`;
     const rawImportPath = route.filePath.replace(/\\/g, "/");
-    const clientQuery = target === "client" ? "?__suamox-client-route" : "";
+    const clientQuery = target === "client" ? `?${CLIENT_ROUTE_QUERY}` : "";
     const importPath = `${rawImportPath}${clientQuery}`;
     const layoutLoadCalls: string[] = [];
 

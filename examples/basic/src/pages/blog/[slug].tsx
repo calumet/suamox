@@ -1,6 +1,8 @@
 ﻿import type { LoaderContext } from "@calumet/suamox";
 import { Head } from "@calumet/suamox-head";
 
+import "./blog-post.css";
+
 // Base de datos simulada de posts del blog
 const blogPosts = {
   "hello-world": {
@@ -86,7 +88,7 @@ export default function BlogPostPage({ data }: { data: BlogPostData | null }) {
       </Head>
       <article>
         <header>
-          <h1>{post.title}</h1>
+          <h1 className="blog-post-marker">{post.title}</h1>
           <time style={{ color: "#666" }}>{post.date}</time>
         </header>
         <div style={{ marginTop: "2rem", lineHeight: "1.6" }}>

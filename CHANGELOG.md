@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.1 (2026-09-05)
+
+### Correcciones
+
+- **`ssr-runtime`: el HTML prerenderizado perdia el CSS de la pagina y de sus layouts.** El SSG buscaba en el manifest de Vite con la ruta del modulo relativa a la raiz (`src/pages/blog/index.tsx`), pero el build del cliente importa paginas y layouts con el query de stripping que agrega `@calumet/suamox-vite-plugin-pages`, asi que el manifest las indexa como `src/pages/blog/index.tsx?__suamox-client-route`. Ninguna clave coincidia, la unica entrada que aportaba estilos era la de `index.html`, y un `import "./blog.css"` dentro de una pagina o de un layout no dejaba `<link>` en el HTML estatico. Como el HTML prerenderizado no trae scripts, esos estilos no llegaban nunca: la pantalla salia sin ellos. Ahora la clave se arma con el query, con lo que el CSS de la ruta y el de cada layout entran en el HTML.
+
+### Packages
+
+| Paquete                             | Version anterior | Nueva version |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox`                   | 0.3.0            | 0.3.1         |
+| `@calumet/suamox-vite-plugin-pages` | 0.6.0            | 0.6.1         |
+
 ## 0.9.0 (2026-09-05)
 
 ### Features

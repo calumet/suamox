@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import pc from "picocolors";
 import { parseSync, type Plugin, type ViteDevServer } from "vite";
 
-import { generateRoutesModule, type DefaultPageMode } from "./codegen.js";
+import { CLIENT_ROUTE_QUERY, generateRoutesModule, type DefaultPageMode } from "./codegen.js";
 import { scanRoutes } from "./scanner.js";
 import { stripServerExports } from "./strip-server-exports.js";
 import type { ApiRouteRecord, RouteRecord } from "./types.js";
@@ -22,8 +22,7 @@ const RESOLVED_VIRTUAL_MODULE_ID = "\0" + VIRTUAL_MODULE_ID;
 const VIRTUAL_SERVER_MODULE_ID = "virtual:pages/server";
 const RESOLVED_VIRTUAL_SERVER_MODULE_ID = "\0" + VIRTUAL_SERVER_MODULE_ID;
 
-/** Query string que el codegen agrega a los imports del cliente para activar el stripping */
-export const CLIENT_ROUTE_QUERY = "__suamox-client-route";
+export { CLIENT_ROUTE_QUERY } from "./codegen.js";
 
 export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
   const { pagesDir = "src/pages", extensions = [".tsx", ".ts"], defaultMode = "ssr" } = options;
