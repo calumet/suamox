@@ -81,12 +81,14 @@ Las páginas con `prerender = true` (SSG) no incluyen scripts de hidratación ni
 
 Durante el build de produccion, Suamox genera dos bundles: uno para el servidor y otro para el cliente. Para evitar que codigo server-only (loaders, getStaticPaths, dependencias de base de datos, API keys) termine en el bundle del cliente, el plugin aplica dos mecanismos:
 
-### Proxy automatico de paginas
+### Stripping de exports de servidor
 
-Los archivos dentro de `src/pages/` que exportan `loader` o `getStaticPaths` son reemplazados automaticamente en el build del cliente por un modulo proxy que solo re-exporta los exports seguros (`default`, `prerender`, `csr`). Esto garantiza que el loader y sus imports no entran al grafo de dependencias del cliente.
+Los archivos dentro de `src/pages/` que exportan `loader` o `getStaticPaths` se reescriben para el build del cliente: se borra la declaracion de esos exports y despues se podan los imports y las declaraciones de nivel superior que quedaron sin usar. El import desaparece del codigo, asi que el modulo importado no entra al bundle ni siquiera cuando tiene codigo de nivel de modulo que el tree shaking no puede podar.
 
 ```ts
 // Archivo original: src/pages/blog/[slug].tsx
+import { db } from "../../lib/db";
+
 export async function loader({ params }) {
   const post = await db.post.findUnique({ where: { slug: params.slug } });
   return { post };
@@ -97,10 +99,11 @@ export default function BlogPost() {
   return <h1>{post.title}</h1>;
 }
 
-// Proxy generado automaticamente para el bundle del cliente:
-// export { default } from "/src/pages/blog/[slug].tsx";
-// loader y db nunca entran al bundle
+// Lo que ve el bundle del cliente: solo el componente.
+// El loader y el import de ../../lib/db ya no estan en el modulo.
 ```
+
+Se conservan los imports sin bindings (`import "./estilos.css"`, escritos por su efecto), las declaraciones cuyo inicializador tiene efectos, y cualquier helper o import que el componente siga usando aunque el loader tambien lo usara.
 
 ### Convencion `.server.ts`
 
@@ -126,7 +129,7 @@ export async function loader() {
 }
 
 export default function Home() {
-  // getUser nunca llega al cliente gracias al proxy + .server.ts
+  // getUser nunca llega al cliente: el stripping borra el import y .server.ts lo bloquea
   const { user } = useLoaderData();
   return <p>Hola, {user.name}</p>;
 }

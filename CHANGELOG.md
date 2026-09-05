@@ -64,13 +64,22 @@
 
   `useStaticProps()` no cambia: sus props son server-only, no se serializan y siguen llegando vivas.
 
+### Correcciones
+
+- **`vite-plugin-pages`: el stripping ya no deja en el cliente los imports que solo usa el loader.** El proxy del cliente sustituia la pagina por `export { default } from "<la pagina>"`, asi que Rollup volvia a entrar al archivo original y evaluaba sus imports de arriba: los que solo usaba el loader se caian unicamente si el modulo importado era libre de efectos. Uno con codigo de nivel de modulo —registrar una clave de cache, leer el entorno— viajaba entero al bundle del cliente, justo lo contrario de lo que promete la entrada de 0.2.6.
+
+  Medido en una app real, con un layout y cuatro paginas que leen del backend en sus loaders: 846.885 B de JS de cliente con el cuerpo del loader escrito en la propia pagina, contra 821.162 B sacandolo a un modulo aparte traido con `await import()`. Esos 22 KB de diferencia eran dos modulos de servidor que el navegador descargaba sin usar, y el `import()` si desaparecia porque se iba con el loader. El efecto practico era que la app tenia que hacer justo lo que el stripping venia a ahorrar.
+
+  Ahora el modulo se reescribe en su sitio, como en el plugin de Vite de React Router: se borran las declaraciones de los exports de servidor y despues se podan los imports y las declaraciones de nivel superior que quedaron sin usar, asi que el import se va aunque el modulo importado tenga efectos. Se conservan los imports sin bindings (`import "./estilos.css"`), las declaraciones cuyo inicializador tiene efectos y cualquier helper que el componente siga usando.
+
 ### Packages
 
-| Paquete                        | Version anterior | Nueva version |
-| ------------------------------ | ---------------- | ------------- |
-| `@calumet/suamox`              | 0.2.12           | 0.3.0         |
-| `@calumet/suamox-router`       | 0.4.1            | 0.5.0         |
-| `@calumet/suamox-hono-adapter` | 0.4.2            | 0.5.0         |
+| Paquete                             | Version anterior | Nueva version |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox`                   | 0.2.12           | 0.3.0         |
+| `@calumet/suamox-router`            | 0.4.1            | 0.5.0         |
+| `@calumet/suamox-hono-adapter`      | 0.4.2            | 0.5.0         |
+| `@calumet/suamox-vite-plugin-pages` | 0.5.0            | 0.6.0         |
 
 ## 0.8.0 (2026-09-01)
 

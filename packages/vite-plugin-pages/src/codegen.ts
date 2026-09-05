@@ -178,30 +178,3 @@ ${runtimeReExports}${apiRoutesCode}
 export default routes;
 `;
 }
-
-/** Exports que son seguros para incluir en el bundle del cliente */
-const CLIENT_SAFE_EXPORTS = new Set(["default", "prerender", "csr"]);
-
-/**
- * Genera un modulo proxy que solo re-exporta los exports seguros para el cliente.
- * Esto garantiza que loader(), getStaticPaths() y sus dependencias server-only
- * no entren al bundle del cliente.
- */
-export function generateClientProxy(
-  originalId: string,
-  exportNames: readonly string[],
-): string | null {
-  const serverExports = exportNames.filter((name) => !CLIENT_SAFE_EXPORTS.has(name));
-
-  if (serverExports.length === 0) {
-    return null;
-  }
-
-  const safeExports = exportNames.filter((name) => CLIENT_SAFE_EXPORTS.has(name));
-
-  if (safeExports.length === 0) {
-    return "export {};";
-  }
-
-  return `export { ${safeExports.join(", ")} } from ${JSON.stringify(originalId)};`;
-}
