@@ -14,4 +14,9 @@ export default defineConfig({
     outDir: "dist/client",
     manifest: true,
   },
+  server: {
+    // En middleware mode el ws de HMR usa 24678 fijo, y dos dev servers de Vite
+    // no pueden convivir. Derivarlo del puerto deja correr la suite igual.
+    hmr: { port: Number(process.env.PORT ?? 3000) + 20000 },
+  },
 });

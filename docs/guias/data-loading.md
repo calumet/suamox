@@ -82,7 +82,7 @@ Si falta `getStaticPaths()` en una ruta dinámica marcada para prerender, el bui
 
 - `export const prerender = true`: incluye la ruta en salida estática.
 - `export const csr = true`: desactiva SSR de esa ruta y renderiza en cliente.
-- `export const layout = false`: renderiza la ruta sin la cadena de layouts de su carpeta.
+- `export const layout = false`: renderiza la ruta sin la cadena de layouts de su carpeta. El `root.tsx` de la app se conserva, y su loader corre igual.
 
 Comportamiento por defecto:
 
@@ -283,7 +283,7 @@ Cada nivel de la jerarquia de rutas tiene un ID:
 | `src/pages/[lang]/about.tsx`   | `/:lang/about`   |
 | `src/pages/blog/[slug].tsx`    | `/blog/:slug`    |
 
-Los layouts usan el prefijo `layout:` seguido de su ruta relativa al directorio de paginas. Las paginas usan su route path pattern (el mismo que aparece en la configuracion de rutas).
+Los layouts usan el prefijo `layout:` seguido de su ruta relativa al directorio de paginas. Las paginas usan su route path pattern (el mismo que aparece en la configuracion de rutas). El root de la app es `"root"`, sin prefijo.
 
 ### Comportamiento
 

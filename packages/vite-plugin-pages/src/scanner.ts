@@ -116,6 +116,19 @@ function isLayoutFile(filePath: string, extensions: string[]): boolean {
   return basename(filePath, matchedExtension) === "layout";
 }
 
+/** Solo cuenta en la raiz de `pages/`; un `root.tsx` anidado es una pagina normal */
+function isRootFile(filePath: string, extensions: string[], pagesDir: string): boolean {
+  const matchedExtension = extensions.find((extension) => filePath.endsWith(extension));
+  if (!matchedExtension) {
+    return false;
+  }
+
+  return basename(filePath, matchedExtension) === "root" && dirname(filePath) === pagesDir;
+}
+
+/** No es `layout:root`: ese lo ocupa `src/pages/layout.tsx` */
+export const ROOT_ROUTE_ID = "root";
+
 /**
  * Genera un route ID para un layout basado en su ruta relativa al pages dir.
  * Ej: src/pages/[lang]/layout.tsx → "layout:[lang]"
@@ -222,8 +235,9 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     ignore: ["**/node_modules/**", "**/.git/**"],
   });
 
+  const rootFile = files.find((file) => isRootFile(file, extensions, absolutePagesDir));
   const layoutFiles = files.filter((file) => isLayoutFile(file, extensions));
-  const pageFiles = files.filter((file) => !isLayoutFile(file, extensions));
+  const pageFiles = files.filter((file) => !isLayoutFile(file, extensions) && file !== rootFile);
   const layoutMap = new Map<string, string>();
   const layoutLoaderMap = new Map<string, boolean>();
 
@@ -231,14 +245,22 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     layoutMap.set(dirname(layoutFile), layoutFile);
   }
 
-  // Detectar loaders en layout files
+  // Detectar loaders en layout files y en el root
   await Promise.all(
-    layoutFiles.map(async (file) => {
+    [...layoutFiles, ...(rootFile ? [rootFile] : [])].map(async (file) => {
       const content = await readFile(file, "utf-8");
       const exports = parseExports(file, content);
       layoutLoaderMap.set(file, exports ? exports.names.has("loader") : fallbackHasLoader(content));
     }),
   );
+
+  const rootMeta: LayoutMeta | null = rootFile
+    ? {
+        filePath: rootFile,
+        routeId: ROOT_ROUTE_ID,
+        hasLoader: layoutLoaderMap.get(rootFile) ?? false,
+      }
+    : null;
 
   const errors: string[] = [];
   const parsedRoutes = await Promise.all(
@@ -254,12 +276,14 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
       const exports = parseExports(file, content);
       const layoutDisabled = exports ? exports.layoutDisabled : fallbackLayoutDisabled(content);
 
-      route.layouts = layoutDisabled
-        ? []
-        : collectLayoutsForFile(file, layoutMap, absolutePagesDir);
-      route.layoutMetas = layoutDisabled
+      // El root envuelve siempre: `layout = false` se salta los layout.tsx, no la app
+      const chain = layoutDisabled ? [] : collectLayoutsForFile(file, layoutMap, absolutePagesDir);
+      const metas = layoutDisabled
         ? []
         : collectLayoutMetasForFile(file, layoutMap, layoutLoaderMap, absolutePagesDir);
+
+      route.layouts = rootFile ? [rootFile, ...chain] : chain;
+      route.layoutMetas = rootMeta ? [rootMeta, ...metas] : metas;
 
       if (exports) {
         route.hasLoader = exports.names.has("loader");

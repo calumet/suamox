@@ -157,6 +157,48 @@ describe("renderPage", () => {
     consoleErrorSpy.mockRestore();
   });
 
+  it("leaves layoutData undefined when no layout has a loader", async () => {
+    const layoutInfo: LayoutInfo = {
+      component: (({ children }: { children: ReactNode }) =>
+        createElement("div", null, children)) as React.ComponentType<{ children: React.ReactNode }>,
+      routeId: "layout:root",
+      hasLoader: false,
+    };
+    const routes: RouteRecord[] = [createMockRoute({ path: "/plano", layoutInfos: [layoutInfo] })];
+
+    const result = await renderPage({
+      pathname: "/plano",
+      request: createMockRequest("http://localhost:3000/plano"),
+      routes,
+    });
+
+    // El adapter emite el payload plano mientras esto sea undefined
+    expect(result.layoutData).toBeUndefined();
+  });
+
+  it("runs the root loader for a page that skipped its layout chain", async () => {
+    const loader = vi.fn().mockResolvedValue({ idioma: "fr" });
+    const rootInfo: LayoutInfo = {
+      component: (({ children }: { children: ReactNode }) =>
+        createElement("div", null, children)) as React.ComponentType<{ children: React.ReactNode }>,
+      routeId: "root",
+      loader,
+      hasLoader: true,
+    };
+    const routes: RouteRecord[] = [
+      createMockRoute({ path: "/ingresar", layoutInfos: [rootInfo], layouts: [] }),
+    ];
+
+    const result = await renderPage({
+      pathname: "/ingresar",
+      request: createMockRequest("http://localhost:3000/ingresar"),
+      routes,
+    });
+
+    expect(loader).toHaveBeenCalledOnce();
+    expect(result.layoutData).toEqual({ root: { idioma: "fr" } });
+  });
+
   it("should handle route without loader", async () => {
     const routes: RouteRecord[] = [createMockRoute({ path: "/simple" })];
     const request = createMockRequest("http://localhost:3000/simple");

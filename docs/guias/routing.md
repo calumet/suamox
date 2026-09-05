@@ -48,6 +48,26 @@ export function loader({ params }: LoaderContext) {
 
 Las dos rutas del mismo archivo nunca compiten, porque tienen distinto número de segmentos. Frente a otras rutas manda la regla de siempre, estático antes que dinámico: `/ingresar` le gana a `/:lang`.
 
+## El root de la app
+
+`src/pages/root.tsx` envuelve todas las rutas y va por encima de la cadena de layouts. Es el sitio para lo que la app necesita en cada pantalla —proveedores de contexto, i18n, tema— porque a diferencia de un layout **no se lo salta nadie**, ni siquiera una página con `layout = false`.
+
+```tsx
+// src/pages/root.tsx
+export function loader({ url }: LoaderContext) {
+  return { idioma: idiomaDeLaUrl(url) };
+}
+
+export default function Root({ children }: { children: ReactNode }) {
+  const { idioma } = useRouteLoaderData<typeof loader>("root")!;
+  return <I18nProvider idioma={idioma}>{children}</I18nProvider>;
+}
+```
+
+Puede tener `loader`, que corre en cada petición como el de cualquier layout, y sus datos se leen con `useRouteLoaderData("root")` desde cualquier nivel. Un `redirect()` desde ahí aplica a toda la app.
+
+Es opcional, y solo cuenta en la raíz de `pages/`: un `root.tsx` en una subcarpeta es una página normal.
+
 ## Layouts por carpeta
 
 Si existe `layout.tsx` en un directorio de `pages`, se aplica a las rutas hijas.
@@ -83,6 +103,8 @@ export default function Ingresar() {
 ```
 
 Es por página: sus hermanas de la misma carpeta conservan el layout. El valor tiene que ser el literal `false`, no una variable ni una expresión, porque se lee al generar las rutas y no en tiempo de ejecución. Los loaders de los layouts que se salta tampoco se ejecutan.
+
+La bandera se salta los `layout.tsx`, **no** el `root.tsx`: la página sigue dentro de la app, solo sale del cromo de su carpeta.
 
 ## Página 404
 

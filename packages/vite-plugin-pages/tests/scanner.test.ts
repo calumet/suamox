@@ -146,6 +146,80 @@ export default function Page() { return null; }`,
     expect(result.errors).toEqual([]);
   });
 
+  it("puts src/pages/root.tsx first in the chain and keeps it out of the routes", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+
+    const appRoot = join(pagesDir, "root.tsx");
+    const rootLayout = join(pagesDir, "layout.tsx");
+    const blogLayout = join(pagesDir, "blog", "layout.tsx");
+
+    await writeFileWithDirs(
+      appRoot,
+      "export default function Root({ children }) { return children; }",
+    );
+    await writeFileWithDirs(
+      rootLayout,
+      "export default function Layout({ children }) { return children; }",
+    );
+    await writeFileWithDirs(
+      blogLayout,
+      "export default function Layout({ children }) { return children; }",
+    );
+    await writeFileWithDirs(join(pagesDir, "blog", "index.tsx"), "export default function P() {}");
+
+    const result = await scanRoutes({ pagesDir: "src/pages", extensions: [".tsx"], root });
+
+    expect(result.routes.map((route) => route.path)).toEqual(["/blog"]);
+    expect(normalizeList(result.routes[0]?.layouts)).toEqual(
+      [appRoot, rootLayout, blogLayout].map(normalizePath),
+    );
+    expect(result.routes[0]?.layoutMetas?.[0]?.routeId).toBe("root");
+  });
+
+  it("keeps root.tsx on a page that exports layout = false", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+
+    const appRoot = join(pagesDir, "root.tsx");
+    const rootLayout = join(pagesDir, "layout.tsx");
+
+    await writeFileWithDirs(
+      appRoot,
+      `export function loader() { return { lang: "es" }; }
+export default function Root({ children }) { return children; }`,
+    );
+    await writeFileWithDirs(
+      rootLayout,
+      "export default function Layout({ children }) { return children; }",
+    );
+    await writeFileWithDirs(
+      join(pagesDir, "ingresar.tsx"),
+      `export const layout = false;
+export default function P() {}`,
+    );
+
+    const result = await scanRoutes({ pagesDir: "src/pages", extensions: [".tsx"], root });
+    const ingresar = result.routes.find((route) => route.path === "/ingresar");
+
+    expect(normalizeList(ingresar?.layouts)).toEqual([appRoot].map(normalizePath));
+    expect(ingresar?.layoutMetas).toEqual([
+      { filePath: appRoot, routeId: "root", hasLoader: true },
+    ]);
+  });
+
+  it("treats a nested root.tsx as an ordinary page", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+
+    await writeFileWithDirs(join(pagesDir, "blog", "root.tsx"), "export default function P() {}");
+
+    const result = await scanRoutes({ pagesDir: "src/pages", extensions: [".tsx"], root });
+
+    expect(result.routes.map((route) => route.path)).toEqual(["/blog/root"]);
+    expect(result.routes[0]?.layouts).toEqual([]);
+  });
+
   it("does not skip layouts when layout is exported as true", async () => {
     const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
     const pagesDir = join(root, "src", "pages");
