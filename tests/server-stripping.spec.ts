@@ -2,6 +2,8 @@ import { readdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { deserializeData } from "@calumet/suamox";
+
 import { expect, test } from "@playwright/test";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -86,9 +88,11 @@ test.describe("Server code stripping", () => {
     await page.goto("/secret-test");
 
     // The data should be available (server rendered it)
-    const initialData = await page.evaluate(() => {
-      return (window as Record<string, unknown>).__INITIAL_DATA__;
-    });
+    const initialData = deserializeData(
+      await page.evaluate(() => {
+        return (window as Record<string, unknown>).__INITIAL_DATA__;
+      }),
+    );
     expect(initialData).toEqual({
       message: "Data loaded securely",
       loadedAt: expect.any(Number),

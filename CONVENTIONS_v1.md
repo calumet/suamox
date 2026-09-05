@@ -89,11 +89,12 @@ export async function loader(ctx: LoaderContext) {
     locals: Record<string, unknown>; // Datos del middleware
   }
   ```
-- **Return:** cualquier objeto JSON-serializable
+- **Return:** cualquier valor transportable con devalue: lo que admite JSON más `Date`, `Map`, `Set`, `RegExp`, `BigInt`, `undefined` y las referencias cíclicas o compartidas
 - **Notas:**
   - El resultado se pasa al componente como `data` prop
   - En SSR, se serializa en `window.__INITIAL_DATA__`
-  - El resultado se serializa **antes** de renderizar, así que el componente ve lo mismo en el servidor y al hidratar. Lo que quede fuera del contrato (un `Date`, un `Map`) llega igual de convertido en los dos lados
+  - Lo que devuelve el loader es lo que llega al componente, igual en el servidor que en el cliente
+  - Las instancias de clase, las funciones y las claves `__proto__` no se pueden transportar: dan error con la ruta del campo, no una conversión silenciosa
 
 ### 2.3 `getStaticPaths()` (opcional, solo para rutas dinámicas en SSG)
 
@@ -373,7 +374,11 @@ export interface LoaderContext {
   locals: Record<string, unknown>;
 }
 
-export type LoaderData<L> = L extends (...args: never[]) => infer R ? Serialized<Awaited<R>> : L;
+export type LoaderData<L> = L extends (...args: never[]) => infer R
+  ? Awaited<R> extends void
+    ? undefined
+    : Awaited<R>
+  : L;
 
 export type PageProps<L = any> = {
   data: LoaderData<L>;
@@ -382,7 +387,7 @@ export type PageProps<L = any> = {
 export type GetStaticPaths = () => Promise<Array<{ params: Record<string, string> }>>;
 ```
 
-`PageProps`, `useLoaderData()` y `useRouteLoaderData()` aceptan la funcion del loader (`PageProps<typeof loader>`), y en ese caso el tipo es la forma que sobrevive a `JSON.stringify`, no la que devuelve el loader. Pasar el tipo de los datos, que es lo que documentaba esta version, sigue devolviendo ese mismo tipo: el generico no cambio de significado, se amplio. Ver [Tipado](./docs/guias/data-loading.md#tipado).
+`PageProps`, `useLoaderData()` y `useRouteLoaderData()` aceptan la funcion del loader (`PageProps<typeof loader>`) además del tipo de los datos, que es lo que documentaba esta version y sigue devolviendo ese mismo tipo: el generico no cambio de significado, se amplio. Ver [Tipado](./docs/guias/data-loading.md#tipado).
 
 ### 10.2 Configuración recomendada (en consumer project)
 

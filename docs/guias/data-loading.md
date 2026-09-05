@@ -195,33 +195,52 @@ const layoutData = useRouteLoaderData<typeof layoutLoader>("layout:[lang]");
 
 Pasar el tipo de los datos en vez de la funcion sigue valiendo (`useLoaderData<{ categories: string[] }>()`) y devuelve exactamente ese tipo. Solo que la forma escrita a mano compila igual cuando el loader pasa a devolver otra cosa, y nadie se entera hasta que la pagina lee `undefined`.
 
-### El tipo es el que sobrevive al JSON
+### Lo que devuelve el loader es lo que llega
 
-Los datos del loader llegan al cliente serializados: en el HTML inicial dentro de `window.__INITIAL_DATA__`, y en navegacion SPA por `/__data`. Las dos rutas pasan por `JSON.stringify`, asi que al inferir del loader lo que se declara es la forma serializada:
-
-| En el loader                        | En el componente                                     |
-| ----------------------------------- | ---------------------------------------------------- |
-| `Date`, o cualquier `toJSON()`      | lo que devuelve `toJSON()` (`string` para una fecha) |
-| clave con una funcion o `undefined` | la clave no existe                                   |
-| `Map`, `Set`                        | `{}`                                                 |
-
-Un `publicado: new Date()` se declara `string`, y `data.publicado.toISOString()` es un error de compilacion en vez de una pantalla rota despues de hidratar.
-
-El framework serializa el resultado del loader **antes** de renderizar, asi que esto no es solo una convencion del tipo: el componente ve exactamente lo mismo en el servidor, al hidratar y en navegacion SPA. Sin eso el render del servidor recibiria el `Date` vivo y el cliente un `string`, con el mismo componente dando resultados distintos en cada lado.
-
-Lo que esto implica al escribir un loader: devuelve la forma serializada tu mismo cuando te importe el detalle. Una fecha viaja mejor como `fecha.toISOString()` explicito que dejandola convertir; un `Map` como `Object.fromEntries(mapa)`.
-
-La conversion esta exportada como `Serialized<T>` por si necesitas la forma serializada de un tipo suelto:
+Un `Date` que sale del loader llega al componente siendo un `Date`, en el servidor y en el navegador. Lo mismo en navegacion SPA. No hay que reconstruir nada ni declarar el campo como `string`:
 
 ```tsx
-import type { Serialized } from "@calumet/suamox";
+export async function loader() {
+  return { publicado: new Date() };
+}
 
-function Tarjeta({ producto }: { producto: Serialized<Producto> }) {
-  return <span>{producto.publicado}</span>;
+export default function Nota() {
+  const { publicado } = useLoaderData<typeof loader>();
+  return <time>{publicado.toLocaleDateString("es")}</time>;
 }
 ```
 
-`useStaticProps()` no pasa por esto: es server-only y sus props no se serializan.
+El transporte no es JSON plano sino [devalue](https://github.com/Rich-Harris/devalue), tanto en `window.__INITIAL_DATA__` como en `/__data`. Sobreviven:
+
+| Tipo                                            | Llega como                    |
+| ----------------------------------------------- | ----------------------------- |
+| `Date`, `RegExp`, `URL`, `Map`, `Set`, `BigInt` | lo mismo                      |
+| `undefined`, `NaN`, `Infinity`, `-0`            | lo mismo                      |
+| Arrays con huecos, typed arrays                 | lo mismo                      |
+| Dos campos apuntando al mismo objeto            | siguen siendo el mismo objeto |
+| Referencias ciclicas                            | el ciclo se conserva          |
+
+### Lo que no se puede transportar
+
+Las instancias de clase no pasan. Un `Decimal` de Prisma, un documento de Mongoose o una clase propia dan un error con la ruta del campo:
+
+```txt
+DevalueError: Cannot stringify arbitrary non-POJOs
+  at .producto.precio
+```
+
+Es deliberado: devalue no sabe reconstruir esa clase en el navegador, y prefiere fallar a mandarte otra cosa haciendo como que no pasa nada. La salida es convertir tu mismo en el loader:
+
+```tsx
+export async function loader() {
+  const producto = await db.producto.find(1);
+  return { ...producto, precio: producto.precio.toString() };
+}
+```
+
+Las funciones y los simbolos tampoco viajan, por lo mismo. Y una clave literal `__proto__` se rechaza, porque es un vector de prototype pollution.
+
+`useStaticProps()` no pasa por nada de esto: es server-only y sus props no se serializan, asi que ahi si puedes devolver lo que quieras.
 
 ## `useRouteLoaderData(routeId)`
 

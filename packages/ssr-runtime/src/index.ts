@@ -5,6 +5,7 @@ import {
   headMarkerEndValue,
   headMarkerStartValue,
 } from "@calumet/suamox-head";
+import { stringify, unflatten } from "devalue";
 import type React from "react";
 import { createContext, createElement, Fragment, useContext } from "react";
 import { renderToStaticMarkup, renderToString } from "react-dom/server";
@@ -81,33 +82,12 @@ export interface ApiRouteRecord {
   priority: number;
 }
 
-type JsonPrimitive = string | number | boolean | null;
-type NonSerializable = ((...args: never[]) => unknown) | symbol | undefined | void;
-
-/**
- * Forma en que un valor sobrevive a `JSON.stringify`: `Date` y cualquier `toJSON()`
- * colapsan a lo que devuelve ese metodo, las claves con funcion o `undefined`
- * desaparecen, y `Map` y `Set` quedan en `{}`.
- */
-export type Serialized<T> = T extends JsonPrimitive
-  ? T
-  : T extends { toJSON(): infer R }
-    ? Serialized<R>
-    : T extends NonSerializable
-      ? undefined
-      : T extends Map<unknown, unknown> | Set<unknown>
-        ? Record<string, never>
-        : T extends readonly unknown[]
-          ? { [K in keyof T]: Serialized<T[K]> }
-          : T extends object
-            ? { [K in keyof T as [T[K]] extends [NonSerializable] ? never : K]: Serialized<T[K]> }
-            : unknown;
-
-/**
- * Datos que llegan al componente. Con una funcion (`typeof loader`) infiere su retorno ya
- * serializado; con un tipo de datos lo devuelve tal cual.
- */
-export type LoaderData<L> = L extends (...args: never[]) => infer R ? Serialized<Awaited<R>> : L;
+/** Datos del loader. Acepta la funcion (`typeof loader`) o el tipo de los datos. */
+export type LoaderData<L> = L extends (...args: never[]) => infer R
+  ? Awaited<R> extends void
+    ? undefined
+    : Awaited<R>
+  : L;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface PageProps<L = any> {
@@ -456,8 +436,8 @@ export async function hydrateApp(
     return;
   }
 
-  const rawInitialData =
-    (window as Window & { __INITIAL_DATA__?: unknown }).__INITIAL_DATA__ ?? null;
+  const payload = (window as Window & { __INITIAL_DATA__?: unknown }).__INITIAL_DATA__;
+  const rawInitialData = payload === undefined ? null : (deserializeData(payload) ?? null);
   const resolvedRoute = await resolveRouteModule(match.route);
 
   let initialData: unknown = null;
@@ -492,15 +472,6 @@ export async function hydrateApp(
   }
 
   hydrateRoot(rootElement, element);
-}
-
-/**
- * Deja los datos del loader como los recibe el cliente. El HTML inicial y `/__data` viajan
- * por `JSON.stringify`, asi que sin esto el render del servidor veria valores (`Date`, `Map`)
- * que ya no existen al hidratar. Es la contraparte en runtime de `Serialized<T>`.
- */
-function serializeLoaderData<T>(value: T): Serialized<T> {
-  return JSON.parse(JSON.stringify(value) ?? "null") as Serialized<T>;
 }
 
 /**
@@ -569,11 +540,11 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
     if (layoutResults) {
       layoutData = {};
       for (const result of layoutResults) {
-        layoutData[result.routeId] = serializeLoaderData(result.data);
+        layoutData[result.routeId] = result.data;
       }
     }
 
-    data = serializeLoaderData(pageData);
+    data = pageData;
   } catch (error) {
     if (error instanceof RedirectResponse) {
       return {
@@ -616,14 +587,19 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
   }
 }
 
-/**
- * Serializa datos de forma segura para inyección en HTML
- */
+/** Serializa datos de forma segura para inyección en HTML. Formato devalue, no JSON plano. */
 export function serializeData(data: unknown): string {
-  const json = JSON.stringify(data) ?? "null";
+  const serialized = stringify(data);
   // Escapar entidades HTML para prevenir XSS
   // Solo se escapan <, > y & que pueden romper el contexto del script
-  return json.replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
+  return serialized.replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
+}
+
+/** Inverso de `serializeData`, sobre el valor ya parseado como JSON. */
+export function deserializeData(payload: unknown): unknown {
+  // Un payload con otra forma es uno que no escribimos nosotros: se trata como sin datos
+  if (typeof payload !== "number" && !Array.isArray(payload)) return null;
+  return unflatten(payload);
 }
 
 /**
@@ -671,7 +647,7 @@ export function generateHTML(options: {
 
   const dataScript = includeInitialDataScript
     ? `<script>
-      window.__INITIAL_DATA__ = ${initialData !== undefined ? serializeData(initialData) : "null"};
+      window.__INITIAL_DATA__ = ${serializeData(initialData ?? null)};
     </script>`
     : "";
 

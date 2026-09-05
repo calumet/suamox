@@ -10,6 +10,8 @@ import {
   useStaticProps,
   redirect,
   createPageElement,
+  serializeData,
+  deserializeData,
 } from "../src/index";
 import type { RouteRecord, LoaderContext, LayoutInfo } from "../src/index";
 
@@ -737,11 +739,15 @@ describe("useRouteLoaderData", () => {
   });
 });
 
-describe("serializacion de los datos del loader", () => {
+describe("transporte de los datos del loader", () => {
   it("el componente ve en el servidor lo mismo que vera al hidratar", async () => {
     const PageComponent = () => {
-      const data = useLoaderData<{ publicado: string; etiquetas: string[] }>();
-      return createElement("p", null, `${typeof data.publicado}|${data.etiquetas.join(",")}`);
+      const data = useLoaderData<{ publicado: Date; etiquetas: string[] }>();
+      return createElement(
+        "p",
+        null,
+        `${data.publicado instanceof Date ? "Date" : "otro"}|${data.etiquetas.join(",")}`,
+      );
     };
 
     const routes: RouteRecord[] = [
@@ -762,37 +768,16 @@ describe("serializacion de los datos del loader", () => {
       routes,
     });
 
-    expect(result.html).toContain("string|a,b");
-    expect(result.initialData).toEqual({
-      publicado: "2026-09-04T10:00:00.000Z",
+    expect(result.html).toContain("Date|a,b");
+
+    const enElCliente = deserializeData(JSON.parse(serializeData(result.initialData)));
+    expect(enElCliente).toEqual({
+      publicado: new Date("2026-09-04T10:00:00Z"),
       etiquetas: ["a", "b"],
     });
   });
 
-  it("descarta lo que JSON.stringify descarta", async () => {
-    const routes: RouteRecord[] = [
-      createMockRoute({
-        path: "/descartes",
-        // eslint-disable-next-line @typescript-eslint/require-await
-        loader: async () => ({
-          ok: 1,
-          sinValor: undefined,
-          fn: () => "no viaja",
-          conjunto: new Set(["a"]),
-        }),
-      }),
-    ];
-
-    const result = await renderPage({
-      pathname: "/descartes",
-      request: createMockRequest("http://localhost:3000/descartes"),
-      routes,
-    });
-
-    expect(result.initialData).toEqual({ ok: 1, conjunto: {} });
-  });
-
-  it("tambien serializa los datos de los layout loaders", async () => {
+  it("los datos de los layout loaders llegan igual de vivos", async () => {
     const Layout = ({ children }: { children: ReactNode }) =>
       createElement("div", { id: "layout" }, children);
 
@@ -801,7 +786,7 @@ describe("serializacion de los datos del loader", () => {
       component: Layout as any,
       routeId: "layout:root",
       // eslint-disable-next-line @typescript-eslint/require-await
-      loader: async () => ({ desde: new Date("2026-09-04T10:00:00Z") }),
+      loader: async () => ({ desde: new Date("2026-09-04T10:00:00Z"), vistas: new Set([1]) }),
       hasLoader: true,
     };
 
@@ -815,8 +800,9 @@ describe("serializacion de los datos del loader", () => {
       routes,
     });
 
-    expect(result.layoutData).toEqual({
-      "layout:root": { desde: "2026-09-04T10:00:00.000Z" },
+    const enElCliente = deserializeData(JSON.parse(serializeData(result.layoutData)));
+    expect(enElCliente).toEqual({
+      "layout:root": { desde: new Date("2026-09-04T10:00:00Z"), vistas: new Set([1]) },
     });
   });
 

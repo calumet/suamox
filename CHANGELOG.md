@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.0 (2026-09-04)
+## 0.9.0 (2026-09-05)
 
 ### Features
 
@@ -16,37 +16,59 @@
   }
   ```
 
-  No rompe nada y no hace falta ni una mayor ni un nombre nuevo conviviendo. `LoaderData<L>` solo infiere cuando `L` es una funcion y devuelve el tipo tal cual cuando no lo es, asi que las llamadas que hoy pasan el tipo de los datos (`useLoaderData<{ categories: string[] }>()`) siguen dando exactamente lo mismo. Es la forma del `SerializeFrom` de React Router. Para leer el loader de otro nivel, `import type { loader as layoutLoader } from "../layout"` no deja rastro en el bundle.
+  No rompe nada y no hace falta ni una mayor ni un nombre nuevo conviviendo. `LoaderData<L>` solo infiere cuando `L` es una funcion y devuelve el tipo tal cual cuando no lo es, asi que las llamadas que pasan el tipo de los datos (`useLoaderData<{ categories: string[] }>()`) siguen dando exactamente lo mismo. Es la forma del `SerializeFrom` de React Router. Para leer el loader de otro nivel, `import type { loader as layoutLoader } from "../layout"` no deja rastro en el bundle.
 
-  Lo que se infiere es la forma que sobrevive al JSON, no la que devuelve el loader. Los datos llegan al cliente por `JSON.stringify`, en `window.__INITIAL_DATA__` y en `/__data`, asi que un `publicado: new Date()` se declara `string` y `data.publicado.toISOString()` pasa a ser un error de compilacion en vez de una pantalla rota al hidratar. Tambien desaparecen las claves con funcion o `undefined`, `Map` y `Set` quedan en `{}`, y cualquier `toJSON()` colapsa a lo que devuelve, con lo que un `Decimal` de Prisma queda en `string`. La conversion se exporta como `Serialized<T>`. React Router se pudo quitar `SerializeFrom` de encima porque paso a turbo-stream, que si preserva `Date`; aqui la serializacion es JSON y el desajuste es real.
+- **Los datos del loader viajan con devalue: un `Date` llega siendo un `Date`.** El transporte era `JSON.stringify`, asi que el tipo inferido tenia que mentir o degradarse: una fecha salia `Date` del loader y llegaba `string` al componente, y el mismo componente se comportaba distinto en el servidor y al hidratar. Ahora `window.__INITIAL_DATA__` y `/__data` usan [devalue](https://github.com/Rich-Harris/devalue), asi que lo que devuelve el loader es lo que llega:
 
-  Y no se queda en el tipo: el runtime serializa el resultado del loader antes de renderizar, asi que el componente ve lo mismo en el servidor, al hidratar y en navegacion SPA. Ver el breaking change de abajo.
+  ```tsx
+  export async function loader() {
+    return { publicado: new Date(), vistas: new Set([1, 2]) };
+  }
+
+  export default function Nota() {
+    const { publicado } = useLoaderData<typeof loader>();
+    return <time>{publicado.toLocaleDateString("es")}</time>;
+  }
+  ```
+
+  Sobreviven `Date`, `Map`, `Set`, `RegExp`, `URL`, `BigInt`, typed arrays, `undefined`, `NaN`, `-0`, los arrays con huecos y las referencias ciclicas o compartidas: dos campos que apuntaban al mismo objeto lo siguen haciendo despues de hidratar. Con eso `LoaderData<L>` es `Awaited<ReturnType<L>>` a secas y no hace falta ningun tipo de conversion.
+
+  Es lo que hacen SvelteKit y Nuxt, que usan devalue tambien; React Router llego a lo mismo por otra via (turbo-stream) al dejar atras su `SerializeFrom`. devalue pesa unos 2 kB en el cliente, no tiene dependencias, y su `parse` no usa `eval`, asi que no pide aflojar la CSP.
+
+  De regalo, devalue rechaza las claves `__proto__`. Antes `window.__INITIAL_DATA__` se emitia como literal de objeto, donde `__proto__:` fija el prototipo: un loader que devolviera JSON externo sin filtrar dejaba al atacante controlar propiedades heredadas del `data` que llega al componente.
 
 ### Breaking Changes
 
-- **`ssr-runtime`: el resultado de un loader se serializa antes del render del servidor.** Hasta ahora el componente recibia en SSR el valor vivo que devolvia el loader, y al hidratar el que sale de `JSON.parse`. Eran dos valores distintos para el mismo componente:
+- **El formato de `window.__INITIAL_DATA__` y de `/__data` ya no es JSON plano.** Es el formato aplanado de devalue, que se lee con `deserializeData()`:
 
-  ```txt
-  SSR html:            <p>4/9/2026</p>
-  typeof en servidor:  Date
-  __INITIAL_DATA__:    {"publicado":"2026-09-04T10:00:00.000Z"}
-  typeof en cliente:   string
-  hidratacion:         TypeError: data.publicado.toLocaleDateString is not a function
+  ```js
+  window.__INITIAL_DATA__ = [{ time: 1, secret: 2 }, "2026-09-05T05:27:01.359Z", "server-only"];
   ```
 
-  El servidor pintaba bien la pantalla y el error salia despues, en el navegador. Ahora `renderPage()` pasa los datos por `JSON.parse(JSON.stringify(...))` antes de renderizar, lo mismo que ya hacian `window.__INITIAL_DATA__` y `/__data`: de los tres caminos, el render inicial era el unico que no lo hacia. Es tambien lo que `CONVENTIONS_v1.md` §2.2 ya congelaba como contrato del loader, "cualquier objeto JSON-serializable"; un `Date` nunca estuvo dentro.
+  Afecta a quien lea `window.__INITIAL_DATA__` a mano o llame a `/__data` desde fuera del router; un test que hiciera `expect(await response.json()).toEqual({ ... })` ahora tiene que envolverlo en `deserializeData()`. `serializeData()` sigue exportado y cambia de formato en consecuencia, y se le suma `deserializeData()`.
 
-  **Impacto.** Una pagina que llama metodos de `Date` (o usa un `Map`, un `Set`, una instancia de clase) sobre `data` pasa de renderizar en el servidor y romperse al hidratar, a devolver un 500. Es mas ruidoso, y es el mismo fallo que ya tenia: se adelanta al servidor en vez de esperar al navegador. Las paginas con `prerender` que nunca hidratan son el unico caso donde esto funcionaba de verdad, y son las que hay que revisar.
+  Los tres paquetes comparten el formato, asi que **`@calumet/suamox`, `@calumet/suamox-router` y `@calumet/suamox-hono-adapter` tienen que actualizarse juntos.**
 
-  **Migracion.** Con los tipos nuevos (`useLoaderData<typeof loader>()`) `tsc` marca cada sitio antes de que llegue a runtime. En cada uno, o reconstruyes el valor en el componente (`new Date(data.publicado)`) o, mejor, devuelves ya la forma serializada desde el loader (`publicado: publicado.toISOString()`).
+- **Las instancias de clase en el retorno de un loader pasan a dar error.** `JSON.stringify` las convertia en silencio llamando a su `toJSON()`, con lo que un `Decimal` de Prisma llegaba al componente como `string` aunque el tipo dijera `Decimal`. devalue no sabe reconstruir esa clase en el navegador y prefiere fallar a mandar otra cosa:
+
+  ```txt
+  DevalueError: Cannot stringify arbitrary non-POJOs
+    at .producto.precio
+  ```
+
+  **Migracion.** Convertir en el loader, que es lo que Next.js lleva anos recomendando para su frontera equivalente: `return { ...producto, precio: producto.precio.toString() }`. Las funciones y los simbolos tampoco viajan, por lo mismo.
+
+  SvelteKit y Nuxt resuelven este caso con un hook para registrar tipos propios (`transport`, `definePayloadReducer`). Aqui no existe todavia; SvelteKit tardo dos anos en dar con la forma de esa API y merece su propio diseno.
 
   `useStaticProps()` no cambia: sus props son server-only, no se serializan y siguen llegando vivas.
 
 ### Packages
 
-| Paquete           | Version anterior | Nueva version |
-| ----------------- | ---------------- | ------------- |
-| `@calumet/suamox` | 0.2.12           | 0.3.0         |
+| Paquete                        | Version anterior | Nueva version |
+| ------------------------------ | ---------------- | ------------- |
+| `@calumet/suamox`              | 0.2.12           | 0.3.0         |
+| `@calumet/suamox-router`       | 0.4.1            | 0.5.0         |
+| `@calumet/suamox-hono-adapter` | 0.4.2            | 0.5.0         |
 
 ## 0.8.0 (2026-09-01)
 

@@ -1,5 +1,6 @@
 import {
   createPageElement,
+  deserializeData,
   isSafeRedirectUrl,
   matchRoute,
   resolveRouteModule,
@@ -160,7 +161,9 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
   const origin = baseUrl ?? window.location.origin;
   let root: Root | null = null;
   let navigationId = 0;
-  let initialData: unknown = (window as Window & { __INITIAL_DATA__?: unknown }).__INITIAL_DATA__;
+  const initialPayload = (window as Window & { __INITIAL_DATA__?: unknown }).__INITIAL_DATA__;
+  let initialData: unknown =
+    initialPayload === undefined ? undefined : deserializeData(initialPayload);
   const prefetched = new Map<string, Promise<void>>();
 
   // Track current layout chain and cached layout data
@@ -246,7 +249,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
           if (!response.ok) {
             throw new Error(`Data fetch failed: ${response.status}`);
           }
-          const json: unknown = await response.json();
+          const json: unknown = deserializeData(await response.json());
           if (
             json != null &&
             typeof json === "object" &&

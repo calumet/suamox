@@ -26,6 +26,7 @@
   "packageManager": "pnpm@10.14.0",
   "devDependencies": {
     "@calumet/elise-linter": "^0.1.2",
+    "@calumet/suamox": "workspace:*",
     "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.61.1",
     "@types/node": "^24.10.1",

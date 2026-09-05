@@ -38,7 +38,8 @@
     "access": "public"
   },
   "dependencies": {
-    "@calumet/suamox-head": "workspace:^"
+    "@calumet/suamox-head": "workspace:^",
+    "devalue": "^5.9.2"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
