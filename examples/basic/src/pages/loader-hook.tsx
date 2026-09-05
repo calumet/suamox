@@ -10,12 +10,12 @@ export function loader(_ctx: LoaderContext) {
 }
 
 function ChildComponent() {
-  const { message } = useLoaderData<{ message: string }>();
+  const { message } = useLoaderData<typeof loader>();
   return <p data-testid="child-message">Child says: {message}</p>;
 }
 
 export default function LoaderHookPage() {
-  const { message, timestamp } = useLoaderData<{ message: string; timestamp: number }>();
+  const { message, timestamp } = useLoaderData<typeof loader>();
 
   return (
     <div>

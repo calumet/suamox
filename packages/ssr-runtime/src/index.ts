@@ -5,6 +5,7 @@ import {
   headMarkerEndValue,
   headMarkerStartValue,
 } from "@calumet/suamox-head";
+import { stringify, unflatten } from "devalue";
 import type React from "react";
 import { createContext, createElement, Fragment, useContext } from "react";
 import { renderToStaticMarkup, renderToString } from "react-dom/server";
@@ -81,9 +82,16 @@ export interface ApiRouteRecord {
   priority: number;
 }
 
+/** Datos del loader. Acepta la funcion (`typeof loader`) o el tipo de los datos. */
+export type LoaderData<L> = L extends (...args: never[]) => infer R
+  ? Awaited<R> extends void
+    ? undefined
+    : Awaited<R>
+  : L;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export interface PageProps<T = any> {
-  data: T;
+export interface PageProps<L = any> {
+  data: LoaderData<L>;
 }
 
 export interface StaticPathEntry {
@@ -110,13 +118,13 @@ const StaticPropsContext = createContext<Record<string, unknown>>({});
 const AllRouteDataContext = createContext<Record<string, unknown>>({});
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function useLoaderData<T = any>(): T {
-  return useContext(LoaderDataContext) as T;
+export function useLoaderData<L = any>(): LoaderData<L> {
+  return useContext(LoaderDataContext) as LoaderData<L>;
 }
 
-export function useRouteLoaderData<T = unknown>(routeId: string): T | undefined {
+export function useRouteLoaderData<L = unknown>(routeId: string): LoaderData<L> | undefined {
   const allData = useContext(AllRouteDataContext);
-  return allData[routeId] as T | undefined;
+  return allData[routeId] as LoaderData<L> | undefined;
 }
 
 export function useStaticProps<T = Record<string, unknown>>(): T {
@@ -428,8 +436,8 @@ export async function hydrateApp(
     return;
   }
 
-  const rawInitialData =
-    (window as Window & { __INITIAL_DATA__?: unknown }).__INITIAL_DATA__ ?? null;
+  const payload = (window as Window & { __INITIAL_DATA__?: unknown }).__INITIAL_DATA__;
+  const rawInitialData = payload === undefined ? null : (deserializeData(payload) ?? null);
   const resolvedRoute = await resolveRouteModule(match.route);
 
   let initialData: unknown = null;
@@ -579,14 +587,42 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
   }
 }
 
-/**
- * Serializa datos de forma segura para inyección en HTML
- */
+// devalue serializa el ArrayBuffer de respaldo entero, no solo la vista, y en Node el pool de
+// Buffer se comparte entre peticiones: un Buffer de 2 bytes arrastraria 64 KB de memoria ajena
+const rejectBinary = {
+  binary: (value: unknown): false => {
+    if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) {
+      throw new TypeError(
+        "Un loader no puede devolver datos binarios (Buffer, TypedArray, ArrayBuffer): se " +
+          "serializaria el ArrayBuffer completo, que en Node comparte memoria con otras " +
+          "peticiones. Conviertelo a texto (base64) o sirvelo desde su propia ruta.",
+      );
+    }
+    return false;
+  },
+};
+
+/** Serializa datos de forma segura para inyección en HTML. Formato devalue, no JSON plano. */
 export function serializeData(data: unknown): string {
-  const json = JSON.stringify(data) ?? "null";
+  const serialized = stringify(data, rejectBinary);
+  // El payload va dentro de un <script>. devalue interpola en crudo los flags de un RegExp y
+  // el toISOString() de un Date, que un Symbol.toStringTag mentiroso puede convertir en codigo
+  JSON.parse(serialized);
   // Escapar entidades HTML para prevenir XSS
   // Solo se escapan <, > y & que pueden romper el contexto del script
-  return json.replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
+  return serialized.replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
+}
+
+/** Inverso de `serializeData`, sobre el valor ya parseado como JSON. */
+export function deserializeData(payload: unknown): unknown {
+  // Un payload que no escribimos nosotros se trata como sin datos: que la app arranque
+  if (typeof payload !== "number" && !Array.isArray(payload)) return null;
+  try {
+    return unflatten(payload);
+  } catch (error) {
+    console.warn("[suamox] payload de datos ilegible, se ignora:", error);
+    return null;
+  }
 }
 
 /**
@@ -634,7 +670,7 @@ export function generateHTML(options: {
 
   const dataScript = includeInitialDataScript
     ? `<script>
-      window.__INITIAL_DATA__ = ${initialData !== undefined ? serializeData(initialData) : "null"};
+      window.__INITIAL_DATA__ = ${serializeData(initialData ?? null)};
     </script>`
     : "";
 

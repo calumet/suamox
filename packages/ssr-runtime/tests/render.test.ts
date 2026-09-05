@@ -10,6 +10,8 @@ import {
   useStaticProps,
   redirect,
   createPageElement,
+  serializeData,
+  deserializeData,
 } from "../src/index";
 import type { RouteRecord, LoaderContext, LayoutInfo } from "../src/index";
 
@@ -734,5 +736,93 @@ describe("useRouteLoaderData", () => {
     const html = renderToString(element);
 
     expect(html).toContain("Data: undefined");
+  });
+});
+
+describe("transporte de los datos del loader", () => {
+  it("el componente ve en el servidor lo mismo que vera al hidratar", async () => {
+    const PageComponent = () => {
+      const data = useLoaderData<{ publicado: Date; etiquetas: string[] }>();
+      return createElement(
+        "p",
+        null,
+        `${data.publicado instanceof Date ? "Date" : "otro"}|${data.etiquetas.join(",")}`,
+      );
+    };
+
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/nota",
+        component: PageComponent,
+        // eslint-disable-next-line @typescript-eslint/require-await
+        loader: async () => ({
+          publicado: new Date("2026-09-04T10:00:00Z"),
+          etiquetas: ["a", "b"],
+        }),
+      }),
+    ];
+
+    const result = await renderPage({
+      pathname: "/nota",
+      request: createMockRequest("http://localhost:3000/nota"),
+      routes,
+    });
+
+    expect(result.html).toContain("Date|a,b");
+
+    const enElCliente = deserializeData(JSON.parse(serializeData(result.initialData)));
+    expect(enElCliente).toEqual({
+      publicado: new Date("2026-09-04T10:00:00Z"),
+      etiquetas: ["a", "b"],
+    });
+  });
+
+  it("los datos de los layout loaders llegan igual de vivos", async () => {
+    const Layout = ({ children }: { children: ReactNode }) =>
+      createElement("div", { id: "layout" }, children);
+
+    const layoutInfo: LayoutInfo = {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+      component: Layout as any,
+      routeId: "layout:root",
+      // eslint-disable-next-line @typescript-eslint/require-await
+      loader: async () => ({ desde: new Date("2026-09-04T10:00:00Z"), vistas: new Set([1]) }),
+      hasLoader: true,
+    };
+
+    const routes: RouteRecord[] = [
+      createMockRoute({ path: "/con-layout", layoutInfos: [layoutInfo] }),
+    ];
+
+    const result = await renderPage({
+      pathname: "/con-layout",
+      request: createMockRequest("http://localhost:3000/con-layout"),
+      routes,
+    });
+
+    const enElCliente = deserializeData(JSON.parse(serializeData(result.layoutData)));
+    expect(enElCliente).toEqual({
+      "layout:root": { desde: new Date("2026-09-04T10:00:00Z"), vistas: new Set([1]) },
+    });
+  });
+
+  it("no toca los static props, que son server-only", async () => {
+    const PageComponent = () => {
+      const props = useStaticProps<{ generado: Date }>();
+      return createElement("p", null, props.generado instanceof Date ? "Date" : "otro");
+    };
+
+    const routes: RouteRecord[] = [
+      createMockRoute({ path: "/estatica", component: PageComponent }),
+    ];
+
+    const result = await renderPage({
+      pathname: "/estatica",
+      request: createMockRequest("http://localhost:3000/estatica"),
+      routes,
+      props: { generado: new Date("2026-09-04T10:00:00Z") },
+    });
+
+    expect(result.html).toContain("Date");
   });
 });

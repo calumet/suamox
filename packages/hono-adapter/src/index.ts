@@ -29,6 +29,11 @@ import pc from "picocolors";
 import { normalizePath, type EnvironmentModuleNode, type ViteDevServer } from "vite";
 import type { ModuleRunner } from "vite/module-runner";
 
+/** Respuesta de `/__data`, en el mismo formato que `window.__INITIAL_DATA__`. */
+function dataResponse(c: Context, value: unknown): Response {
+  return c.body(serializeData(value), 200, { "Content-Type": "application/json" });
+}
+
 export interface HonoAdapterOptions {
   onRequest?: (c: Context) => void | Promise<void>;
   onBeforeRender?: (ctx: RenderOptions) => RenderOptions | Promise<RenderOptions>;
@@ -599,20 +604,20 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
               layouts[result.routeId] = result.data;
             }
 
-            return c.json({ page: pageData, layouts });
+            return dataResponse(c, { page: pageData, layouts });
           }
 
           // Legacy: sin layout loaders
           if (!resolved.loader) {
-            return c.json(null);
+            return dataResponse(c, null);
           }
           const data = await resolved.loader(loaderContext);
-          return c.json(data);
+          return dataResponse(c, data);
         },
       );
     } catch (error) {
       if (error instanceof RedirectResponse) {
-        return c.json({ __redirect: error.location, __status: error.status });
+        return dataResponse(c, { __redirect: error.location, __status: error.status });
       }
       console.error(pc.red("[Data Endpoint Error]"), error);
       return c.json({ error: "Loader error" }, 500);
@@ -1140,20 +1145,20 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
               layouts[result.routeId] = result.data;
             }
 
-            return c.json({ page: pageData, layouts });
+            return dataResponse(c, { page: pageData, layouts });
           }
 
           // Legacy: sin layout loaders
           if (!resolved.loader) {
-            return c.json(null);
+            return dataResponse(c, null);
           }
           const data = await resolved.loader(loaderContext);
-          return c.json(data);
+          return dataResponse(c, data);
         },
       );
     } catch (error) {
       if (error instanceof RedirectResponse) {
-        return c.json({ __redirect: error.location, __status: error.status });
+        return dataResponse(c, { __redirect: error.location, __status: error.status });
       }
       console.error(pc.red("[Data Endpoint Error]"), (error as Error).message);
       return c.json({ error: "Loader error" }, 500);

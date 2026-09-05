@@ -1,3 +1,4 @@
+import { deserializeData } from "@calumet/suamox";
 import { expect, test } from "@playwright/test";
 
 test.describe("/__data endpoint", () => {
@@ -5,7 +6,7 @@ test.describe("/__data endpoint", () => {
     const response = await request.get("/__data?path=/time");
 
     expect(response.status()).toBe(200);
-    const json = await response.json();
+    const json = deserializeData(await response.json());
     expect(json).toHaveProperty("time");
     expect(json).toHaveProperty("secret");
   });
@@ -14,7 +15,7 @@ test.describe("/__data endpoint", () => {
     const response = await request.get("/__data?path=/dashboard");
 
     expect(response.status()).toBe(200);
-    const json = await response.json();
+    const json = deserializeData(await response.json());
     expect(json).toBeNull();
   });
 
@@ -28,7 +29,10 @@ test.describe("/__data endpoint", () => {
     const response = await request.get("/__data?path=/redirigeme", { maxRedirects: 0 });
 
     expect(response.status()).toBe(200);
-    expect(await response.json()).toEqual({ __redirect: "/time", __status: 302 });
+    expect(deserializeData(await response.json())).toEqual({
+      __redirect: "/time",
+      __status: 302,
+    });
   });
 
   test("returns 302 on the SSR path when the loader redirects", async ({ request }) => {
@@ -65,7 +69,7 @@ test.describe("/__data endpoint", () => {
   test("the middleware guard also cuts off requests to /__data", async ({ request }) => {
     const data = await request.get("/__data?path=/protegido", { maxRedirects: 0 });
     expect(data.status()).toBe(200);
-    expect(await data.json()).toEqual({ __redirect: "/", __status: 302 });
+    expect(deserializeData(await data.json())).toEqual({ __redirect: "/", __status: 302 });
 
     const ssr = await request.get("/protegido", { maxRedirects: 0 });
     expect(ssr.status()).toBe(302);
@@ -74,7 +78,7 @@ test.describe("/__data endpoint", () => {
 
   test("executes loader on server with access to server-only values", async ({ request }) => {
     const response = await request.get("/__data?path=/time");
-    const json = await response.json();
+    const json = deserializeData(await response.json()) as { secret: string };
 
     // The loader reads process.env.TEST_SECRET which is only available on the server
     expect(json.secret).toBe("server-only");

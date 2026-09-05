@@ -86,12 +86,15 @@ export async function loader(ctx: LoaderContext) {
     url: URL; // URL parseada
     params: Record<string, string>; // Parámetros de ruta
     query: URLSearchParams; // Query params
+    locals: Record<string, unknown>; // Datos del middleware
   }
   ```
-- **Return:** cualquier objeto JSON-serializable
+- **Return:** cualquier valor transportable con devalue: lo que admite JSON más `Date`, `Map`, `Set`, `RegExp`, `BigInt`, `undefined` y las referencias cíclicas o compartidas
 - **Notas:**
   - El resultado se pasa al componente como `data` prop
   - En SSR, se serializa en `window.__INITIAL_DATA__`
+  - Lo que devuelve el loader es lo que llega al componente, igual en el servidor que en el cliente
+  - Las instancias de clase, las funciones y las claves `__proto__` no se pueden transportar: dan error con la ruta del campo, no una conversión silenciosa
 
 ### 2.3 `getStaticPaths()` (opcional, solo para rutas dinámicas en SSG)
 
@@ -368,14 +371,23 @@ export interface LoaderContext {
   url: URL;
   params: Record<string, string>;
   query: URLSearchParams;
+  locals: Record<string, unknown>;
 }
 
-export type PageProps<T = any> = {
-  data: T;
+export type LoaderData<L> = L extends (...args: never[]) => infer R
+  ? Awaited<R> extends void
+    ? undefined
+    : Awaited<R>
+  : L;
+
+export type PageProps<L = any> = {
+  data: LoaderData<L>;
 };
 
 export type GetStaticPaths = () => Promise<Array<{ params: Record<string, string> }>>;
 ```
+
+`PageProps`, `useLoaderData()` y `useRouteLoaderData()` aceptan la funcion del loader (`PageProps<typeof loader>`) además del tipo de los datos, que es lo que documentaba esta version y sigue devolviendo ese mismo tipo: el generico no cambio de significado, se amplio. Ver [Tipado](./docs/guias/data-loading.md#tipado).
 
 ### 10.2 Configuración recomendada (en consumer project)
 

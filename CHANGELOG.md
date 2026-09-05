@@ -1,5 +1,77 @@
 # Changelog
 
+## 0.9.0 (2026-09-05)
+
+### Features
+
+- **`ssr-runtime`: `useLoaderData()`, `useRouteLoaderData()` y `PageProps` toman el tipo del loader.** El generico tomaba el tipo de los datos, asi que cada pagina derivaba la conversion a mano (`type Datos = Awaited<ReturnType<typeof loader>>`) o repetia la forma, que es peor: el tipo escrito a mano compila igual cuando el loader pasa a devolver otra cosa, y nadie se entera hasta que la pagina lee `undefined`. Ahora se pasa la funcion, como en Remix y React Router:
+
+  ```tsx
+  export async function loader({ params }: LoaderContext) {
+    return { producto: await fetchProducto(params.id) };
+  }
+
+  export default function ProductoPage({ data }: PageProps<typeof loader>) {
+    const { producto } = useLoaderData<typeof loader>();
+  }
+  ```
+
+  No rompe nada y no hace falta ni una mayor ni un nombre nuevo conviviendo. `LoaderData<L>` solo infiere cuando `L` es una funcion y devuelve el tipo tal cual cuando no lo es, asi que las llamadas que pasan el tipo de los datos (`useLoaderData<{ categories: string[] }>()`) siguen dando exactamente lo mismo. Es la forma del `SerializeFrom` de React Router. Para leer el loader de otro nivel, `import type { loader as layoutLoader } from "../layout"` no deja rastro en el bundle.
+
+- **Los datos del loader viajan con devalue: un `Date` llega siendo un `Date`.** El transporte era `JSON.stringify`, asi que el tipo inferido tenia que mentir o degradarse: una fecha salia `Date` del loader y llegaba `string` al componente, y el mismo componente se comportaba distinto en el servidor y al hidratar. Ahora `window.__INITIAL_DATA__` y `/__data` usan [devalue](https://github.com/Rich-Harris/devalue), asi que lo que devuelve el loader es lo que llega:
+
+  ```tsx
+  export async function loader() {
+    return { publicado: new Date(), vistas: new Set([1, 2]) };
+  }
+
+  export default function Nota() {
+    const { publicado } = useLoaderData<typeof loader>();
+    return <time>{publicado.toLocaleDateString("es")}</time>;
+  }
+  ```
+
+  Sobreviven `Date`, `Map`, `Set`, `RegExp`, `URL`, `BigInt`, typed arrays, `undefined`, `NaN`, `-0`, los arrays con huecos y las referencias ciclicas o compartidas: dos campos que apuntaban al mismo objeto lo siguen haciendo despues de hidratar. Con eso `LoaderData<L>` es `Awaited<ReturnType<L>>` a secas y no hace falta ningun tipo de conversion.
+
+  Es lo que hacen SvelteKit y Nuxt, que usan devalue tambien; React Router llego a lo mismo por otra via (turbo-stream) al dejar atras su `SerializeFrom`. devalue pesa unos 2 kB en el cliente, no tiene dependencias, y su `parse` no usa `eval`, asi que no pide aflojar la CSP.
+
+  De regalo, devalue rechaza las claves `__proto__`. Antes `window.__INITIAL_DATA__` se emitia como literal de objeto, donde `__proto__:` fija el prototipo: un loader que devolviera JSON externo sin filtrar dejaba al atacante controlar propiedades heredadas del `data` que llega al componente.
+
+### Breaking Changes
+
+- **El formato de `window.__INITIAL_DATA__` y de `/__data` ya no es JSON plano.** Es el formato aplanado de devalue, que se lee con `deserializeData()`:
+
+  ```js
+  window.__INITIAL_DATA__ = [{ time: 1, secret: 2 }, "2026-09-05T05:27:01.359Z", "server-only"];
+  ```
+
+  Afecta a quien lea `window.__INITIAL_DATA__` a mano o llame a `/__data` desde fuera del router; un test que hiciera `expect(await response.json()).toEqual({ ... })` ahora tiene que envolverlo en `deserializeData()`. `serializeData()` sigue exportado y cambia de formato en consecuencia, y se le suma `deserializeData()`.
+
+  Los tres paquetes comparten el formato, asi que **`@calumet/suamox`, `@calumet/suamox-router` y `@calumet/suamox-hono-adapter` tienen que actualizarse juntos.**
+
+- **Las instancias de clase en el retorno de un loader pasan a dar error.** `JSON.stringify` las convertia en silencio llamando a su `toJSON()`, con lo que un `Decimal` de Prisma llegaba al componente como `string` aunque el tipo dijera `Decimal`. devalue no sabe reconstruir esa clase en el navegador y prefiere fallar a mandar otra cosa:
+
+  ```txt
+  DevalueError: Cannot stringify arbitrary non-POJOs
+    at .producto.precio
+  ```
+
+  **Migracion.** Convertir en el loader, que es lo que Next.js lleva anos recomendando para su frontera equivalente: `return { ...producto, precio: producto.precio.toString() }`. Las funciones y los simbolos tampoco viajan, por lo mismo.
+
+  Los datos binarios (`Buffer`, `TypedArray`, `ArrayBuffer`) tambien se rechazan, y no por gusto: devalue serializa el `ArrayBuffer` de respaldo entero, no solo la vista, y en Node el pool de `Buffer` se comparte entre peticiones. Un `Buffer.from("v1")` de dos bytes servia 64 KB de memoria del proceso al visitante, con trozos de otras peticiones dentro. Lo encontro una revision de seguridad de esta misma rama; el PoC servia 87.440 bytes por un valor de 2 bytes. Convierte a base64 en el loader o sirve el binario desde su propia ruta.
+
+  SvelteKit y Nuxt resuelven este caso con un hook para registrar tipos propios (`transport`, `definePayloadReducer`). Aqui no existe todavia; SvelteKit tardo dos anos en dar con la forma de esa API y merece su propio diseno.
+
+  `useStaticProps()` no cambia: sus props son server-only, no se serializan y siguen llegando vivas.
+
+### Packages
+
+| Paquete                        | Version anterior | Nueva version |
+| ------------------------------ | ---------------- | ------------- |
+| `@calumet/suamox`              | 0.2.12           | 0.3.0         |
+| `@calumet/suamox-router`       | 0.4.1            | 0.5.0         |
+| `@calumet/suamox-hono-adapter` | 0.4.2            | 0.5.0         |
+
 ## 0.8.0 (2026-09-01)
 
 ### Features

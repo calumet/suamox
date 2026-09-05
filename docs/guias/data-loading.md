@@ -140,10 +140,14 @@ Por ejemplo, al navegar de `/es/about` a `/es/contact`, el layout `[lang]/layout
 Cualquier componente hijo (dentro de una pagina o layout) puede acceder a los datos del loader sin recibirlos por props:
 
 ```tsx
-import { useLoaderData } from "@calumet/suamox";
+import { useLoaderData, type LoaderContext } from "@calumet/suamox";
+
+export async function loader({ params }: LoaderContext) {
+  return { categories: await fetchCategories(params.lang) };
+}
 
 function Sidebar() {
-  const { categories } = useLoaderData<{ categories: string[] }>();
+  const { categories } = useLoaderData<typeof loader>();
   return (
     <ul>
       {categories.map((c) => (
@@ -164,6 +168,82 @@ El hook lee del `LoaderDataContext` mas cercano. Si se llama desde un componente
 - Funciona en SSR, SSG y navegacion SPA por igual.
 - En navegacion SPA, los datos se obtienen automaticamente del servidor via `/__data?path=...`.
 
+### Tipado
+
+`useLoaderData()`, `useRouteLoaderData()` y `PageProps` toman la funcion del loader y sacan de ahi el tipo de los datos, asi que no hay que repetir la forma a mano:
+
+```tsx
+import { useLoaderData, type LoaderContext, type PageProps } from "@calumet/suamox";
+
+export async function loader({ params }: LoaderContext) {
+  return { producto: await fetchProducto(params.id) };
+}
+
+export default function ProductoPage({ data }: PageProps<typeof loader>) {
+  const { producto } = useLoaderData<typeof loader>();
+  return <h1>{data.producto.nombre}</h1>;
+}
+```
+
+Para leer el loader de otro archivo, importa su tipo. `import type` no deja rastro en el bundle:
+
+```tsx
+import type { loader as layoutLoader } from "../layout";
+
+const layoutData = useRouteLoaderData<typeof layoutLoader>("layout:[lang]");
+```
+
+Pasar el tipo de los datos en vez de la funcion sigue valiendo (`useLoaderData<{ categories: string[] }>()`) y devuelve exactamente ese tipo. Solo que la forma escrita a mano compila igual cuando el loader pasa a devolver otra cosa, y nadie se entera hasta que la pagina lee `undefined`.
+
+### Lo que devuelve el loader es lo que llega
+
+Un `Date` que sale del loader llega al componente siendo un `Date`, en el servidor y en el navegador. Lo mismo en navegacion SPA. No hay que reconstruir nada ni declarar el campo como `string`:
+
+```tsx
+export async function loader() {
+  return { publicado: new Date() };
+}
+
+export default function Nota() {
+  const { publicado } = useLoaderData<typeof loader>();
+  return <time>{publicado.toLocaleDateString("es")}</time>;
+}
+```
+
+El transporte no es JSON plano sino [devalue](https://github.com/Rich-Harris/devalue), tanto en `window.__INITIAL_DATA__` como en `/__data`. Sobreviven:
+
+| Tipo                                            | Llega como                    |
+| ----------------------------------------------- | ----------------------------- |
+| `Date`, `RegExp`, `URL`, `Map`, `Set`, `BigInt` | lo mismo                      |
+| `undefined`, `NaN`, `Infinity`, `-0`            | lo mismo                      |
+| Arrays con huecos, typed arrays                 | lo mismo                      |
+| Dos campos apuntando al mismo objeto            | siguen siendo el mismo objeto |
+| Referencias ciclicas                            | el ciclo se conserva          |
+
+### Lo que no se puede transportar
+
+Las instancias de clase no pasan. Un `Decimal` de Prisma, un documento de Mongoose o una clase propia dan un error con la ruta del campo:
+
+```txt
+DevalueError: Cannot stringify arbitrary non-POJOs
+  at .producto.precio
+```
+
+Es deliberado: devalue no sabe reconstruir esa clase en el navegador, y prefiere fallar a mandarte otra cosa haciendo como que no pasa nada. La salida es convertir tu mismo en el loader:
+
+```tsx
+export async function loader() {
+  const producto = await db.producto.find(1);
+  return { ...producto, precio: producto.precio.toString() };
+}
+```
+
+Las funciones y los simbolos tampoco viajan, por lo mismo. Y una clave literal `__proto__` se rechaza, porque es un vector de prototype pollution.
+
+Los datos binarios (`Buffer`, `TypedArray`, `ArrayBuffer`) tambien dan error, y este merece explicacion: devalue serializa el `ArrayBuffer` de respaldo **entero**, no solo la vista. En Node el pool de `Buffer` se comparte entre peticiones, asi que un `Buffer.from("v1")` de dos bytes arrastraria 64 KB de memoria del proceso — trozos de otras peticiones incluidos — al HTML de cualquier visitante. Convierte a base64 en el loader, o sirve el binario desde su propia ruta.
+
+`useStaticProps()` no pasa por nada de esto: es server-only y sus props no se serializan, asi que ahi si puedes devolver lo que quieras.
+
 ## `useRouteLoaderData(routeId)`
 
 `useLoaderData()` siempre lee los datos del loader mas cercano (el del layout o el de la pagina, dependiendo de donde se llame). Pero a veces un componente dentro de una pagina necesita leer datos que vienen del layout, o viceversa.
@@ -173,12 +253,14 @@ El hook lee del `LoaderDataContext` mas cercano. Si se llama desde un componente
 ```tsx
 import { useLoaderData, useRouteLoaderData } from "@calumet/suamox";
 
+import type { loader as rootLoader } from "../layout";
+
 export default function ProductPage() {
   // Datos del page loader (nivel actual)
-  const { product } = useLoaderData<{ product: { name: string } }>();
+  const { product } = useLoaderData<typeof loader>();
 
   // Datos del layout loader (otro nivel)
-  const layoutData = useRouteLoaderData<{ siteName: string }>("layout:root");
+  const layoutData = useRouteLoaderData<typeof rootLoader>("layout:root");
 
   return (
     <div>
@@ -207,7 +289,7 @@ Los layouts usan el prefijo `layout:` seguido de su ruta relativa al directorio 
 
 - Retorna `undefined` si el route ID no existe o no tiene loader.
 - Funciona en SSR y en navegacion SPA.
-- Es tipable con generics: `useRouteLoaderData<MiTipo>("layout:[lang]")`.
+- Toma el tipo del loader del otro nivel: `useRouteLoaderData<typeof layoutLoader>("layout:[lang]")`. Ver [Tipado](#tipado).
 - Cualquier componente en el arbol puede leer datos de cualquier nivel activo.
 
 ### Cuando usar cada hook
@@ -278,7 +360,7 @@ export async function loader({ params }: LoaderContext) {
 }
 
 export default function PostPage() {
-  const { slug } = useLoaderData<{ slug: string }>();
+  const { slug } = useLoaderData<typeof loader>();
   const { title, content } = useStaticProps<{ title: string; content: string }>();
 
   return (

@@ -1,112 +1,142 @@
-import { describe, it, expect } from "vitest";
+import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { serializeData, generateHTML } from "../src/index";
+import { describe, it, expect, vi } from "vitest";
+
+import { serializeData, deserializeData, generateHTML } from "../src/index";
+
+/** Lo que ve el cliente: el navegador parsea el literal y el runtime lo revive. */
+const daLaVuelta = (value: unknown): unknown => deserializeData(JSON.parse(serializeData(value)));
+
+/** Lo mismo, pero extrayendo el payload del HTML generado. */
+const datosDelHtml = (html: string): unknown => {
+  const payload = /window\.__INITIAL_DATA__ = (.*);/.exec(html)?.[1];
+  return deserializeData(JSON.parse(payload ?? "null"));
+};
 
 describe("serializeData", () => {
-  it("should serialize simple object", () => {
-    const data = { name: "John", age: 30 };
-    const result = serializeData(data);
-
-    expect(result).toBe('{"name":"John","age":30}');
+  it("da la vuelta a los valores de siempre", () => {
+    expect(daLaVuelta({ name: "John", age: 30 })).toEqual({ name: "John", age: 30 });
+    expect(daLaVuelta({ count: 42, price: 19.99 })).toEqual({ count: 42, price: 19.99 });
+    expect(daLaVuelta({ active: true, deleted: false })).toEqual({ active: true, deleted: false });
+    expect(daLaVuelta({ value: null })).toEqual({ value: null });
+    expect(daLaVuelta({ tags: ["<script>", "safe"] })).toEqual({ tags: ["<script>", "safe"] });
+    expect(daLaVuelta({ user: { profile: { bio: "<p>Hello</p>" } } })).toEqual({
+      user: { profile: { bio: "<p>Hello</p>" } },
+    });
+    expect(daLaVuelta({ text: "It's working" })).toEqual({ text: "It's working" });
+    expect(daLaVuelta(null)).toBeNull();
+    expect(daLaVuelta(undefined)).toBeUndefined();
   });
 
-  it("should escape < to prevent XSS", () => {
-    const data = { html: '<script>alert("xss")</script>' };
-    const result = serializeData(data);
+  it("da la vuelta a lo que JSON perdia", () => {
+    const vuelta = daLaVuelta({
+      fecha: new Date("2026-09-04T10:00:00Z"),
+      mapa: new Map([["a", 1]]),
+      conjunto: new Set(["x"]),
+      patron: /ab+c/gi,
+      sinValor: undefined,
+      grande: 9007199254740993n,
+    }) as Record<string, unknown>;
 
-    expect(result).toContain("\\u003cscript");
-    expect(result).not.toContain("<script");
+    expect(vuelta.fecha).toBeInstanceOf(Date);
+    expect((vuelta.fecha as Date).toISOString()).toBe("2026-09-04T10:00:00.000Z");
+    expect(vuelta.mapa).toBeInstanceOf(Map);
+    expect((vuelta.mapa as Map<string, number>).get("a")).toBe(1);
+    expect(vuelta.conjunto).toBeInstanceOf(Set);
+    expect((vuelta.conjunto as Set<string>).has("x")).toBe(true);
+    expect(vuelta.patron).toEqual(/ab+c/gi);
+    expect("sinValor" in vuelta).toBe(true);
+    expect(vuelta.sinValor).toBeUndefined();
+    expect(vuelta.grande).toBe(9007199254740993n);
   });
 
-  it("should escape > to prevent XSS", () => {
-    const data = { html: '<script>alert("xss")</script>' };
-    const result = serializeData(data);
+  it("conserva las referencias ciclicas y las compartidas", () => {
+    const comun = { n: 1 };
+    const ciclico: Record<string, unknown> = { comun, otro: comun };
+    ciclico.self = ciclico;
 
-    expect(result).toContain("\\u003e");
-    expect(result).not.toContain("</script>");
+    const vuelta = daLaVuelta(ciclico) as Record<string, unknown>;
+
+    expect(vuelta.self).toBe(vuelta);
+    expect(vuelta.comun).toBe(vuelta.otro);
   });
 
-  it("should escape & to prevent XSS", () => {
-    const data = { text: "Tom & Jerry" };
-    const result = serializeData(data);
+  it("lanza con instancias de clase, diciendo en que campo", () => {
+    class Decimal {
+      constructor(readonly valor: string) {}
+    }
 
-    expect(result).toContain("\\u0026");
-    expect(result).not.toContain("&");
+    expect(() => serializeData({ producto: { precio: new Decimal("19.99") } })).toThrow(
+      /non-POJOs/,
+    );
   });
 
-  it("should preserve quotes in JSON safely", () => {
-    const data = { text: "It's working" };
-    const result = serializeData(data);
+  it("lanza con datos binarios, que arrastrarian memoria de otras peticiones", () => {
+    // devalue serializa el ArrayBuffer de respaldo entero; en Node el pool de Buffer es
+    // compartido, asi que un Buffer de 2 bytes sirve 64 KB de memoria ajena al visitante
+    const delPool = Buffer.from("v1");
+    expect(delPool.buffer.byteLength).toBeGreaterThan(delPool.length);
 
-    // JSON strings are already properly escaped by JSON.stringify
-    // Single quotes don't need escaping in JSON
-    expect(result).toBe('{"text":"It\'s working"}');
+    expect(() => serializeData({ etag: delPool })).toThrow(/datos binarios/);
+    expect(() => serializeData({ b: new Uint8Array([1, 2]) })).toThrow(/datos binarios/);
+    expect(() => serializeData({ b: new ArrayBuffer(8) })).toThrow(/datos binarios/);
+    expect(() => serializeData({ b: new DataView(new ArrayBuffer(8)) })).toThrow(/datos binarios/);
   });
 
-  it("should handle nested objects", () => {
-    const data = {
-      user: {
-        name: "John",
-        profile: {
-          bio: "<p>Hello</p>",
-        },
-      },
+  it("lanza tambien con un Buffer de readFileSync, el caso idiomatico", () => {
+    // readFileSync sin encoding devuelve un Buffer, y para archivos < 32 KB sale del pool
+    // compartido: leer un asset y devolverlo desde un loader es el vector mas comun
+    const tmp = join(tmpdir(), `suamox-test-${process.pid}.json`);
+    writeFileSync(tmp, '{"version":"1.4.2"}');
+    try {
+      const asset = readFileSync(tmp);
+      expect(asset.buffer.byteLength).toBeGreaterThan(asset.byteLength);
+      expect(() => serializeData({ manifest: asset })).toThrow(/datos binarios/);
+    } finally {
+      unlinkSync(tmp);
+    }
+  });
+
+  it("lanza con claves __proto__", () => {
+    const conProto: unknown = JSON.parse('{"__proto__":{"pwn":true},"ok":1}');
+
+    expect(() => serializeData(conProto)).toThrow(/__proto__/);
+  });
+
+  it("lanza si el payload no es JSON valido", () => {
+    // devalue interpola en crudo los flags de un RegExp, y tagOf usa Object.prototype.toString,
+    // asi que un Symbol.toStringTag mentiroso mete codigo dentro del <script>
+    const falsoRegExp = {
+      source: "a",
+      flags: '",alert(document.cookie),"',
+      [Symbol.toStringTag]: "RegExp",
     };
-    const result = serializeData(data);
 
-    expect(result).toContain("\\u003cp\\u003e");
-    expect(result).not.toContain("<p>");
+    expect(() => serializeData({ r: falsoRegExp })).toThrow(SyntaxError);
   });
 
-  it("should handle arrays", () => {
-    const data = { tags: ["<script>", "safe", "test"] };
-    const result = serializeData(data);
+  it("un payload ilegible se trata como sin datos, no tumba la hidratacion", () => {
+    const avisos = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
-    expect(result).toContain("\\u003cscript\\u003e");
-    expect(result).toContain("safe");
+    expect(deserializeData([{ a: 99 }])).toBeNull();
+    expect(deserializeData({ a: 1 })).toBeNull();
+    expect(avisos).toHaveBeenCalledTimes(1);
+
+    avisos.mockRestore();
   });
 
-  it("should handle null values", () => {
-    const data = { value: null };
-    const result = serializeData(data);
+  it("no deja ningun <, > ni & sin escapar", () => {
+    const result = serializeData({
+      code: '</script><script>alert("xss")</script>',
+      text: "Tom & Jerry",
+    });
 
-    expect(result).toBe('{"value":null}');
-  });
-
-  it("should handle undefined values", () => {
-    const data = { value: undefined };
-    const result = serializeData(data);
-
-    expect(result).toBe("{}");
-  });
-
-  it("should serialize top-level undefined as null", () => {
-    const result = serializeData(undefined);
-
-    expect(result).toBe("null");
-  });
-
-  it("should handle numbers", () => {
-    const data = { count: 42, price: 19.99 };
-    const result = serializeData(data);
-
-    expect(result).toBe('{"count":42,"price":19.99}');
-  });
-
-  it("should handle booleans", () => {
-    const data = { active: true, deleted: false };
-    const result = serializeData(data);
-
-    expect(result).toBe('{"active":true,"deleted":false}');
-  });
-
-  it("should prevent script injection in JSON", () => {
-    const data = { code: '</script><script>alert("xss")</script>' };
-    const result = serializeData(data);
-
-    expect(result).not.toContain("</script>");
-    expect(result).not.toContain("<script>");
-    expect(result).toContain("\\u003c/script\\u003e");
+    expect(result).not.toContain("<");
+    expect(result).not.toContain(">");
+    expect(result).not.toContain("&");
+    expect(daLaVuelta({ code: "</script>" })).toEqual({ code: "</script>" });
   });
 });
 
@@ -149,8 +179,8 @@ describe("generateHTML", () => {
     });
 
     expect(html).toContain("window.__INITIAL_DATA__");
-    expect(html).toContain("\\u003cscript");
     expect(html).not.toContain('<script>alert("xss")');
+    expect(datosDelHtml(html)).toEqual({ message: '<script>alert("xss")</script>' });
   });
 
   it("should handle null initial data", () => {
@@ -159,7 +189,18 @@ describe("generateHTML", () => {
       initialData: undefined,
     });
 
-    expect(html).toContain("window.__INITIAL_DATA__ = null");
+    expect(datosDelHtml(html)).toBeNull();
+  });
+
+  it("mantiene vivos los tipos que JSON perdia hasta el cliente", () => {
+    const html = generateHTML({
+      html: "<div>Content</div>",
+      initialData: { publicado: new Date("2026-09-04T10:00:00Z") },
+    });
+
+    const datos = datosDelHtml(html) as { publicado: Date };
+    expect(datos.publicado).toBeInstanceOf(Date);
+    expect(datos.publicado.toISOString()).toBe("2026-09-04T10:00:00.000Z");
   });
 
   it("should include script tags", () => {
@@ -254,7 +295,8 @@ describe("generateHTML", () => {
 
     expect(html).not.toContain("<img src=x");
     expect(html).not.toContain("</script><script>");
-    expect(html).toContain("\\u003c");
+    // devalue escapa el `<` en mayuscula, serializeData el resto en minuscula
+    expect(html).toMatch(/\\u003c/i);
     expect(html).toContain("\\u003e");
   });
 
