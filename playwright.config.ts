@@ -1,7 +1,18 @@
 import { defineConfig } from "@playwright/test";
 
-const DEV_PORT = 3000;
-const PROD_PORT = 3001;
+function resolvePort(name: string, fallback: number): number {
+  const value = process.env[name];
+  if (!value) return fallback;
+
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(`${name} tiene que ser un puerto entre 1 y 65535, no "${value}"`);
+  }
+  return port;
+}
+
+const DEV_PORT = resolvePort("E2E_DEV_PORT", 3000);
+const PROD_PORT = resolvePort("E2E_PROD_PORT", 3001);
 
 export default defineConfig({
   testDir: "./tests",

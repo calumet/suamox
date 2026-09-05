@@ -45,6 +45,12 @@ suamox/
 6. Compila paquetes: `pnpm build`
 7. Ejecuta tests: `pnpm test` y `pnpm test:e2e`
 
+Los tests e2e levantan la app de ejemplo en los puertos 3000 (dev) y 3001 (prod). Si los tienes ocupados, cambialos con `E2E_DEV_PORT` y `E2E_PROD_PORT`:
+
+```bash
+E2E_DEV_PORT=3100 E2E_PROD_PORT=3101 pnpm test:e2e
+```
+
 ### Desarrollo de Paquetes
 
 Cada paquete tiene su propio modo de desarrollo:
