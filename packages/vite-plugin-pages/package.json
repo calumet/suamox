@@ -1,6 +1,6 @@
 {
   "name": "@calumet/suamox-vite-plugin-pages",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Vite plugin for filesystem-based routing",
   "type": "module",
   "main": "./dist/index.js",
@@ -39,6 +39,7 @@
   "dependencies": {
     "@swc/wasm-typescript": "^1.15.46",
     "fast-glob": "^3.3.3",
+    "magic-string": "^0.30.21",
     "picocolors": "^1.1.1"
   },
   "devDependencies": {

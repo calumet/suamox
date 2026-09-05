@@ -3,8 +3,9 @@ import { resolve } from "node:path";
 import pc from "picocolors";
 import { parseSync, type Plugin, type ViteDevServer } from "vite";
 
-import { generateClientProxy, generateRoutesModule, type DefaultPageMode } from "./codegen.js";
+import { generateRoutesModule, type DefaultPageMode } from "./codegen.js";
 import { scanRoutes } from "./scanner.js";
+import { stripServerExports } from "./strip-server-exports.js";
 import type { ApiRouteRecord, RouteRecord } from "./types.js";
 
 export interface SuamoxPagesOptions {
@@ -202,7 +203,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       if (!id.includes(`?${CLIENT_ROUTE_QUERY}`)) return;
 
       // En este punto Vite ya transformo TSX/TS a JS. Se usa el parser Oxc de
-      // Vite para extraer los exports con precision de AST.
+      // Vite para operar sobre el AST del modulo ya transformado.
       const filePath = (id.split("?")[0] ?? id).replace(/\\/g, "/");
 
       const result = parseSync(filePath, code);
@@ -220,26 +221,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
         );
       }
 
-      // El default export llega sin `name` (kind "Default"); generateClientProxy
-      // lo espera como "default" para re-exportar el componente de pagina.
-      const exportNames: string[] = [];
-      for (const statement of result.module.staticExports) {
-        for (const entry of statement.entries) {
-          if (entry.exportName.name) {
-            exportNames.push(entry.exportName.name);
-          } else if (entry.exportName.kind === "Default") {
-            exportNames.push("default");
-          }
-        }
-      }
-
-      const proxy = generateClientProxy(filePath, exportNames);
-      if (proxy) {
-        return {
-          code: proxy,
-          map: null,
-        };
-      }
+      return stripServerExports(code, result.program, filePath) ?? undefined;
     },
   };
 }

@@ -40,6 +40,7 @@ test.describe("Server code stripping", () => {
 
     await expect(page.getByTestId("secret-heading")).toHaveText("Secret Test");
     await expect(page.getByTestId("secret-message")).toHaveText("Data loaded securely");
+    await expect(page.getByTestId("secret-visitas")).toHaveText(/^[1-9]\d*$/);
   });
 
   test(".server.ts marker strings do NOT appear in client bundle", async () => {
@@ -62,6 +63,15 @@ test.describe("Server code stripping", () => {
 
     // process.env references from time.tsx loader should not be in client
     expect(clientJs).not.toContain("TEST_SECRET");
+  });
+
+  test("module-level side effects of a loader-only import do NOT appear in client bundle", async () => {
+    const clientJs = await readAllClientJs(CLIENT_DIST);
+
+    // registro.ts registers a cache key when it loads, so tree shaking alone
+    // cannot drop it: the import has to disappear from the page source.
+    expect(clientJs).not.toContain("MARKER_MODULE_SIDE_EFFECT_ABCDE");
+    expect(clientJs).not.toContain("contarVisita");
   });
 
   test("loader export name does NOT appear in client bundle route definitions", async () => {
@@ -96,6 +106,7 @@ test.describe("Server code stripping", () => {
     expect(initialData).toEqual({
       message: "Data loaded securely",
       loadedAt: expect.any(Number),
+      visitas: expect.any(Number),
     });
 
     // But the server secrets should NOT be in __INITIAL_DATA__

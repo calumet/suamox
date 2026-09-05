@@ -126,7 +126,7 @@ await fetch("/api/session", { method: "DELETE" });
 | Metodos HTTP         | Solo GET (via `/__data`)   | Cualquier metodo           |
 | Retorno              | Datos serializables (JSON) | Objeto `Response` completo |
 | Headers de respuesta | No controlables            | Control total              |
-| Bundle del cliente   | Excluidos via proxy        | Excluidos completamente    |
+| Bundle del cliente   | Borrados del modulo        | Excluidos completamente    |
 | Layouts              | Si                         | No                         |
 
 ## Restricciones

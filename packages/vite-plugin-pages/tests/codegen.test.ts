@@ -1,7 +1,7 @@
 import { parse } from "acorn";
 import { describe, it, expect } from "vitest";
 
-import { generateClientProxy, generateRoutesModule } from "../src/codegen";
+import { generateRoutesModule } from "../src/codegen";
 import type { ApiRouteRecord, RouteRecord } from "../src/types";
 
 function assertValidModule(code: string): void {
@@ -581,62 +581,5 @@ describe("API routes codegen", () => {
 
     expect(code).not.toContain("apiRoutes");
     expect(code).not.toContain("_api");
-  });
-});
-
-describe("generateClientProxy", () => {
-  it("returns null when there are no server-only exports", () => {
-    const result = generateClientProxy("/pages/index.tsx", ["default"]);
-    expect(result).toBeNull();
-  });
-
-  it("returns null for only client-safe exports", () => {
-    const result = generateClientProxy("/pages/index.tsx", ["default", "prerender", "csr"]);
-    expect(result).toBeNull();
-  });
-
-  it("generates proxy that strips loader export", () => {
-    const result = generateClientProxy("/pages/index.tsx", ["default", "loader"]);
-    expect(result).not.toBeNull();
-    expect(result).toContain("default");
-    expect(result).not.toContain("loader");
-    expect(result).toContain('from "/pages/index.tsx"');
-  });
-
-  it("generates proxy that strips getStaticPaths export", () => {
-    const result = generateClientProxy("/pages/blog.tsx", [
-      "default",
-      "prerender",
-      "getStaticPaths",
-    ]);
-    expect(result).not.toBeNull();
-    expect(result).toContain("default");
-    expect(result).toContain("prerender");
-    expect(result).not.toContain("getStaticPaths");
-  });
-
-  it("generates proxy that strips both loader and getStaticPaths", () => {
-    const result = generateClientProxy("/pages/blog.tsx", [
-      "default",
-      "loader",
-      "getStaticPaths",
-      "prerender",
-    ]);
-    expect(result).not.toBeNull();
-    expect(result).toContain("default");
-    expect(result).toContain("prerender");
-    expect(result).not.toContain("loader");
-    expect(result).not.toContain("getStaticPaths");
-  });
-
-  it("returns empty export when all exports are server-only", () => {
-    const result = generateClientProxy("/pages/api.tsx", ["loader"]);
-    expect(result).toBe("export {};");
-  });
-
-  it("generates valid JS", () => {
-    const result = generateClientProxy("/pages/index.tsx", ["default", "loader", "prerender"]);
-    expect(result).not.toBeNull();
-    expect(() => parse(result!, { ecmaVersion: "latest", sourceType: "module" })).not.toThrow();
   });
 });
