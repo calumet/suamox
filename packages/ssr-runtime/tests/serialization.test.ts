@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 import { serializeData, deserializeData, generateHTML } from "../src/index";
 
@@ -85,6 +85,28 @@ describe("serializeData", () => {
     const conProto: unknown = JSON.parse('{"__proto__":{"pwn":true},"ok":1}');
 
     expect(() => serializeData(conProto)).toThrow(/__proto__/);
+  });
+
+  it("lanza si el payload no es JSON valido", () => {
+    // devalue interpola en crudo los flags de un RegExp, y tagOf usa Object.prototype.toString,
+    // asi que un Symbol.toStringTag mentiroso mete codigo dentro del <script>
+    const falsoRegExp = {
+      source: "a",
+      flags: '",alert(document.cookie),"',
+      [Symbol.toStringTag]: "RegExp",
+    };
+
+    expect(() => serializeData({ r: falsoRegExp })).toThrow(SyntaxError);
+  });
+
+  it("un payload ilegible se trata como sin datos, no tumba la hidratacion", () => {
+    const avisos = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    expect(deserializeData([{ a: 99 }])).toBeNull();
+    expect(deserializeData({ a: 1 })).toBeNull();
+    expect(avisos).toHaveBeenCalledTimes(1);
+
+    avisos.mockRestore();
   });
 
   it("no deja ningun <, > ni & sin escapar", () => {

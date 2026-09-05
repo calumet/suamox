@@ -605,6 +605,9 @@ const rejectBinary = {
 /** Serializa datos de forma segura para inyección en HTML. Formato devalue, no JSON plano. */
 export function serializeData(data: unknown): string {
   const serialized = stringify(data, rejectBinary);
+  // El payload va dentro de un <script>. devalue interpola en crudo los flags de un RegExp y
+  // el toISOString() de un Date, que un Symbol.toStringTag mentiroso puede convertir en codigo
+  JSON.parse(serialized);
   // Escapar entidades HTML para prevenir XSS
   // Solo se escapan <, > y & que pueden romper el contexto del script
   return serialized.replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
@@ -612,9 +615,14 @@ export function serializeData(data: unknown): string {
 
 /** Inverso de `serializeData`, sobre el valor ya parseado como JSON. */
 export function deserializeData(payload: unknown): unknown {
-  // Un payload con otra forma es uno que no escribimos nosotros: se trata como sin datos
+  // Un payload que no escribimos nosotros se trata como sin datos: que la app arranque
   if (typeof payload !== "number" && !Array.isArray(payload)) return null;
-  return unflatten(payload);
+  try {
+    return unflatten(payload);
+  } catch (error) {
+    console.warn("[suamox] payload de datos ilegible, se ignora:", error);
+    return null;
+  }
 }
 
 /**
