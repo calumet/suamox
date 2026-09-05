@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.10.0 (2026-09-05)
+
+### Features
+
+- **`vite-plugin-pages`: `src/pages/root.tsx`, el nivel de app que no se salta nadie.** `export const layout = false` sacaba a la pagina de toda la cadena, y ahi se iba tambien `src/pages/layout.tsx`. Ese no era un layout mas: al no haber ningun envoltorio por encima de las rutas, era el unico sitio donde una app podia montar lo que necesita cada pantalla. Una app con el proveedor de i18n ahi veia las pantallas con la bandera salir con las claves en crudo, y la redireccion de idioma que vivia en su loader dejaba de correr. Ninguna de las dos falla al compilar ni al servir: responden 200 y el defecto solo se ve leyendo el HTML.
+
+  ```tsx
+  // src/pages/root.tsx
+  export function loader({ url }: LoaderContext) {
+    return { idioma: idiomaDeLaUrl(url) };
+  }
+
+  export default function Root({ children }: { children: ReactNode }) {
+    const { idioma } = useRouteLoaderData<typeof loader>("root")!;
+    return <I18nProvider idioma={idioma}>{children}</I18nProvider>;
+  }
+  ```
+
+  Envuelve todas las rutas, va por encima de la cadena de layouts y `layout = false` ya no se lo salta: lo que la bandera quita es el cromo de la carpeta, no la app. Es un layout a todos los efectos —acepta `loader`, sus datos se leen con `useRouteLoaderData("root")`, un `redirect()` desde ahi aplica a toda la app, y su CSS entra en el HTML prerenderizado— solo que siempre primero en la cadena. Su route ID es `"root"`, no `layout:root`, que sigue siendo el de `src/pages/layout.tsx`.
+
+  Es el reparto de Nuxt, de donde viene `layout: false`: `app.vue` por encima y los layouts debajo, asi que la bandera nunca tira los proveedores. Remix y React Router llegan a lo mismo por otra via —`padre_.hijo` te saca del layout intermedio pero te sigue anidando en `root.tsx`— y Next directamente hace obligatorio el layout raiz. Los tres coinciden en que hay un nivel que no se salta.
+
+  Es opcional: una app sin `root.tsx` no cambia en nada. Solo cuenta en la raiz de `pages/`; uno anidado en una subcarpeta sigue siendo una pagina normal.
+
+### Breaking Changes
+
+- **`src/pages/root.tsx` deja de ser una ruta.** Una app que tuviera ese archivo como pagina servia `/root`; ahora pasa a ser el envoltorio de la app. Renombrar el archivo si se quiere conservar la ruta. Solo aplica al que este en la raiz de `pages/`.
+
+### Packages
+
+| Paquete                             | Version anterior | Nueva version |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox-vite-plugin-pages` | 0.6.1            | 0.7.0         |
+
 ## 0.9.1 (2026-09-05)
 
 ### Correcciones

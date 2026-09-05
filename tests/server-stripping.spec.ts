@@ -104,9 +104,12 @@ test.describe("Server code stripping", () => {
       }),
     );
     expect(initialData).toEqual({
-      message: "Data loaded securely",
-      loadedAt: expect.any(Number),
-      visitas: expect.any(Number),
+      page: {
+        message: "Data loaded securely",
+        loadedAt: expect.any(Number),
+        visitas: expect.any(Number),
+      },
+      layouts: { root: { idioma: "es" } },
     });
 
     // But the server secrets should NOT be in __INITIAL_DATA__

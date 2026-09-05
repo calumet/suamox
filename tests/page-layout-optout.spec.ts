@@ -10,6 +10,20 @@ test.describe("export const layout = false", () => {
     await expect(page.locator("footer")).toHaveCount(0);
   });
 
+  test("pero conserva el root de la app, que es donde viven los proveedores", async ({ page }) => {
+    await page.goto("/sin-layout");
+
+    await expect(page.getByTestId("app-root")).toBeVisible();
+    await expect(page.getByTestId("app-root")).toHaveAttribute("data-idioma", "es");
+    await expect(page.locator("header")).toHaveCount(0);
+  });
+
+  test("el loader del root corre y ve la URL", async ({ page }) => {
+    await page.goto("/fr/ingresar");
+
+    await expect(page.getByTestId("app-root")).toHaveAttribute("data-idioma", "fr");
+  });
+
   test("sus hermanas conservan el layout", async ({ page }) => {
     await page.goto("/time");
 

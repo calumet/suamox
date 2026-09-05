@@ -6,17 +6,27 @@ test.describe("/__data endpoint", () => {
     const response = await request.get("/__data?path=/time");
 
     expect(response.status()).toBe(200);
-    const json = deserializeData(await response.json());
-    expect(json).toHaveProperty("time");
-    expect(json).toHaveProperty("secret");
+    const { page } = deserializeData(await response.json()) as { page: unknown };
+    expect(page).toHaveProperty("time");
+    expect(page).toHaveProperty("secret");
   });
 
   test("returns null for routes without loader", async ({ request }) => {
     const response = await request.get("/__data?path=/dashboard");
 
     expect(response.status()).toBe(200);
-    const json = deserializeData(await response.json());
-    expect(json).toBeNull();
+    const { page } = deserializeData(await response.json()) as { page: unknown };
+    expect(page).toBeNull();
+  });
+
+  test("carries the root loader data next to the page data", async ({ request }) => {
+    const response = await request.get("/__data?path=/sin-layout");
+
+    expect(response.status()).toBe(200);
+    const { layouts } = deserializeData(await response.json()) as {
+      layouts: Record<string, unknown>;
+    };
+    expect(layouts.root).toEqual({ idioma: "es" });
   });
 
   test("returns 400 when path parameter is missing", async ({ request }) => {
@@ -78,9 +88,9 @@ test.describe("/__data endpoint", () => {
 
   test("executes loader on server with access to server-only values", async ({ request }) => {
     const response = await request.get("/__data?path=/time");
-    const json = deserializeData(await response.json()) as { secret: string };
+    const { page } = deserializeData(await response.json()) as { page: { secret: string } };
 
     // The loader reads process.env.TEST_SECRET which is only available on the server
-    expect(json.secret).toBe("server-only");
+    expect(page.secret).toBe("server-only");
   });
 });
