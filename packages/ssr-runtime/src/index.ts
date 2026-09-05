@@ -587,9 +587,24 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
   }
 }
 
+// devalue serializa el ArrayBuffer de respaldo entero, no solo la vista, y en Node el pool de
+// Buffer se comparte entre peticiones: un Buffer de 2 bytes arrastraria 64 KB de memoria ajena
+const rejectBinary = {
+  binary: (value: unknown): false => {
+    if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) {
+      throw new TypeError(
+        "Un loader no puede devolver datos binarios (Buffer, TypedArray, ArrayBuffer): se " +
+          "serializaria el ArrayBuffer completo, que en Node comparte memoria con otras " +
+          "peticiones. Conviertelo a texto (base64) o sirvelo desde su propia ruta.",
+      );
+    }
+    return false;
+  },
+};
+
 /** Serializa datos de forma segura para inyección en HTML. Formato devalue, no JSON plano. */
 export function serializeData(data: unknown): string {
-  const serialized = stringify(data);
+  const serialized = stringify(data, rejectBinary);
   // Escapar entidades HTML para prevenir XSS
   // Solo se escapan <, > y & que pueden romper el contexto del script
   return serialized.replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");

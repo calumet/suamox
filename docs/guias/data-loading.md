@@ -240,6 +240,8 @@ export async function loader() {
 
 Las funciones y los simbolos tampoco viajan, por lo mismo. Y una clave literal `__proto__` se rechaza, porque es un vector de prototype pollution.
 
+Los datos binarios (`Buffer`, `TypedArray`, `ArrayBuffer`) tambien dan error, y este merece explicacion: devalue serializa el `ArrayBuffer` de respaldo **entero**, no solo la vista. En Node el pool de `Buffer` se comparte entre peticiones, asi que un `Buffer.from("v1")` de dos bytes arrastraria 64 KB de memoria del proceso — trozos de otras peticiones incluidos — al HTML de cualquier visitante. Convierte a base64 en el loader, o sirve el binario desde su propia ruta.
+
 `useStaticProps()` no pasa por nada de esto: es server-only y sus props no se serializan, asi que ahi si puedes devolver lo que quieras.
 
 ## `useRouteLoaderData(routeId)`

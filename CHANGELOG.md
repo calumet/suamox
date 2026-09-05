@@ -58,6 +58,8 @@
 
   **Migracion.** Convertir en el loader, que es lo que Next.js lleva anos recomendando para su frontera equivalente: `return { ...producto, precio: producto.precio.toString() }`. Las funciones y los simbolos tampoco viajan, por lo mismo.
 
+  Los datos binarios (`Buffer`, `TypedArray`, `ArrayBuffer`) tambien se rechazan, y no por gusto: devalue serializa el `ArrayBuffer` de respaldo entero, no solo la vista, y en Node el pool de `Buffer` se comparte entre peticiones. Un `Buffer.from("v1")` de dos bytes servia 64 KB de memoria del proceso al visitante, con trozos de otras peticiones dentro. Lo encontro una revision de seguridad de esta misma rama; el PoC servia 87.440 bytes por un valor de 2 bytes. Convierte a base64 en el loader o sirve el binario desde su propia ruta.
+
   SvelteKit y Nuxt resuelven este caso con un hook para registrar tipos propios (`transport`, `definePayloadReducer`). Aqui no existe todavia; SvelteKit tardo dos anos en dar con la forma de esa API y merece su propio diseno.
 
   `useStaticProps()` no cambia: sus props son server-only, no se serializan y siguen llegando vivas.

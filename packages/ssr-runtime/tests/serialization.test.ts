@@ -69,6 +69,18 @@ describe("serializeData", () => {
     );
   });
 
+  it("lanza con datos binarios, que arrastrarian memoria de otras peticiones", () => {
+    // devalue serializa el ArrayBuffer de respaldo entero; en Node el pool de Buffer es
+    // compartido, asi que un Buffer de 2 bytes sirve 64 KB de memoria ajena al visitante
+    const delPool = Buffer.from("v1");
+    expect(delPool.buffer.byteLength).toBeGreaterThan(delPool.length);
+
+    expect(() => serializeData({ etag: delPool })).toThrow(/datos binarios/);
+    expect(() => serializeData({ b: new Uint8Array([1, 2]) })).toThrow(/datos binarios/);
+    expect(() => serializeData({ b: new ArrayBuffer(8) })).toThrow(/datos binarios/);
+    expect(() => serializeData({ b: new DataView(new ArrayBuffer(8)) })).toThrow(/datos binarios/);
+  });
+
   it("lanza con claves __proto__", () => {
     const conProto: unknown = JSON.parse('{"__proto__":{"pwn":true},"ok":1}');
 
