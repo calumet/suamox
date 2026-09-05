@@ -245,6 +245,18 @@ export default function Page() { return null; }
     expect(code).not.toContain("./db");
   });
 
+  it("keeps the loader alive when a top-level statement assigns to it", () => {
+    const code = strip(`
+export function loader() { return 1; }
+loader.hydrate = true;
+export default function Page() { return null; }
+`);
+
+    expect(code).toContain("function loader");
+    expect(code).toContain("loader.hydrate");
+    expect(exportNames(code!)).toEqual(["default"]);
+  });
+
   it("keeps a class whose static block runs on definition", () => {
     const code = strip(`
 import { registrar } from "./registro";
