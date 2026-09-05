@@ -1,3 +1,7 @@
+import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, it, expect, vi } from "vitest";
 
 import { serializeData, deserializeData, generateHTML } from "../src/index";
@@ -79,6 +83,20 @@ describe("serializeData", () => {
     expect(() => serializeData({ b: new Uint8Array([1, 2]) })).toThrow(/datos binarios/);
     expect(() => serializeData({ b: new ArrayBuffer(8) })).toThrow(/datos binarios/);
     expect(() => serializeData({ b: new DataView(new ArrayBuffer(8)) })).toThrow(/datos binarios/);
+  });
+
+  it("lanza tambien con un Buffer de readFileSync, el caso idiomatico", () => {
+    // readFileSync sin encoding devuelve un Buffer, y para archivos < 32 KB sale del pool
+    // compartido: leer un asset y devolverlo desde un loader es el vector mas comun
+    const tmp = join(tmpdir(), `suamox-test-${process.pid}.json`);
+    writeFileSync(tmp, '{"version":"1.4.2"}');
+    try {
+      const asset = readFileSync(tmp);
+      expect(asset.buffer.byteLength).toBeGreaterThan(asset.byteLength);
+      expect(() => serializeData({ manifest: asset })).toThrow(/datos binarios/);
+    } finally {
+      unlinkSync(tmp);
+    }
   });
 
   it("lanza con claves __proto__", () => {
