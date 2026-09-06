@@ -79,7 +79,7 @@ Las páginas con `prerender = true` (SSG) no incluyen scripts de hidratación ni
 
 ## Separacion de codigo servidor/cliente
 
-Durante el build de produccion, Suamox genera dos bundles: uno para el servidor y otro para el cliente. Para evitar que codigo server-only (loaders, getStaticPaths, dependencias de base de datos, API keys) termine en el bundle del cliente, el plugin aplica dos mecanismos:
+Durante el build de produccion, Suamox genera dos bundles: uno para el servidor y otro para el cliente. Para evitar que codigo server-only (loaders, getStaticPaths, dependencias de base de datos, API keys) termine en el bundle del cliente, el plugin aplica tres mecanismos:
 
 ### Stripping de exports de servidor
 
@@ -146,6 +146,37 @@ import { getUser } from "../lib/auth.server";
 [suamox:pages] Cannot import server-only file "auth.server.ts" from client code.
 Files matching *.server.{ts,tsx,js,jsx} are excluded from the client bundle.
 ```
+
+### Validacion del bundle generado
+
+Los dos mecanismos anteriores actuan mientras se resuelve el import. Al terminar el build del cliente, el plugin revisa ademas el bundle que realmente salio: recorre los modulos que quedaron en cada chunk y falla si encuentra un `*.server.*`, una ruta de `src/api/`, o un builtin de Node.
+
+Es una red de seguridad, no la primera linea de defensa: cubre lo que evade a las otras dos (un alias, otro plugin que resuelve antes, un import dinamico). Mira los modulos que el bundler incluyo, no el texto del bundle, asi que no depende de que un nombre sobreviva al minificador.
+
+El caso mas comun que atrapa es usar una API de servidor en el componente en vez de en el loader:
+
+```tsx
+// src/pages/informe.tsx
+import { readFileSync } from "node:fs";
+
+export default function Informe() {
+  return <pre>{readFileSync("/etc/hostname", "utf-8")}</pre>; // en el componente
+}
+```
+
+```
+[suamox:pages] Server-only code reached the client bundle:
+
+  assets/informe-Dcku00bO.js
+    - __vite-browser-external (Node builtin, unavailable in the browser)
+
+The chunk name points to the page that pulled it in. To fix this, you can:
+  1. Use the import inside loader()/getStaticPaths(), never in the component
+  2. Move it to a *.server.ts file, which is excluded from the client bundle
+  3. Check for an alias or plugin resolving the import before suamox:pages sees it
+```
+
+Vite no deja `node:fs` tal cual en el bundle del navegador: lo sustituye por un stub vacio, `__vite-browser-external`. Por eso ese stub es la huella que delata al builtin, y no el nombre del modulo.
 
 ## Notas de desarrollo
 
