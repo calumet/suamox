@@ -26,7 +26,13 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      # El PR ya verifico su rama, pero lo que se publica es el resultado del
+      # merge, que ningun PR llego a compilar. Publicar no se puede deshacer:
+      # una version ya subida no se sobrescribe.
       - run: pnpm --filter "@calumet/suamox*" build
+      - run: pnpm typecheck
+      - run: pnpm lint
       - run: pnpm -r test
 
       - run: pnpm -r --filter "@calumet/suamox*" publish --no-git-checks
