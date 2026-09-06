@@ -39,11 +39,13 @@ suamox/
 
 1. Crea una rama nueva para tu feature o fix.
 2. Haz los cambios en el paquete correspondiente.
-3. Ejecuta type checking: `pnpm typecheck`
-4. Ejecuta linting: `pnpm lint`
-5. Formatea código: `pnpm format`
-6. Compila paquetes: `pnpm build`
+3. Compila paquetes: `pnpm build`
+4. Ejecuta type checking: `pnpm typecheck`
+5. Ejecuta linting: `pnpm lint`
+6. Formatea código: `pnpm format`
 7. Ejecuta tests: `pnpm test` y `pnpm test:e2e`
+
+`build` va primero: los paquetes se referencian entre si por `workspace:` y sus tipos salen de `dist/`, asi que `typecheck` falla si no hay nada compilado. El workflow de CI corre estos mismos pasos en ese orden.
 
 Los tests e2e levantan la app de ejemplo en los puertos 3000 (dev) y 3001 (prod). Si los tienes ocupados, cambialos con `E2E_DEV_PORT` y `E2E_PROD_PORT`:
 
