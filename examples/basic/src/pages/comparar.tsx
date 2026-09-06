@@ -1,23 +1,21 @@
 import { useClientValue } from "@calumet/suamox";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 const CLAVE = "idUsr";
+const sinSuscripcion = () => () => {};
+const leerSesion = () => !!sessionStorage.getItem("idUsr");
 
-/** El patron habitual: el valor real solo se conoce despues de hidratar */
-function SinPrehydrate() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  useEffect(() => {
-    // El setState en el efecto es justo lo que esta demo enseña: es el patron que
-    // provoca el salto, porque el valor real no llega hasta despues de hidratar
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsLoggedIn(!!sessionStorage.getItem(CLAVE));
-  }, []);
+/**
+ * Lo que se hace hoy sin el framework: `useSyncExternalStore` con un snapshot de
+ * servidor. Es correcto y converge al valor real, pero solo despues de hidratar.
+ */
+function SinScriptInline() {
+  const isLoggedIn = useSyncExternalStore(sinSuscripcion, leerSesion, () => false);
 
   return (
     <section style={{ border: "2px solid #c00", padding: "1rem", borderRadius: 8 }}>
-      <h2>Sin useClientValue</h2>
-      <p style={{ color: "#666", fontSize: 14 }}>useState + useEffect</p>
+      <h2>useSyncExternalStore a secas</h2>
+      <p style={{ color: "#666", fontSize: 14 }}>se corrige al hidratar</p>
       <button id="sin-logout" hidden={!isLoggedIn} data-testid="sin-logout">
         Salir
       </button>
@@ -28,8 +26,8 @@ function SinPrehydrate() {
   );
 }
 
-/** El script inline corrige el DOM antes de que React hidrate */
-function ConPrehydrate() {
+/** Lo mismo, mas el script inline que adelanta la correccion al primer pintado */
+function ConScriptInline() {
   const isLoggedIn = useClientValue(false, () => !!sessionStorage.getItem("idUsr"), {
     show: "#con-logout",
     hide: "#con-login",
@@ -37,12 +35,23 @@ function ConPrehydrate() {
 
   return (
     <section style={{ border: "2px solid #0a0", padding: "1rem", borderRadius: 8 }}>
-      <h2>Con useClientValue</h2>
-      <p style={{ color: "#666", fontSize: 14 }}>script inline antes de hidratar</p>
-      <button id="con-logout" hidden={!isLoggedIn} data-testid="con-logout">
+      <h2>useClientValue</h2>
+      <p style={{ color: "#666", fontSize: 14 }}>se corrige antes de pintar</p>
+      <button
+        id="con-logout"
+        hidden={!isLoggedIn}
+        data-testid="con-logout"
+        suppressHydrationWarning
+      >
         Salir
       </button>
-      <a id="con-login" href="#" hidden={isLoggedIn} data-testid="con-login">
+      <a
+        id="con-login"
+        href="#"
+        hidden={isLoggedIn}
+        data-testid="con-login"
+        suppressHydrationWarning
+      >
         Ingresar
       </a>
     </section>
@@ -50,20 +59,6 @@ function ConPrehydrate() {
 }
 
 export default function CompararPage() {
-  const [registro, setRegistro] = useState<string[]>([]);
-
-  useEffect(() => {
-    const paint = performance.getEntriesByName("first-contentful-paint")[0];
-    const lineas = [
-      `primer paint: ${paint ? Math.round(paint.startTime) : "?"} ms`,
-      `con useClientValue: corregido por el script inline, antes del paint`,
-      `sin useClientValue: corregido al hidratar, ${Math.round(performance.now())} ms`,
-    ];
-    // Los tiempos solo se conocen despues del primer render, de ahi el setState
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setRegistro(lineas);
-  }, []);
-
   const entrar = () => {
     sessionStorage.setItem(CLAVE, "42");
     location.reload();
@@ -75,16 +70,15 @@ export default function CompararPage() {
 
   return (
     <div style={{ fontFamily: "system-ui", maxWidth: 640, padding: "1rem" }}>
-      <h1>Comparacion de prehydrate</h1>
+      <h1>Que aporta el script inline</h1>
       <p>
-        Pulsa <b>Simular sesion</b> y observa los dos bloques al recargar. El rojo parpadea: muestra
-        &quot;Ingresar&quot; hasta que React hidrata. El verde sale ya correcto.
+        Los dos bloques acaban en el estado correcto: el de abajo no es «lo que funciona» frente a
+        «lo que no». La diferencia es <b>cuando</b> se corrige. El rojo espera a que React hidrate;
+        el verde ya sale bien del HTML.
       </p>
       <p style={{ background: "#ffd", padding: "0.75rem", borderRadius: 6, fontSize: 14 }}>
-        En un portatil rapido el parpadeo dura ~50 ms y casi no se ve. Para apreciarlo, abre
-        DevTools &rarr; Performance &rarr; <b>CPU: 6x slowdown</b> y recarga: la ventana pasa a ~300
-        ms. El bloque verde se corrige siempre <b>antes</b> del primer paint, el rojo siempre
-        despues.
+        Pulsa <b>Simular sesion</b>. En un portatil rapido la diferencia dura ~50 ms y casi no se
+        ve: abre DevTools &rarr; Performance &rarr; <b>CPU 6x slowdown</b> y recarga.
       </p>
 
       <p>
@@ -97,16 +91,9 @@ export default function CompararPage() {
       </p>
 
       <div style={{ display: "grid", gap: "1rem" }}>
-        <SinPrehydrate />
-        <ConPrehydrate />
+        <SinScriptInline />
+        <ConScriptInline />
       </div>
-
-      <h3>Registro</h3>
-      <ul data-testid="registro">
-        {registro.map((linea) => (
-          <li key={linea}>{linea}</li>
-        ))}
-      </ul>
     </div>
   );
 }
