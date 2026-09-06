@@ -72,7 +72,11 @@ function buildScript(entry: ClientValueEntry): string {
     }
   }
 
-  const helper = `function d(s,h){document.querySelectorAll(s).forEach(function(e){e.hidden=h;});}`;
+  // El helper solo hace falta con el patch declarativo; con uno en funcion sobra
+  const helper =
+    entry.patch && typeof entry.patch !== "string"
+      ? `function d(s,h){document.querySelectorAll(s).forEach(function(e){e.hidden=h;});}`
+      : "";
 
   // Si el script falla, React converge igual al hidratar: solo se pierde la correccion
   // antes del primer pintado. Pero avisa: el fallo mas comun es un `resolve` que captura
@@ -106,7 +110,9 @@ export function useClientValue<T>(
 ): T {
   const manager = useContext(ClientValueContext);
 
-  if (manager && manager.mode === "server") {
+  // Sin patch no hay nada que corregir en el DOM: el script solo calcularia el valor
+  // para tirarlo, ejecutando una lectura de storage en el camino critico para nada
+  if (manager && manager.mode === "server" && patch !== undefined) {
     manager.register({
       resolve: resolve.toString(),
       patch: typeof patch === "function" ? patch.toString() : patch,

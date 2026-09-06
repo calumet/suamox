@@ -54,6 +54,11 @@ export default function PrehydratePage() {
         Que ve React
       </button>
       <span data-testid="respuesta" />
+
+      {/* Enlace normal: lo intercepta el router, asi que la navegacion es SPA */}
+      <a href="/time" data-testid="ir-time">
+        Ir a /time
+      </a>
     </div>
   );
 }

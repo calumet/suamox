@@ -34,7 +34,7 @@ describe("useClientValue", () => {
 
   it("registra un script con el resolve serializado", () => {
     const [script] = scriptsDe(() => {
-      useClientValue(false, () => !!sessionStorage.getItem("idUsr"));
+      useClientValue(false, () => !!sessionStorage.getItem("idUsr"), { show: "#a" });
       return null;
     });
 
@@ -91,7 +91,7 @@ describe("useClientValue", () => {
 
   it("no deja escapar el cierre del script, que romperia el contexto", () => {
     const [script] = scriptsDe(() => {
-      useClientValue("", () => "</script><img src=x onerror=alert(1)>");
+      useClientValue("", () => "</script><img src=x onerror=alert(1)>", { show: "#a" });
       return null;
     });
 
@@ -110,7 +110,7 @@ describe("useClientValue", () => {
 
   it("escapa el inicio de comentario HTML", () => {
     const [script] = scriptsDe(() => {
-      useClientValue("", () => "<!--corta el html-->");
+      useClientValue("", () => "<!--corta el html-->", { show: "#a" });
       return null;
     });
 
@@ -120,7 +120,7 @@ describe("useClientValue", () => {
 
   it("no rompe una comparacion menor-que del codigo", () => {
     const [script] = scriptsDe(() => {
-      useClientValue(false, () => window.innerWidth < 768);
+      useClientValue(false, () => window.innerWidth < 768, { hide: "#a" });
       return null;
     });
 
@@ -138,7 +138,7 @@ describe("useClientValue", () => {
         ClientValueProvider,
         { value: a },
         createElement(() => {
-          useClientValue(false, () => !!sessionStorage.getItem("usuarioA"));
+          useClientValue(false, () => !!sessionStorage.getItem("usuarioA"), { show: "#a" });
           return null;
         }),
       ),
@@ -146,6 +146,30 @@ describe("useClientValue", () => {
 
     expect(a.getSnapshot()).toHaveLength(1);
     expect(b.getSnapshot()).toHaveLength(0);
+  });
+
+  it("sin patch no emite script: no habria nada que corregir", () => {
+    const scripts = scriptsDe(() => {
+      useClientValue(false, () => !!sessionStorage.getItem("idUsr"));
+      return null;
+    });
+
+    expect(scripts).toEqual([]);
+  });
+
+  it("con patch en funcion no arrastra el helper del patch declarativo", () => {
+    const [script] = scriptsDe(() => {
+      useClientValue(
+        "",
+        () => "x",
+        (v) => {
+          document.title = v;
+        },
+      );
+      return null;
+    });
+
+    expect(script).not.toContain("querySelectorAll");
   });
 
   it("avisa por consola si el script falla, en vez de callarse", () => {

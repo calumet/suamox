@@ -60,13 +60,23 @@ test.describe("useClientValue", () => {
     await page.goto("/prehydrate");
     await expect(page.getByTestId("btn-logout")).toBeVisible();
 
-    await page.goto("/time");
+    // Marca el documento: si sobrevive, el router navego sin recargar
+    await page.evaluate(() => {
+      (window as Record<string, unknown>).__mismoDoc = true;
+    });
+
+    // Click en un enlace, que el router intercepta, y vuelta con el historial
+    await page.getByTestId("ir-time").click();
+    await expect(page.getByTestId("time")).toBeVisible();
     await page.goBack();
-    await page.waitForLoadState("networkidle");
-
     await expect(page.getByTestId("btn-logout")).toBeVisible();
-    await expect(page.getByTestId("btn-login")).toBeHidden();
 
+    const fueSpa = await page.evaluate(
+      () => (window as Record<string, unknown>).__mismoDoc === true,
+    );
+    expect(fueSpa, "la navegacion tiene que ser SPA, sin recargar el documento").toBe(true);
+
+    await expect(page.getByTestId("btn-login")).toBeHidden();
     await page.getByTestId("preguntar").click();
     await expect(page.getByTestId("respuesta")).toHaveText("true");
   });
