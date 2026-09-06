@@ -16,15 +16,28 @@
   <a id="btn-login" hidden={isLoggedIn}>Ingresar</a>
   ```
 
-  `show` y `hide` aplican el atributo `hidden` nativo en vez de un `data-*` con CSS del framework. En el JSX se escribe `hidden={!isLoggedIn}` a secas: React omite el atributo cuando vale `false`, mientras que un `data-*` lo emitiria como la cadena `"false"` y un selector `[data-x]` acabaria casandolo igual. Ademas `hidden` es semantico y no obliga a inyectar CSS global.
+  `show` y `hide` aplican el atributo `hidden` nativo en vez de un `data-*` con CSS del framework. En el JSX se escribe `hidden={!isLoggedIn}` a secas: React omite el atributo cuando vale `false`, mientras que un `data-*` lo emitiria como la cadena `"false"` y un selector `[data-x]` acabaria casandolo igual. Ademas `hidden` es semantico y no obliga a inyectar CSS global. Los elementos parcheados llevan `suppressHydrationWarning`, porque React compara contra el HTML del servidor y no contra el DOM ya corregido.
 
-  La clave con la que el cliente recupera el valor se deriva del propio codigo del `resolve`, no de `useId`: si React remonta el arbol en lugar de hidratarlo, un id posicional cambia y el valor precomputado deja de encontrarse.
+  **El valor de React no viaja en el script.** El cliente ejecuta `resolve` por su cuenta, con `useSyncExternalStore`, y el script inline solo adelanta la correccion del DOM al primer pintado. Emparejar cliente y servidor por una clave derivada del codigo no funciona: el minificador reescribe el cuerpo de la funcion, asi que el bundle de servidor y el de cliente no producen la misma. Con este reparto un fallo del script cuesta el parpadeo, no el valor.
 
-  El codigo inyectado se escapa antes de emitirlo (`</script` y `<!--`), porque React no escapa `dangerouslySetInnerHTML` y un `</script>` dentro de un `resolve` inyectaria HTML arbitrario. No se escapa `<` entero como en los datos del loader: aqui el contenido es codigo y romperia cualquier comparacion `a < b`. Los selectores se serializan, nunca se concatenan.
+  El codigo inyectado se escapa antes de emitirlo (`</script` y `<!--`), sobre la cadena ya montada con los selectores dentro, que es la via por la que entrarian datos. Los selectores se serializan, nunca se concatenan. No se escapa `<` entero como en los datos del loader: aqui el contenido es codigo y romperia cualquier comparacion `a < b`. El script va en un `try/catch` para que un fallo suyo no tumbe la pagina.
 
-  El registro de scripts es por peticion, como el de `head`: compartirlo entre peticiones pondria los scripts de un usuario en el HTML de otro. `generateHTML` acepta ademas un `nonce` para servir con CSP estricta.
+  El registro de scripts es por peticion, como el de `head`: compartirlo entre peticiones pondria los scripts de un usuario en el HTML de otro.
 
   Ver [prehydrate](./docs/guias/prehydrate.md).
+
+- **CSP para los scripts inline, en SSR y en SSG.** Un script inline no se ejecuta con una CSP estricta, y hasta ahora no habia forma de autorizarlo. En SSR el adaptador genera un nonce por peticion, lo aplica a los scripts y emite la cabecera; en SSG no hay peticion, asi que se emite el hash de cada script en un `<meta http-equiv>` de la propia pagina, como hace Astro.
+
+  ```ts
+  await createServer({ port: 3000, csp: true });
+  await runSsg({ csp: true });
+  ```
+
+  El hasher vive en `@calumet/suamox/csp` para que `index.ts`, que tambien se carga en el navegador, no tenga que importar `node:crypto`.
+
+### Correcciones
+
+- **`hono-adapter`: los scripts inline del servidor de desarrollo se inyectaban con `String.replace` y una cadena de reemplazo.** En esa posicion `$&` y `` $` `` son patrones de sustitucion, asi que un `resolve` que los contuviera reinyectaba el HTML anterior —con su `</script>` dentro— y cerraba el bloque antes de tiempo. El escape del payload no lo veia, porque ese `</script>` lo metia el propio `replace` despues de escapar. Ahora el reemplazo va en funcion, que desactiva los patrones. Afectaba tambien a la inyeccion de `window.__INITIAL_DATA__`, que ya estaba antes.
 
 ### Packages
 

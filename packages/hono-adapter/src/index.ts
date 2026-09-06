@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import type { IncomingHttpHeaders, IncomingMessage } from "node:http";
@@ -34,7 +35,25 @@ function dataResponse(c: Context, value: unknown): Response {
   return c.body(serializeData(value), 200, { "Content-Type": "application/json" });
 }
 
+/**
+ * CSP para los scripts inline del SSR. Con `true` se genera un nonce por peticion, se
+ * aplica a los scripts y se emite la cabecera. `directives` se añade a `script-src`.
+ */
+export type CspOption = boolean | { directives?: string };
+
+/** Nonce de la peticion, disponible en `locals.nonce` para que la app lo reuse */
+function crearNonce(): string {
+  return randomBytes(16).toString("base64");
+}
+
+/** `script-src` con el nonce de la peticion, mas lo que añada la app */
+function cabeceraCsp(nonce: string, csp: CspOption | undefined): string {
+  const extra = typeof csp === "object" ? csp.directives : undefined;
+  return [`script-src 'self' 'nonce-${nonce}'`, extra].filter(Boolean).join("; ");
+}
+
 export interface HonoAdapterOptions {
+  csp?: CspOption;
   onRequest?: (c: Context) => void | Promise<void>;
   onBeforeRender?: (ctx: RenderOptions) => RenderOptions | Promise<RenderOptions>;
   onAfterRender?: (result: RenderResult) => RenderResult | Promise<RenderResult>;
@@ -733,11 +752,18 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
           // Los scripts de useClientValue van antes que los datos: parchean el DOM
           // en cuanto el parser los alcanza, sin esperar a la hidratacion
           let finalHtml = template;
+          const nonceDev = options.csp ? crearNonce() : undefined;
+          const nonceAttr = nonceDev ? ` nonce="${nonceDev}"` : "";
           const prehydrate = (result.prehydrateScripts ?? [])
-            .map((code) => `<script>${code}</script>`)
+            .map((code) => `<script${nonceAttr}>${code}</script>`)
             .join("");
+          // El reemplazo va en funcion: en una cadena, `$&` y `` $` `` son patrones de
+          // sustitucion y reinyectarian el HTML anterior, con su </script> dentro
           if (prehydrate) {
-            finalHtml = finalHtml.replace("</body>", `${prehydrate}</body>`);
+            finalHtml = finalHtml.replace("</body>", () => `${prehydrate}</body>`);
+          }
+          if (nonceDev) {
+            c.header("Content-Security-Policy", cabeceraCsp(nonceDev, options.csp));
           }
 
           // Inyectar datos iniciales solo para rutas con hidratación
@@ -748,7 +774,8 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
             const serializedData = serializeData(initialDataPayload);
             finalHtml = finalHtml.replace(
               "</body>",
-              `<script>window.__INITIAL_DATA__ = ${serializedData};</script></body>`,
+              () =>
+                `<script${nonceAttr}>window.__INITIAL_DATA__ = ${serializedData};</script></body>`,
             );
           }
 
@@ -1237,6 +1264,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
           // Detectar si la ruta es prerender
           const resolvedMatch = match ? await entry.resolveRouteModule(match.route) : null;
           const isPrerender = resolvedMatch?.prerender === true;
+          const nonce = options.csp ? crearNonce() : undefined;
 
           // Generar HTML completo (sin hidratación para rutas prerender)
           const { preloadScripts, styles } = collectManifestAssets(entry.routes, strippedPathname);
@@ -1255,7 +1283,12 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
             scriptPlacement: "head",
             includeInitialDataScript: !isPrerender,
             prehydrateScripts: result.prehydrateScripts,
+            nonce,
           });
+
+          if (nonce) {
+            c.header("Content-Security-Policy", cabeceraCsp(nonce, options.csp));
+          }
 
           return c.html(html, result.status as 200 | 404 | 500);
         },

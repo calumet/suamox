@@ -2,7 +2,7 @@
 
 Cuando una pantalla depende de algo que solo existe en el navegador —`sessionStorage`, una cookie de JS, `navigator`— el HTML del servidor sale con un valor por defecto. Al hidratar, React ve el valor real y actualiza el DOM: el usuario ve un salto.
 
-`useClientValue` evita ese salto. En SSR devuelve el fallback y registra un `<script>` inline que el framework inyecta al final del body. Ese script computa el valor real, corrige el DOM y lo deja en `window.__PREHYDRATE__`, de donde React lo lee al hidratar, asi que tampoco hay hydration mismatch.
+`useClientValue` evita ese salto. En SSR devuelve el fallback y registra un `<script>` inline que el framework inyecta al final del body; ese script corrige el DOM antes del primer pintado. El valor con el que React trabaja sale de ejecutar `resolve` en el cliente, **no del script**, asi que si el script falla la pantalla converge igual.
 
 ```tsx
 import { useClientValue } from "@calumet/suamox";
@@ -15,16 +15,18 @@ export function Header() {
 
   return (
     <header>
-      <button id="btn-logout" hidden={!isLoggedIn}>
+      <button id="btn-logout" hidden={!isLoggedIn} suppressHydrationWarning>
         Salir
       </button>
-      <a id="btn-login" hidden={isLoggedIn}>
+      <a id="btn-login" hidden={isLoggedIn} suppressHydrationWarning>
         Ingresar
       </a>
     </header>
   );
 }
 ```
+
+Los elementos que aparecen en `show`/`hide` llevan `suppressHydrationWarning`: el script cambia el DOM antes de que React hidrate, y React compara contra el HTML que emitio el servidor, no contra el DOM ya corregido. Sin la marca avisa por consola de una diferencia que es intencionada. El valor se corrige igual en el render siguiente.
 
 ## La firma
 
@@ -88,28 +90,57 @@ const isLoggedIn = useClientValue(false, () => !!sessionStorage.getItem("idUsr")
 
 ## Restricciones de `resolve` y `patch`
 
-Las dos funciones se serializan con `toString()` y se inyectan en un `<script>` que el navegador ejecuta como JS plano, fuera de React. Por eso:
+`resolve` se usa de dos formas, y solo una impone restricciones:
 
-- No pueden importar modulos.
-- No pueden usar variables del componente ni closures.
-- Solo APIs globales del navegador: `sessionStorage`, `localStorage`, `document`, `navigator`, `window`, `Date`.
+- **Para el valor de React** se ejecuta como cualquier funcion del cliente. Ahi puede usar lo que quiera.
+- **Para el `<script>` inline** se serializa con `toString()` y el navegador lo ejecuta como JS plano, fuera de React y sin el bundle. Ahi no valen imports, variables del componente, constantes de modulo ni funciones con `.bind()`.
 
-**Su codigo acaba en el HTML publico.** No pongas ahi secretos ni logica de negocio que no quieras enseñar.
+Si el script falla por eso, la unica consecuencia es que se pierde la correccion antes del primer pintado: React converge igual al hidratar. Aun asi conviene escribir `resolve` autocontenido, con solo APIs globales del navegador (`sessionStorage`, `localStorage`, `document`, `navigator`, `Date`).
 
-En desarrollo, si un selector de `show`/`hide` no encuentra ningun elemento, el script avisa por consola: un typo dejaria de corregir el DOM en silencio.
+`resolve` debe devolver **un primitivo**. Se llama en cada render y el resultado se compara con `Object.is`, asi que devolver un objeto nuevo cada vez provocaria un bucle de renders.
+
+**El codigo de `resolve` acaba en el HTML publico.** No pongas ahi secretos ni logica de negocio que no quieras enseñar.
+
+## Lo que este hook no hace
+
+No se suscribe a la fuente. Si `sessionStorage` cambia mientras la pagina esta abierta, el valor se relee en el siguiente render, pero nada lo dispara por si solo. Para estado que cambia en vivo, usa un store de verdad.
 
 ## Content Security Policy
 
-El script es inline, asi que con una CSP estricta necesita un nonce. `generateHTML` acepta uno y lo aplica a los scripts que emite:
+El script es inline, asi que con una CSP estricta hay que autorizarlo. Las dos rutas estan cubiertas, porque en SSG un nonce por peticion no existe.
+
+**SSR** — el adaptador genera un nonce por peticion, lo pone en los scripts y emite la cabecera:
 
 ```ts
-generateHTML({ ...opciones, nonce: nonceDeLaPeticion });
+await createServer({ port: 3000, csp: true });
+// o con directivas propias:
+await createServer({ port: 3000, csp: { directives: "object-src 'none'" } });
+```
+
+**SSG** — no hay peticion, asi que se usa el hash de cada script, emitido en un `<meta>` de la propia pagina:
+
+```ts
+await runSsg({ csp: true });
+```
+
+```html
+<meta http-equiv="content-security-policy" content="script-src 'self' 'sha256-...'" />
+```
+
+Si construyes el HTML a mano, `generateHTML` acepta las dos formas: `nonce` para la cabecera y `csp: { hash }` para el `<meta>`. El hasher se pasa desde `@calumet/suamox/csp`, que es server-only:
+
+```ts
+import { cspHasher } from "@calumet/suamox/csp";
+
+generateHTML({ ...opciones, csp: cspHasher });
 ```
 
 ## Seguridad del script generado
 
-El codigo que se inyecta se escapa antes de emitirlo: las secuencias `</script` y `<!--` salen con barra invertida para que no puedan cerrar el bloque. React **no** escapa `dangerouslySetInnerHTML`, asi que sin eso un `</script>` dentro de un `resolve` inyectaria HTML arbitrario en la pagina.
+El codigo que se inyecta se escapa antes de emitirlo: las secuencias `</script` y `<!--` salen con barra invertida para que no puedan cerrar el bloque ni abrir un comentario HTML. El escape se aplica a la cadena **ya montada**, con los selectores dentro, que es lo que cierra la via de entrada por datos.
 
 Los selectores se serializan con `JSON.stringify`, nunca se concatenan, por si vienen de una variable.
 
 No se escapa `<` entero como en los datos del loader: aqui el contenido es codigo, y `<` solo vale dentro de un string, asi que romperia cualquier comparacion `a < b`.
+
+El script va envuelto en un `try/catch`: un fallo suyo no puede tumbar el resto de la pagina, y el valor de React no depende de el.

@@ -13,6 +13,10 @@
     "./ssg": {
       "types": "./dist/ssg.d.ts",
       "import": "./dist/ssg.js"
+    },
+    "./csp": {
+      "types": "./dist/csp.d.ts",
+      "import": "./dist/csp.js"
     }
   },
   "files": [

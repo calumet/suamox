@@ -1,5 +1,5 @@
 import type React from "react";
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useSyncExternalStore } from "react";
 
 /** Selectores a los que el script inline aplica `hidden` segun el valor resuelto */
 export interface ClientValuePatch {
@@ -12,7 +12,6 @@ export interface ClientValuePatch {
 export type ClientValueMode = "server" | "client";
 
 interface ClientValueEntry {
-  key: string;
   resolve: string;
   patch?: ClientValuePatch | string;
 }
@@ -30,7 +29,8 @@ export const createClientValueManager = (mode: ClientValueMode): ClientValueMana
   return {
     mode,
     register: (entry) => {
-      if (!entries.has(entry.key)) entries.set(entry.key, entry);
+      const clave = entry.resolve + JSON.stringify(entry.patch ?? null);
+      if (!entries.has(clave)) entries.set(clave, entry);
     },
     getSnapshot: () => Array.from(entries.values(), buildScript),
   };
@@ -51,35 +51,13 @@ export const ClientValueProvider = ClientValueContext.Provider;
  * Escapa las secuencias que cierran el contexto de un `<script>`.
  *
  * No se puede escapar `<` entero como en `serializeData`: aqui el contenido es codigo,
- * y `<` solo vale dentro de un string, asi que romperia cualquier `a < b`. Estas
- * dos secuencias solo aparecen en codigo valido dentro de strings, regex o comentarios,
- * donde la barra invertida es inocua.
+ * y `<` solo vale dentro de un string, asi que romperia cualquier `a < b`.
  */
 const escapeScript = (code: string): string =>
   code.replace(/<\/script/gi, "<\\/script").replace(/<!--/g, "<\\!--");
 
-/**
- * Clave derivada del propio codigo, no de la posicion en el arbol.
- *
- * `useId` no sirve: cambia si React remonta el arbol en vez de hidratarlo, y entonces
- * el valor precomputado deja de encontrarse. Derivarla del `resolve` y del `patch` la
- * hace igual en servidor y cliente, y estable entre montajes. Dos hooks con el mismo
- * codigo comparten entrada, que es correcto: calculan lo mismo.
- */
-function hashKey(input: string): string {
-  let hash = 5381;
-  for (let i = 0; i < input.length; i++) {
-    hash = ((hash << 5) + hash) ^ input.charCodeAt(i);
-  }
-  return `cv${(hash >>> 0).toString(36)}`;
-}
-
 function buildScript(entry: ClientValueEntry): string {
-  const key = JSON.stringify(entry.key);
-  const lines = [
-    `var v=(${entry.resolve})();`,
-    `(window.__PREHYDRATE__=window.__PREHYDRATE__||{})[${key}]=v;`,
-  ];
+  const lines = [`var v=(${entry.resolve})();`];
 
   if (typeof entry.patch === "string") {
     lines.push(`(${entry.patch})(v);`);
@@ -93,50 +71,42 @@ function buildScript(entry: ClientValueEntry): string {
     }
   }
 
-  const helper = `function d(s,h){var n=document.querySelectorAll(s);${
-    process.env.NODE_ENV === "production"
-      ? ""
-      : `if(!n.length)console.warn("[suamox] useClientValue: el selector "+s+" no encontro elementos");`
-  }n.forEach(function(e){e.hidden=h;});}`;
+  const helper = `function d(s,h){document.querySelectorAll(s).forEach(function(e){e.hidden=h;});}`;
 
-  return escapeScript(`(function(){${helper}${lines.join("")}})();`);
+  // Si el script falla, React converge igual al hidratar: solo se pierde la
+  // correccion antes del primer pintado, no el valor
+  return escapeScript(`(function(){try{${helper}${lines.join("")}}catch(e){}})();`);
 }
 
-declare global {
-  interface Window {
-    __PREHYDRATE__?: Record<string, unknown>;
-  }
-}
+const noSuscribir = () => () => {};
 
 /**
  * Valor que solo existe en el cliente, sin el parpadeo de la hidratacion.
  *
- * En SSR devuelve `fallback` y registra un `<script>` inline que se inyecta al final
- * del body. Ese script computa el valor real, parchea el DOM y lo deja en
- * `window.__PREHYDRATE__`, de donde React lo lee al hidratar, asi que no hay mismatch.
+ * En SSR devuelve `fallback` y registra un `<script>` inline que el framework inyecta
+ * al final del body para corregir el DOM antes del primer pintado. El valor con el que
+ * React hidrata sale de ejecutar `resolve` en el cliente, no del script, asi que si el
+ * script falla la pantalla converge igual.
  *
- * `resolve` y `patch` se serializan con `toString()`: no pueden usar imports ni
- * variables del componente, solo APIs globales del navegador. Su codigo acaba en el
- * HTML publico, asi que no deben llevar secretos.
+ * `resolve` debe devolver un primitivo: se llama en cada render y el resultado se
+ * compara con `Object.is`, asi que un objeto nuevo cada vez provocaria un bucle.
+ *
+ * Solo el `<script>` inline se serializa con `toString()`, y ahi no valen imports ni
+ * variables externas. Su codigo acaba en el HTML publico: no debe llevar secretos.
  */
 export function useClientValue<T>(
   fallback: T,
   resolve: () => T,
   patch?: ClientValuePatch | ((value: T) => void),
 ): T {
-  const serializedPatch = typeof patch === "function" ? patch.toString() : patch;
-  const key = hashKey(resolve.toString() + JSON.stringify(serializedPatch ?? null));
   const manager = useContext(ClientValueContext);
 
   if (manager && manager.mode === "server") {
-    manager.register({ key, resolve: resolve.toString(), patch: serializedPatch });
+    manager.register({
+      resolve: resolve.toString(),
+      patch: typeof patch === "function" ? patch.toString() : patch,
+    });
   }
 
-  const [value] = useState<T>(() => {
-    if (typeof window === "undefined") return fallback;
-    const prehydrated = window.__PREHYDRATE__;
-    return prehydrated && key in prehydrated ? (prehydrated[key] as T) : fallback;
-  });
-
-  return value;
+  return useSyncExternalStore(noSuscribir, resolve, () => fallback);
 }

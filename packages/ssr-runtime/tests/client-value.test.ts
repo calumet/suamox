@@ -5,6 +5,8 @@ import { renderToString } from "react-dom/server";
 import { describe, it, expect } from "vitest";
 
 import { ClientValueProvider, createClientValueManager, useClientValue } from "../src/client-value";
+import { hashInlineScript } from "../src/csp";
+import { generateHTML } from "../src/index";
 
 /** Renderiza en modo servidor y devuelve los scripts que se inyectarian */
 function scriptsDe(componente: () => React.ReactNode): string[] {
@@ -16,19 +18,18 @@ function scriptsDe(componente: () => React.ReactNode): string[] {
 describe("useClientValue", () => {
   it("en el servidor devuelve el fallback", () => {
     let visto: unknown;
-    const html = renderToString(
+    renderToString(
       createElement(
         ClientValueProvider,
         { value: createClientValueManager("server") },
         createElement(() => {
           visto = useClientValue(false, () => true);
-          return createElement("p", null, String(visto));
+          return null;
         }),
       ),
     );
 
     expect(visto).toBe(false);
-    expect(html).toContain("false");
   });
 
   it("registra un script con el resolve serializado", () => {
@@ -38,7 +39,6 @@ describe("useClientValue", () => {
     });
 
     expect(script).toContain("sessionStorage.getItem");
-    expect(script).toContain("__PREHYDRATE__");
   });
 
   it("el patch declarativo usa hidden y no un atributo propio", () => {
@@ -51,6 +51,27 @@ describe("useClientValue", () => {
     expect(script).toContain('"#btn-login"');
     expect(script).toContain("e.hidden=h");
     expect(script).not.toContain("data-cv-hide");
+  });
+
+  it("no depende de una clave: el valor del cliente no viaja en el script", () => {
+    // El cliente ejecuta resolve por su cuenta, asi que el script no necesita
+    // emparejarse con nada. Antes esto se hacia con un hash del codigo, que cambia
+    // entre el bundle de servidor y el minificado del cliente.
+    const [script] = scriptsDe(() => {
+      useClientValue(false, () => true, { show: "#a" });
+      return null;
+    });
+
+    expect(script).not.toContain("__PREHYDRATE__");
+  });
+
+  it("el script se traga sus propios errores para no romper la pagina", () => {
+    const [script] = scriptsDe(() => {
+      useClientValue(false, () => true, { show: "#a" });
+      return null;
+    });
+
+    expect(script).toContain("catch");
   });
 
   it("un patch en funcion se serializa tal cual", () => {
@@ -66,18 +87,6 @@ describe("useClientValue", () => {
     });
 
     expect(script).toContain("document.title");
-  });
-
-  it("da una key distinta a cada invocacion", () => {
-    const scripts = scriptsDe(() => {
-      useClientValue(false, () => true);
-      useClientValue(false, () => false);
-      return null;
-    });
-
-    expect(scripts).toHaveLength(2);
-    const claves = scripts.map((s) => /__PREHYDRATE__\|\|\{\}\)\[("[^"]+")\]/.exec(s)?.[1]);
-    expect(claves[0]).not.toBe(claves[1]);
   });
 
   it("no deja escapar el cierre del script, que romperia el contexto", () => {
@@ -115,10 +124,8 @@ describe("useClientValue", () => {
       return null;
     });
 
-    // Escapar `<` entero como en serializeData romperia el operador
     expect(script).toContain("<");
     expect(script).not.toContain("\\u003c");
-    // vm.Script compila sin ejecutar: valida la sintaxis sin correr el codigo
     expect(() => new Script(script)).not.toThrow();
   });
 
@@ -150,7 +157,61 @@ describe("useClientValue", () => {
       return null;
     });
 
-    // vm.Script compila sin ejecutar: valida la sintaxis sin correr el codigo
     expect(() => new Script(script)).not.toThrow();
+  });
+});
+
+describe("CSP", () => {
+  it("emite el meta con el hash de cada script inline", () => {
+    const html = generateHTML({
+      html: "<div>x</div>",
+      initialData: { a: 1 },
+      prehydrateScripts: ["var v=1;"],
+      csp: { hash: hashInlineScript },
+    });
+
+    expect(html).toContain('<meta http-equiv="content-security-policy"');
+    expect(html).toContain("script-src 'self'");
+    // uno por el script de datos y otro por el de prehydrate
+    expect(html.match(/'sha256-[A-Za-z0-9+/=]+'/g)).toHaveLength(2);
+  });
+
+  it("el hash corresponde al contenido exacto del script emitido", () => {
+    const codigo = "var v=1;";
+    const html = generateHTML({
+      html: "<div>x</div>",
+      includeInitialDataScript: false,
+      prehydrateScripts: [codigo],
+      csp: { hash: hashInlineScript },
+    });
+
+    expect(html).toContain(`'${hashInlineScript(codigo)}'`);
+  });
+
+  it("añade las directivas de la app", () => {
+    const html = generateHTML({
+      html: "<div>x</div>",
+      includeInitialDataScript: false,
+      csp: { hash: hashInlineScript, directives: "object-src 'none'" },
+    });
+
+    expect(html).toContain("object-src &quot;none&quot;".replace(/&quot;/g, "'"));
+  });
+
+  it("sin la opcion no emite ningun meta", () => {
+    const html = generateHTML({ html: "<div>x</div>" });
+
+    expect(html).not.toContain("content-security-policy");
+  });
+
+  it("el nonce llega a los dos scripts inline", () => {
+    const html = generateHTML({
+      html: "<div>x</div>",
+      initialData: { a: 1 },
+      prehydrateScripts: ["var v=1;"],
+      nonce: "abc123",
+    });
+
+    expect(html.match(/<script nonce="abc123"/g)).toHaveLength(2);
   });
 });

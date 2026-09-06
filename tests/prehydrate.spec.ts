@@ -20,14 +20,23 @@ test.describe("useClientValue", () => {
     await expect(page.getByTestId("estado-fuera")).toBeHidden();
   });
 
-  test("el valor resuelto queda en __PREHYDRATE__ para que React lo lea", async ({ page }) => {
+  // El script parchea el DOM aunque React se quede con el fallback, asi que mirar
+  // solo el DOM no distingue "funciona" de "roto". Esto pregunta a React.
+  test("React hidrata con el valor real, no con el fallback", async ({ page }) => {
     await page.addInitScript(() => sessionStorage.setItem("idUsr", "42"));
     await page.goto("/prehydrate");
+    await page.waitForLoadState("networkidle");
 
-    const valores = await page.evaluate(() =>
-      Object.values((window as Record<string, unknown>).__PREHYDRATE__ ?? {}),
-    );
-    expect(valores).toContain(true);
+    await page.getByTestId("preguntar").click();
+    await expect(page.getByTestId("respuesta")).toHaveText("true");
+  });
+
+  test("sin sesion React tambien tiene el valor correcto", async ({ page }) => {
+    await page.goto("/prehydrate");
+    await page.waitForLoadState("networkidle");
+
+    await page.getByTestId("preguntar").click();
+    await expect(page.getByTestId("respuesta")).toHaveText("false");
   });
 
   test("no hay error de hidratacion al corregir el DOM", async ({ page }) => {
@@ -44,15 +53,38 @@ test.describe("useClientValue", () => {
     expect(errores).toEqual([]);
   });
 
-  test("el estado sobrevive a una navegacion SPA de ida y vuelta", async ({ page }) => {
+  // Una navegacion SPA remonta el arbol. Con una clave derivada del codigo esto
+  // fallaba en produccion, donde el minificador reescribe el cuerpo del resolve.
+  test("el valor sobrevive a una navegacion SPA de ida y vuelta", async ({ page }) => {
     await page.addInitScript(() => sessionStorage.setItem("idUsr", "42"));
     await page.goto("/prehydrate");
     await expect(page.getByTestId("btn-logout")).toBeVisible();
 
     await page.goto("/time");
     await page.goBack();
+    await page.waitForLoadState("networkidle");
 
     await expect(page.getByTestId("btn-logout")).toBeVisible();
     await expect(page.getByTestId("btn-login")).toBeHidden();
+
+    await page.getByTestId("preguntar").click();
+    await expect(page.getByTestId("respuesta")).toHaveText("true");
+  });
+
+  test("una ruta sin sesion y otra con sesion no se contaminan entre si", async ({ browser }) => {
+    const limpio = await browser.newContext();
+    const conSesion = await browser.newContext();
+    await conSesion.addInitScript(() => sessionStorage.setItem("idUsr", "42"));
+
+    const a = await limpio.newPage();
+    const b = await conSesion.newPage();
+    await a.goto("/prehydrate");
+    await b.goto("/prehydrate");
+
+    await expect(a.getByTestId("btn-login")).toBeVisible();
+    await expect(b.getByTestId("btn-logout")).toBeVisible();
+
+    await limpio.close();
+    await conSesion.close();
   });
 });

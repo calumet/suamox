@@ -659,8 +659,15 @@ export function generateHTML(options: {
   includeInitialDataScript?: boolean;
   scriptPlacement?: "head" | "body";
   prehydrateScripts?: string[];
-  /** Nonce para los scripts inline, si la app sirve una CSP estricta */
+  /** Nonce para los scripts inline, si la app sirve una CSP estricta por cabecera */
   nonce?: string;
+  /**
+   * Emite un `<meta http-equiv="content-security-policy">` con el hash de cada script
+   * inline. Funciona igual en SSR que en SSG, donde un nonce por peticion no existe.
+   * Recibe el hasher porque este modulo tambien se carga en el navegador y no puede
+   * importar `node:crypto`.
+   */
+  csp?: { hash: (code: string) => string; directives?: string };
 }): string {
   const {
     html,
@@ -673,6 +680,7 @@ export function generateHTML(options: {
     scriptPlacement = "body",
     prehydrateScripts = [],
     nonce,
+    csp,
   } = options;
 
   const escapeAttr = (value: string): string =>
@@ -696,18 +704,38 @@ export function generateHTML(options: {
 
   const nonceAttr = nonce ? ` nonce="${escapeAttr(nonce)}"` : "";
 
-  const dataScript = includeInitialDataScript
-    ? `<script${nonceAttr}>
-      window.__INITIAL_DATA__ = ${serializeData(initialData ?? null)};
-    </script>`
-    : "";
+  const dataScriptBody = includeInitialDataScript
+    ? `\n      window.__INITIAL_DATA__ = ${serializeData(initialData ?? null)};\n    `
+    : null;
+
+  const dataScript =
+    dataScriptBody === null ? "" : `<script${nonceAttr}>${dataScriptBody}</script>`;
 
   // Van antes de los scripts de modulo: tienen que correr antes de que React hidrate
   const prehydrateTags = prehydrateScripts
     .map((code) => `<script${nonceAttr}>${code}</script>`)
     .join("\n    ");
 
-  const headContent = [head, styleTags, preloadTags, scriptPlacement === "head" ? scriptTags : ""]
+  // El hash CSP se calcula sobre el contenido exacto entre las etiquetas
+  const inlineBodies = [...(dataScriptBody === null ? [] : [dataScriptBody]), ...prehydrateScripts];
+  const cspMeta = csp
+    ? `<meta http-equiv="content-security-policy" content="${escapeAttr(
+        [
+          `script-src 'self' ${inlineBodies.map((body) => `'${csp.hash(body)}'`).join(" ")}`.trim(),
+          csp.directives,
+        ]
+          .filter(Boolean)
+          .join("; "),
+      )}">`
+    : "";
+
+  const headContent = [
+    cspMeta,
+    head,
+    styleTags,
+    preloadTags,
+    scriptPlacement === "head" ? scriptTags : "",
+  ]
     .filter(Boolean)
     .join("\n    ");
   const bodyScripts = scriptPlacement === "body" ? scriptTags : "";
