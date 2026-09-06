@@ -1,6 +1,6 @@
 {
   "name": "@calumet/suamox",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "SSR and SSG runtime for Suamox framework",
   "type": "module",
   "main": "./dist/index.js",
@@ -13,6 +13,10 @@
     "./ssg": {
       "types": "./dist/ssg.d.ts",
       "import": "./dist/ssg.js"
+    },
+    "./csp": {
+      "types": "./dist/csp.d.ts",
+      "import": "./dist/csp.js"
     }
   },
   "files": [

@@ -2,6 +2,8 @@ import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promi
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { hashInlineScript } from "./csp";
+
 import { generateHTML, renderPage, resolveRouteModule } from "./index";
 import type { RouteRecord } from "./index";
 
@@ -23,6 +25,8 @@ export interface PrerenderOptions {
     route: RouteRecord;
     pathname: string;
   }) => PrerenderAssets | Promise<PrerenderAssets>;
+  /** Emite el `<meta>` de CSP con el hash de cada script inline de la pagina */
+  csp?: boolean | { directives?: string };
 }
 
 export interface RunSsgOptions {
@@ -33,6 +37,16 @@ export interface RunSsgOptions {
   outDir?: string;
   baseUrl?: string;
   base?: string;
+  /** Emite el `<meta>` de CSP con el hash de cada script inline de la pagina */
+  csp?: boolean | { directives?: string };
+}
+
+/** Traduce la opcion `csp` al hasher que espera `generateHTML` */
+function cspOption(
+  csp: boolean | { directives?: string } | undefined,
+): { hash: (code: string) => string; directives?: string } | undefined {
+  if (!csp) return undefined;
+  return { hash: hashInlineScript, directives: csp === true ? undefined : csp.directives };
 }
 
 function isDynamicRoute(route: RouteRecord): boolean {
@@ -215,6 +229,8 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
       scripts: routeScripts,
       styles: routeStyles,
       preloadScripts: routePreloadScripts,
+      prehydrateScripts: result.prehydrateScripts,
+      csp: cspOption(options.csp),
     });
 
     const { dir, filePath } = getOutputPath(normalizedPath);
@@ -359,6 +375,7 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
     resolveAssets: ({ route }) => ({
       styles: resolveRouteStyles(route),
     }),
+    csp: options.csp,
   });
 
   const staticClientDir = join(resolvedOutDir, "client");

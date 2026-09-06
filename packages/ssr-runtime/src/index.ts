@@ -10,6 +10,11 @@ import type React from "react";
 import { createContext, createElement, Fragment, useContext } from "react";
 import { renderToStaticMarkup, renderToString } from "react-dom/server";
 
+import { ClientValueProvider, createClientValueManager } from "./client-value.js";
+
+export { useClientValue, ClientValueProvider, createClientValueManager } from "./client-value.js";
+export type { ClientValuePatch, ClientValueManager } from "./client-value.js";
+
 export interface LayoutInfo {
   component: React.ComponentType<{ children: React.ReactNode }>;
   loader?: (ctx: LoaderContext) => Promise<unknown>;
@@ -222,6 +227,8 @@ export interface RenderResult {
   initialData?: unknown;
   layoutData?: Record<string, unknown>;
   redirectTo?: string;
+  /** Scripts inline de `useClientValue`, para inyectar al final del body */
+  prehydrateScripts?: string[];
 }
 
 export interface HydrationAdapter {
@@ -456,7 +463,13 @@ export async function hydrateApp(
   }
 
   const pageElement = createPageElement(resolvedRoute, initialData, undefined, layoutData);
-  const element = createElement(HeadProvider, null, pageElement);
+  // El Provider tiene que estar tambien en el cliente: useId numera segun la posicion
+  // en el arbol, y si el servidor tiene un nivel de mas las claves no coinciden
+  const element = createElement(
+    HeadProvider,
+    null,
+    createElement(ClientValueProvider, { value: createClientValueManager("client") }, pageElement),
+  );
 
   let hydrateRoot = adapter?.hydrateRoot;
   let createRoot = adapter?.createRoot;
@@ -563,10 +576,17 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
   // Renderizar componente con React SSR
   try {
     const headManager = createHeadManager("server");
+    // Un manager por request: compartirlo entre requests filtraria los scripts de
+    // una peticion en el HTML de otra
+    const clientValueManager = createClientValueManager("server");
     const element = createElement(
       HeadProvider,
       { manager: headManager },
-      createPageElement(resolvedRoute, data, props, layoutData),
+      createElement(
+        ClientValueProvider,
+        { value: clientValueManager },
+        createPageElement(resolvedRoute, data, props, layoutData),
+      ),
     );
     const html = renderToString(element);
     const head = renderHeadToString(headManager.getSnapshot());
@@ -577,6 +597,7 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
       head,
       initialData: data,
       layoutData,
+      prehydrateScripts: clientValueManager.getSnapshot(),
     };
   } catch (error) {
     console.error("Render error:", error);
@@ -637,6 +658,16 @@ export function generateHTML(options: {
   styles?: string[];
   includeInitialDataScript?: boolean;
   scriptPlacement?: "head" | "body";
+  prehydrateScripts?: string[];
+  /** Nonce para los scripts inline, si la app sirve una CSP estricta por cabecera */
+  nonce?: string;
+  /**
+   * Emite un `<meta http-equiv="content-security-policy">` con el hash de cada script
+   * inline. Funciona igual en SSR que en SSG, donde un nonce por peticion no existe.
+   * Recibe el hasher porque este modulo tambien se carga en el navegador y no puede
+   * importar `node:crypto`.
+   */
+  csp?: { hash: (code: string) => string; directives?: string };
 }): string {
   const {
     html,
@@ -647,6 +678,9 @@ export function generateHTML(options: {
     styles = [],
     includeInitialDataScript = true,
     scriptPlacement = "body",
+    prehydrateScripts = [],
+    nonce,
+    csp,
   } = options;
 
   const escapeAttr = (value: string): string =>
@@ -668,17 +702,46 @@ export function generateHTML(options: {
     .map((src) => `<script type="module" src="${escapeAttr(src)}"></script>`)
     .join("\n    ");
 
-  const dataScript = includeInitialDataScript
-    ? `<script>
-      window.__INITIAL_DATA__ = ${serializeData(initialData ?? null)};
-    </script>`
+  const nonceAttr = nonce ? ` nonce="${escapeAttr(nonce)}"` : "";
+
+  const dataScriptBody = includeInitialDataScript
+    ? `\n      window.__INITIAL_DATA__ = ${serializeData(initialData ?? null)};\n    `
+    : null;
+
+  const dataScript =
+    dataScriptBody === null ? "" : `<script${nonceAttr}>${dataScriptBody}</script>`;
+
+  // Van antes de los scripts de modulo: tienen que correr antes de que React hidrate
+  const prehydrateTags = prehydrateScripts
+    .map((code) => `<script${nonceAttr}>${code}</script>`)
+    .join("\n    ");
+
+  // El hash CSP se calcula sobre el contenido exacto entre las etiquetas
+  const inlineBodies = [...(dataScriptBody === null ? [] : [dataScriptBody]), ...prehydrateScripts];
+  const cspMeta = csp
+    ? `<meta http-equiv="content-security-policy" content="${escapeAttr(
+        [
+          `script-src 'self' ${inlineBodies.map((body) => `'${csp.hash(body)}'`).join(" ")}`.trim(),
+          csp.directives,
+        ]
+          .filter(Boolean)
+          .join("; "),
+      )}">`
     : "";
 
-  const headContent = [head, styleTags, preloadTags, scriptPlacement === "head" ? scriptTags : ""]
+  const headContent = [
+    cspMeta,
+    head,
+    styleTags,
+    preloadTags,
+    scriptPlacement === "head" ? scriptTags : "",
+  ]
     .filter(Boolean)
     .join("\n    ");
   const bodyScripts = scriptPlacement === "body" ? scriptTags : "";
-  const bodyContent = [html, dataScript, bodyScripts].filter(Boolean).join("\n    ");
+  const bodyContent = [html, prehydrateTags, dataScript, bodyScripts]
+    .filter(Boolean)
+    .join("\n    ");
 
   return `<!DOCTYPE html>
 <html lang="en">
