@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.11.0 (2026-09-05)
+
+### Features
+
+- **`vite-plugin-pages`: el build del cliente falla si codigo de servidor llego al bundle.** El stripping de exports y el bloqueo de `.server.ts` actuan mientras se resuelve el import; los dos son la primera linea, y hasta ahora nadie comprobaba el resultado. Al cerrar el build del cliente el plugin recorre los modulos que quedaron en cada chunk y aborta si encuentra un `*.server.*`, una ruta de `src/api/` o un builtin de Node.
+
+  ```txt
+  [suamox:pages] Server-only code reached the client bundle:
+
+    assets/informe-Dcku00bO.js
+      - __vite-browser-external (Node builtin, unavailable in the browser)
+  ```
+
+  Mira los modulos que el bundler incluyo, no el texto del bundle, asi que no depende de que un nombre sobreviva al minificador ni se le escapa por un identificador renombrado. Cubre lo que evade a los otros dos mecanismos: un alias, otro plugin que resuelve antes, un import dinamico. El caso que atrapa en la practica es mas simple: usar `node:fs` en el componente en vez de en el loader, que ningun mecanismo anterior veia porque el import es legitimo hasta que se decide para que bundle va.
+
+  El nombre del chunk apunta a la pagina culpable. Vite no deja `node:fs` tal cual en el bundle del navegador —lo sustituye por un stub vacio, `__vite-browser-external`— asi que ese stub es la huella que se busca, no el nombre del modulo.
+
+### Packages
+
+| Paquete                             | Version anterior | Nueva version |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox-vite-plugin-pages` | 0.7.0            | 0.8.0         |
+
 ## 0.10.0 (2026-09-05)
 
 ### Features

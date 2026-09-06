@@ -7,6 +7,7 @@ import { CLIENT_ROUTE_QUERY, generateRoutesModule, type DefaultPageMode } from "
 import { scanRoutes } from "./scanner.js";
 import { stripServerExports } from "./strip-server-exports.js";
 import type { ApiRouteRecord, RouteRecord } from "./types.js";
+import { findServerLeaks, formatLeakError, type ChunkModules } from "./validator.js";
 
 export interface SuamoxPagesOptions {
   pagesDir?: string;
@@ -221,6 +222,22 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       }
 
       return stripServerExports(code, result.program, filePath) ?? undefined;
+    },
+
+    generateBundle(_options, bundle) {
+      if (this.environment.config.consumer !== "client") return;
+
+      const chunks: ChunkModules[] = [];
+      for (const [fileName, output] of Object.entries(bundle)) {
+        if (output.type !== "chunk") continue;
+        // `modules` es lo que se bundleo; `imports` recoge lo externalizado
+        chunks.push({ fileName, ids: [...Object.keys(output.modules), ...output.imports] });
+      }
+
+      const leaks = findServerLeaks(chunks, resolve(root, "src/api"));
+      if (leaks.length > 0) {
+        this.error(formatLeakError(leaks, root));
+      }
     },
   };
 }
