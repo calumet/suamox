@@ -148,6 +148,17 @@ describe("useClientValue", () => {
     expect(b.getSnapshot()).toHaveLength(0);
   });
 
+  it("avisa por consola si el script falla, en vez de callarse", () => {
+    // El fallo mas comun es un resolve que captura algo del scope, que en el script
+    // inline no existe. Sin aviso no hay forma de enterarse: el DOM converge igual.
+    const [script] = scriptsDe(() => {
+      useClientValue(false, () => true, { show: "#a" });
+      return null;
+    });
+
+    expect(script).toContain("console.warn");
+  });
+
   it("el script generado es JavaScript valido", () => {
     const [script] = scriptsDe(() => {
       useClientValue(false, () => !!sessionStorage.getItem("idUsr"), {

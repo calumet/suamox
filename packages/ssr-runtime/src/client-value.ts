@@ -36,9 +36,10 @@ export const createClientValueManager = (mode: ClientValueMode): ClientValueMana
   };
 };
 
-// El contexto se guarda en globalThis porque el adaptador y la app pueden cargar
-// copias distintas del modulo, igual que hace el manager de head
-const globalKey = "__SUAMOX_CLIENT_VALUE_CONTEXT__";
+// El contexto se guarda en globalThis porque el adaptador y la app pueden cargar copias
+// distintas del modulo. La clave es un Symbol, no una cadena: un `<div id="...">` en el
+// HTML crea una propiedad de `window` con ese nombre y suplantaria el contexto.
+const globalKey = Symbol.for("suamox.clientValueContext");
 type ContextType = React.Context<ClientValueManager | null>;
 const store = globalThis as typeof globalThis & { [globalKey]?: ContextType };
 const ClientValueContext: ContextType =
@@ -73,9 +74,13 @@ function buildScript(entry: ClientValueEntry): string {
 
   const helper = `function d(s,h){document.querySelectorAll(s).forEach(function(e){e.hidden=h;});}`;
 
-  // Si el script falla, React converge igual al hidratar: solo se pierde la
-  // correccion antes del primer pintado, no el valor
-  return escapeScript(`(function(){try{${helper}${lines.join("")}}catch(e){}})();`);
+  // Si el script falla, React converge igual al hidratar: solo se pierde la correccion
+  // antes del primer pintado. Pero avisa: el fallo mas comun es un `resolve` que captura
+  // algo del scope, que aqui no existe, y en silencio no hay forma de notarlo.
+  return escapeScript(
+    `(function(){try{${helper}${lines.join("")}}catch(e){` +
+      `console.warn("[suamox] useClientValue: el script inline fallo, se corrige al hidratar",e);}})();`,
+  );
 }
 
 const noSuscribir = () => () => {};

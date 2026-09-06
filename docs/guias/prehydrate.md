@@ -95,7 +95,9 @@ const isLoggedIn = useClientValue(false, () => !!sessionStorage.getItem("idUsr")
 - **Para el valor de React** se ejecuta como cualquier funcion del cliente. Ahi puede usar lo que quiera.
 - **Para el `<script>` inline** se serializa con `toString()` y el navegador lo ejecuta como JS plano, fuera de React y sin el bundle. Ahi no valen imports, variables del componente, constantes de modulo ni funciones con `.bind()`.
 
-Si el script falla por eso, la unica consecuencia es que se pierde la correccion antes del primer pintado: React converge igual al hidratar. Aun asi conviene escribir `resolve` autocontenido, con solo APIs globales del navegador (`sessionStorage`, `localStorage`, `document`, `navigator`, `Date`).
+Si el script falla por eso, en una ruta normal la unica consecuencia es que se pierde la correccion antes del primer pintado: React converge igual al hidratar, y el fallo se avisa por consola. Escribe `resolve` autocontenido, con solo APIs globales del navegador (`sessionStorage`, `localStorage`, `document`, `navigator`, `Date`).
+
+**La excepcion es `prerender`.** Una pagina estatica no lleva el JavaScript de la app, asi que no hay hidratacion y no hay nada que converja: ahi el script inline es la unica correccion que existe. Si falla, o si algo que depende del valor no esta en `patch`, se queda mal de forma permanente. En rutas prerenderizadas conviene revisar la consola una vez.
 
 `resolve` debe devolver **un primitivo**. Se llama en cada render y el resultado se compara con `Object.is`, asi que devolver un objeto nuevo cada vez provocaria un bucle de renders.
 
@@ -109,13 +111,15 @@ No se suscribe a la fuente. Si `sessionStorage` cambia mientras la pagina esta a
 
 El script es inline, asi que con una CSP estricta hay que autorizarlo. Las dos rutas estan cubiertas, porque en SSG un nonce por peticion no existe.
 
-**SSR** — el adaptador genera un nonce por peticion, lo pone en los scripts y emite la cabecera:
+**SSR** — el adaptador genera un nonce por peticion, lo pone en todos los scripts inline y emite la cabecera:
 
 ```ts
 await createServer({ port: 3000, csp: true });
 // o con directivas propias:
 await createServer({ port: 3000, csp: { directives: "object-src 'none'" } });
 ```
+
+`directives` son directivas **adicionales**, no tokens de `script-src`: se unen con `;`. La politica que emite es `script-src 'self' 'nonce-…'`, asi que los scripts externos siguen entrando por `'self'`; todavia no se puede migrar a `'strict-dynamic'`.
 
 **SSG** — no hay peticion, asi que se usa el hash de cada script, emitido en un `<meta>` de la propia pagina:
 

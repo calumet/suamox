@@ -4,7 +4,7 @@
 
 ### Features
 
-- **`ssr-runtime`: `useClientValue()`, estado del navegador sin el salto de la hidratacion.** Cuando una pantalla depende de `sessionStorage` o de una cookie de JS, el HTML del servidor sale con un valor por defecto y React lo corrige al hidratar: el usuario ve el estado equivocado un instante. El hook devuelve el fallback en SSR y registra un `<script>` inline que corrige el DOM en cuanto el parser lo alcanza, y deja el valor en `window.__PREHYDRATE__` para que React hidrate con el mismo y no haya mismatch.
+- **`ssr-runtime`: `useClientValue()`, estado del navegador sin el salto de la hidratacion.** Cuando una pantalla depende de `sessionStorage` o de una cookie de JS, el HTML del servidor sale con un valor por defecto y React lo corrige al hidratar: el usuario ve el estado equivocado un instante. El hook devuelve el fallback en SSR y registra un `<script>` inline que corrige el DOM en cuanto el parser lo alcanza; el valor con el que React trabaja sale de ejecutar `resolve` en el cliente.
 
   ```tsx
   const isLoggedIn = useClientValue(false, () => !!sessionStorage.getItem("idUsr"), {

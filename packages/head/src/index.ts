@@ -66,7 +66,9 @@ export const createHeadManager = (mode: HeadManagerMode): HeadManager => {
   };
 };
 
-const globalContextKey = "__SUAMOX_HEAD_CONTEXT__";
+// Symbol y no cadena: un `<div id="...">` en el HTML crea una propiedad de `window`
+// con ese nombre, y suplantaria el contexto tumbando la hidratacion
+const globalContextKey = Symbol.for("suamox.headContext");
 type HeadContextType = React.Context<HeadManager | null>;
 const globalHeadContext = globalThis as typeof globalThis & {
   [globalContextKey]?: HeadContextType;

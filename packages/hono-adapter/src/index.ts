@@ -37,16 +37,18 @@ function dataResponse(c: Context, value: unknown): Response {
 
 /**
  * CSP para los scripts inline del SSR. Con `true` se genera un nonce por peticion, se
- * aplica a los scripts y se emite la cabecera. `directives` se añade a `script-src`.
+ * aplica a los scripts inline y se emite la cabecera con `script-src`.
+ *
+ * `directives` son **directivas adicionales**, no tokens de `script-src`: se unen con
+ * `;`, asi que ahi va `object-src 'none'`, no `'strict-dynamic'`.
  */
 export type CspOption = boolean | { directives?: string };
 
-/** Nonce de la peticion, disponible en `locals.nonce` para que la app lo reuse */
 function crearNonce(): string {
   return randomBytes(16).toString("base64");
 }
 
-/** `script-src` con el nonce de la peticion, mas lo que añada la app */
+/** `script-src` con el nonce de la peticion, mas las directivas que añada la app */
 function cabeceraCsp(nonce: string, csp: CspOption | undefined): string {
   const extra = typeof csp === "object" ? csp.directives : undefined;
   return [`script-src 'self' 'nonce-${nonce}'`, extra].filter(Boolean).join("; ");
@@ -754,17 +756,25 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
           let finalHtml = template;
           const nonceDev = options.csp ? crearNonce() : undefined;
           const nonceAttr = nonceDev ? ` nonce="${nonceDev}"` : "";
-          const prehydrate = (result.prehydrateScripts ?? [])
-            .map((code) => `<script${nonceAttr}>${code}</script>`)
-            .join("");
-          // El reemplazo va en funcion: en una cadena, `$&` y `` $` `` son patrones de
-          // sustitucion y reinyectarian el HTML anterior, con su </script> dentro
-          if (prehydrate) {
-            finalHtml = finalHtml.replace("</body>", () => `${prehydrate}</body>`);
+
+          // Vite inyecta su preambulo inline (el de @vitejs/plugin-react) sin nonce, y
+          // la propia cabecera lo bloquearia: React no llegaria a montar. Se le pone a
+          // todo script inline que aun no lo tenga.
+          if (nonceDev) {
+            finalHtml = finalHtml.replace(
+              /<script(?![^>]*\bnonce=)(?![^>]*\bsrc=)/g,
+              () => `<script nonce="${nonceDev}"`,
+            );
           }
           if (nonceDev) {
             c.header("Content-Security-Policy", cabeceraCsp(nonceDev, options.csp));
           }
+
+          // Los scripts de useClientValue van antes que los datos: parchean el DOM en
+          // cuanto el parser los alcanza, sin esperar a la hidratacion.
+          const inline = (result.prehydrateScripts ?? []).map(
+            (code) => `<script${nonceAttr}>${code}</script>`,
+          );
 
           // Inyectar datos iniciales solo para rutas con hidratación
           if (!isPrerender) {
@@ -772,11 +782,20 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
               ? { page: result.initialData ?? null, layouts: result.layoutData }
               : (result.initialData ?? null);
             const serializedData = serializeData(initialDataPayload);
-            finalHtml = finalHtml.replace(
-              "</body>",
-              () =>
-                `<script${nonceAttr}>window.__INITIAL_DATA__ = ${serializedData};</script></body>`,
+            inline.push(
+              `<script${nonceAttr}>window.__INITIAL_DATA__ = ${serializedData};</script>`,
             );
+          }
+
+          // Una sola insercion, y en el ultimo `</body>`: el codigo del desarrollador
+          // puede contener esa cadena, y buscar la primera aparicion metia el bloque
+          // dentro de su propio script
+          if (inline.length > 0) {
+            const cierre = finalHtml.lastIndexOf("</body>");
+            finalHtml =
+              cierre === -1
+                ? finalHtml + inline.join("")
+                : finalHtml.slice(0, cierre) + inline.join("") + finalHtml.slice(cierre);
           }
 
           return c.html(finalHtml, result.status as 200 | 404 | 500);
