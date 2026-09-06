@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.12.0 (2026-09-06)
+
+### Features
+
+- **`ssr-runtime`: `useClientValue()`, estado del navegador sin el salto de la hidratacion.** Cuando una pantalla depende de `sessionStorage` o de una cookie de JS, el HTML del servidor sale con un valor por defecto y React lo corrige al hidratar: el usuario ve el estado equivocado un instante. El hook devuelve el fallback en SSR y registra un `<script>` inline que corrige el DOM en cuanto el parser lo alcanza, y deja el valor en `window.__PREHYDRATE__` para que React hidrate con el mismo y no haya mismatch.
+
+  ```tsx
+  const isLoggedIn = useClientValue(false, () => !!sessionStorage.getItem("idUsr"), {
+    show: "#btn-logout",
+    hide: "#btn-login",
+  });
+
+  <button id="btn-logout" hidden={!isLoggedIn}>Salir</button>
+  <a id="btn-login" hidden={isLoggedIn}>Ingresar</a>
+  ```
+
+  `show` y `hide` aplican el atributo `hidden` nativo en vez de un `data-*` con CSS del framework. En el JSX se escribe `hidden={!isLoggedIn}` a secas: React omite el atributo cuando vale `false`, mientras que un `data-*` lo emitiria como la cadena `"false"` y un selector `[data-x]` acabaria casandolo igual. Ademas `hidden` es semantico y no obliga a inyectar CSS global.
+
+  La clave con la que el cliente recupera el valor se deriva del propio codigo del `resolve`, no de `useId`: si React remonta el arbol en lugar de hidratarlo, un id posicional cambia y el valor precomputado deja de encontrarse.
+
+  El codigo inyectado se escapa antes de emitirlo (`</script` y `<!--`), porque React no escapa `dangerouslySetInnerHTML` y un `</script>` dentro de un `resolve` inyectaria HTML arbitrario. No se escapa `<` entero como en los datos del loader: aqui el contenido es codigo y romperia cualquier comparacion `a < b`. Los selectores se serializan, nunca se concatenan.
+
+  El registro de scripts es por peticion, como el de `head`: compartirlo entre peticiones pondria los scripts de un usuario en el HTML de otro. `generateHTML` acepta ademas un `nonce` para servir con CSP estricta.
+
+  Ver [prehydrate](./docs/guias/prehydrate.md).
+
+### Packages
+
+| Paquete                        | Version anterior | Nueva version |
+| ------------------------------ | ---------------- | ------------- |
+| `@calumet/suamox`              | 0.3.1            | 0.4.0         |
+| `@calumet/suamox-router`       | 0.5.0            | 0.6.0         |
+| `@calumet/suamox-hono-adapter` | 0.5.0            | 0.6.0         |
+
 ## 0.11.0 (2026-09-05)
 
 ### Features

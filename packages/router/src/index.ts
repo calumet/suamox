@@ -1,4 +1,6 @@
 import {
+  ClientValueProvider,
+  createClientValueManager,
   createPageElement,
   deserializeData,
   isSafeRedirectUrl,
@@ -308,10 +310,16 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     currentLayoutRouteIds =
       (match.route as ResolvedMatch["route"] & { layoutRouteIds?: string[] }).layoutRouteIds ?? [];
 
+    // El arbol tiene que tener los mismos niveles que en SSR: useId numera por
+    // posicion, y un Provider de menos desalinea las claves de useClientValue
     const element = createElement(
       HeadProvider,
       null,
-      createPageElement(resolvedRoute, data, undefined, layoutData),
+      createElement(
+        ClientValueProvider,
+        { value: createClientValueManager("client") },
+        createPageElement(resolvedRoute, data, undefined, layoutData),
+      ),
     );
 
     if (!root) {

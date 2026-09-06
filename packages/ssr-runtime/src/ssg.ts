@@ -215,6 +215,7 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
       scripts: routeScripts,
       styles: routeStyles,
       preloadScripts: routePreloadScripts,
+      prehydrateScripts: result.prehydrateScripts,
     });
 
     const { dir, filePath } = getOutputPath(normalizedPath);

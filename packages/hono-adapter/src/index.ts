@@ -730,14 +730,23 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
 </html>`,
           );
 
-          // Inyectar datos iniciales solo para rutas con hidratación
+          // Los scripts de useClientValue van antes que los datos: parchean el DOM
+          // en cuanto el parser los alcanza, sin esperar a la hidratacion
           let finalHtml = template;
+          const prehydrate = (result.prehydrateScripts ?? [])
+            .map((code) => `<script>${code}</script>`)
+            .join("");
+          if (prehydrate) {
+            finalHtml = finalHtml.replace("</body>", `${prehydrate}</body>`);
+          }
+
+          // Inyectar datos iniciales solo para rutas con hidratación
           if (!isPrerender) {
             const initialDataPayload = result.layoutData
               ? { page: result.initialData ?? null, layouts: result.layoutData }
               : (result.initialData ?? null);
             const serializedData = serializeData(initialDataPayload);
-            finalHtml = template.replace(
+            finalHtml = finalHtml.replace(
               "</body>",
               `<script>window.__INITIAL_DATA__ = ${serializedData};</script></body>`,
             );
@@ -1245,6 +1254,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
             styles,
             scriptPlacement: "head",
             includeInitialDataScript: !isPrerender,
+            prehydrateScripts: result.prehydrateScripts,
           });
 
           return c.html(html, result.status as 200 | 404 | 500);
