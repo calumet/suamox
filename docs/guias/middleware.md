@@ -96,6 +96,14 @@ Peticion HTTP
 
 El middleware se ejecuta tanto para peticiones SSR como para el endpoint `/__data` (navegacion client-side) y para las rutas de API. Esto garantiza que los loaders siempre reciben los mismos `locals` sin importar si la pagina se carga por primera vez o se navega con el router. En los tres casos `context.pathname` es la ruta que caso, con el [reroute](./reroute.md) ya aplicado, para que un guardia y la pagina que se renderiza nunca discrepen.
 
+### Las paginas SSG no pasan por aqui
+
+Una pagina con `prerender = true` se sirve desde `dist/static` sin ejecutar el middleware. No es una limitacion que se pueda levantar: su HTML se genero en el build y es el mismo para todo el mundo, asi que no hay nada que un guardia por peticion pueda cambiar. **Una pagina prerenderizada no se puede proteger con middleware**; si necesita autorizacion, no la prerenderices.
+
+Es lo mismo que hacen React Router, SvelteKit y Astro: en los tres, los loaders y hooks de una ruta prerenderizada corren en el build y no en cada peticion.
+
+El `onRequest` del adaptador si corre, porque es infraestructura y aplica a toda respuesta.
+
 ## Diferencia con onRequest del adapter
 
 El adaptador de Hono tiene su propio hook `onRequest` en las opciones del servidor:

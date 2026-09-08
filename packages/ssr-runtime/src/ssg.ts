@@ -137,7 +137,8 @@ type Manifest = Record<string, ManifestEntry>;
 /**
  * Espejo de `CLIENT_ROUTE_QUERY` de `@calumet/suamox-vite-plugin-pages`. No se importa
  * de ahi para no invertir la direccion de dependencias (el plugin genera codigo que
- * importa este paquete); si cambia alla, hay que cambiarlo aca.
+ * importa este paquete); hay otra copia en `hono-adapter/src/index.ts`, y si cambia
+ * alla hay que cambiarla en las tres.
  */
 const CLIENT_ROUTE_QUERY = "__suamox-client-route";
 

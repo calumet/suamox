@@ -97,6 +97,12 @@ dist/static/
 
 Los paths de CSS también incluyen el prefijo base automáticamente.
 
+## Sin middleware
+
+El HTML prerenderizado se sirve directamente desde disco, sin pasar por `src/middleware.ts`. Su contenido se fijó en el build y es idéntico para todos, así que un guardia por petición no tendría nada que decidir. Si una página necesita autorización, no la prerenderices. Ver [middleware](./middleware.md#las-paginas-ssg-no-pasan-por-aqui).
+
+El hook `onRequest` del adaptador sí se ejecuta: es infraestructura —logging, headers— y aplica a toda respuesta.
+
 ## Comportamiento en producción
 
 Al usar `suamox preview`:
