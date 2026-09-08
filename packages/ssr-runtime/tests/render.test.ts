@@ -4,7 +4,6 @@ import { renderToString } from "react-dom/server";
 import { describe, it, expect, vi } from "vitest";
 
 import {
-  renderPage,
   useLoaderData,
   useRouteLoaderData,
   useStaticProps,
@@ -14,6 +13,7 @@ import {
   deserializeData,
 } from "../src/index";
 import type { RouteRecord, LoaderContext, LayoutInfo } from "../src/index";
+import { renderPage } from "../src/server";
 
 function createMockRoute(overrides: Partial<RouteRecord>): RouteRecord {
   return {

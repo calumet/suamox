@@ -39,7 +39,7 @@ En producción, el adaptador:
 `createServer` y handlers aceptan hooks opcionales:
 
 - `onRequest(c)`: antes de resolver la página.
-- `onBeforeRender(ctx)`: antes de `renderPage`, permite transformar contexto.
+- `onBeforeRender(ctx)`: antes de [`renderPage`](#renderpage), permite transformar el contexto.
 - `onAfterRender(result)`: después de render, permite ajustar resultado.
 
 Ejemplo:
@@ -199,3 +199,19 @@ Si ese archivo existe y Vite lo resuelve, se enlaza automáticamente durante SSR
 
 La referencia final de comportamiento visual sigue siendo
 `pnpm run build` + `pnpm run preview`.
+
+## renderPage
+
+Vive en su propio entry point, no en el principal:
+
+```ts
+import { renderPage } from "@calumet/suamox/server";
+```
+
+Es la única pieza del runtime que importa `react-dom/server`, y `react-dom` no
+declara `sideEffects: false`, así que un import estático desde `@calumet/suamox`
+arrastraba la librería entera al bundle del navegador —197 KB que nunca se
+ejecutan— porque el router importa del entry principal.
+
+La regla, si añades algo al runtime: lo que solo corre en el servidor y traiga
+dependencias pesadas va en `src/server.ts`.
