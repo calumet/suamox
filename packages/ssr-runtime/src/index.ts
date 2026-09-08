@@ -185,16 +185,39 @@ const UNSAFE_REDIRECT_PROTOCOLS = new Set([
   "filesystem:",
 ]);
 
+const defaultRedirectBase = (): string =>
+  typeof window !== "undefined" ? window.location.origin : "http://localhost";
+
 /**
- * Valida que una URL de redirect no use protocolos peligrosos.
- * Usar antes de redirigir con URLs que provienen de input del usuario.
+ * Comprueba solo el **protocolo**: bloquea `javascript:`, `data:` y compania.
+ * Un destino en otro origen lo da por bueno, que es lo correcto para un
+ * `redirect("https://checkout.stripe.com/...")` salido del codigo de la app.
+ *
+ * No alcanza para un destino que venga del usuario: para eso, `isSameOriginRedirect`.
  */
-export function isSafeRedirectUrl(location: string, baseOrigin?: string): boolean {
-  const base =
-    baseOrigin ?? (typeof window !== "undefined" ? window.location.origin : "http://localhost");
+export function hasSafeRedirectProtocol(location: string, baseOrigin?: string): boolean {
+  const base = baseOrigin ?? defaultRedirectBase();
   try {
     const url = new URL(location, base);
     return !UNSAFE_REDIRECT_PROTOCOLS.has(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Comprueba que el destino resuelva dentro del propio origen. Es lo que hay que
+ * usar cuando la URL viene del usuario —un `?returnTo=`, un campo de formulario—,
+ * porque cierra el open redirect.
+ *
+ * Cubre las formas que no lo parecen: `//evil.com` y `/\evil.com` resuelven las dos
+ * al origen `evil.com`, porque el parser de URL trata `\` como `/`. Un protocolo
+ * peligroso tampoco pasa: su origen nunca coincide con el de la app.
+ */
+export function isSameOriginRedirect(location: string, baseOrigin?: string): boolean {
+  const base = baseOrigin ?? defaultRedirectBase();
+  try {
+    return new URL(location, base).origin === new URL(base).origin;
   } catch {
     return false;
   }
@@ -305,14 +328,54 @@ export function resolveRoutePathname(pathname: string): string {
   return applyReroute(normalizePathname(decoded));
 }
 
+const splitPath = (value: string): string[] => value.split("/").filter(Boolean);
+
+type CompiledRoute =
+  | { kind: "static"; path: string }
+  | { kind: "dynamic"; parts: readonly string[] }
+  | { kind: "catchAll"; baseParts: readonly string[]; paramName: string };
+
+/**
+ * El patron de una ruta no cambia nunca, pero `matchRoute` recorre la tabla entera
+ * en cada peticion, en cada navegacion y en cada hover sobre un enlace. En WeakMap
+ * para que un rebuild del module graph no deje entradas colgadas.
+ */
+const compiledRoutes = new WeakMap<RouteRecord, CompiledRoute>();
+
+function compileRoute(route: RouteRecord): CompiledRoute {
+  const cached = compiledRoutes.get(route);
+  if (cached) {
+    return cached;
+  }
+
+  const pattern = route.path;
+  let compiled: CompiledRoute;
+
+  if (!pattern.includes(":") && !pattern.includes("*")) {
+    compiled = { kind: "static", path: pattern };
+  } else if (pattern.endsWith("/*")) {
+    compiled = {
+      kind: "catchAll",
+      baseParts: splitPath(pattern.slice(0, -2)),
+      paramName: route.params[route.params.length - 1] ?? "all",
+    };
+  } else {
+    compiled = { kind: "dynamic", parts: splitPath(pattern) };
+  }
+
+  compiledRoutes.set(route, compiled);
+  return compiled;
+}
+
 /**
  * Hace match de un pathname contra rutas y extrae params
  */
 export function matchRoute(routes: RouteRecord[], pathname: string): MatchResult | null {
   const target = resolveRoutePathname(pathname);
+  const targetParts = splitPath(target);
 
   for (const route of routes) {
-    const match = matchPattern(route, target);
+    const match = matchPattern(compileRoute(route), target, targetParts);
     if (match) {
       return {
         route,
@@ -326,26 +389,20 @@ export function matchRoute(routes: RouteRecord[], pathname: string): MatchResult
 }
 
 /**
- * Hace match de un patrón de ruta contra un pathname
+ * Hace match de un patrón ya compilado contra un pathname y sus segmentos.
+ * Recibe los segmentos partidos porque `matchRoute` los reusa para toda la tabla.
  */
 function matchPattern(
-  route: RouteRecord,
+  compiled: CompiledRoute,
   pathname: string,
+  pathParts: readonly string[],
 ): { params: Record<string, string> } | null {
-  const pattern = route.path;
-  // Manejar match exacto para rutas estáticas
-  if (!pattern.includes(":") && !pattern.includes("*")) {
-    return pattern === pathname ? { params: {} } : null;
+  if (compiled.kind === "static") {
+    return compiled.path === pathname ? { params: {} } : null;
   }
 
-  const patternParts = pattern.split("/").filter(Boolean);
-  const pathParts = pathname.split("/").filter(Boolean);
-
-  // Ruta catch-all
-  if (pattern.endsWith("/*")) {
-    const basePattern = pattern.slice(0, -2);
-    const baseParts = basePattern.split("/").filter(Boolean);
-
+  if (compiled.kind === "catchAll") {
+    const { baseParts, paramName } = compiled;
     const params: Record<string, string> = {};
 
     // Verificar si coincide la base y extraer params dinámicos
@@ -367,29 +424,24 @@ function matchPattern(
       }
     }
 
-    // Extraer parámetro catch-all
-    const catchAllParts = pathParts.slice(baseParts.length);
-    const catchAllParamName = route.params[route.params.length - 1] ?? "all";
-    params[catchAllParamName] = catchAllParts.join("/");
-
+    params[paramName] = pathParts.slice(baseParts.length).join("/");
     return { params };
   }
 
-  // Match de rutas dinámicas
-  if (patternParts.length !== pathParts.length) {
+  const { parts } = compiled;
+  if (parts.length !== pathParts.length) {
     return null;
   }
 
   const params: Record<string, string> = {};
 
-  for (let i = 0; i < patternParts.length; i++) {
-    const patternPart = patternParts[i]!;
+  for (let i = 0; i < parts.length; i++) {
+    const patternPart = parts[i]!;
     const pathPart = pathParts[i]!;
 
     if (patternPart.startsWith(":")) {
       // Parámetro dinámico
-      const paramName = patternPart.slice(1);
-      params[paramName] = pathPart;
+      params[patternPart.slice(1)] = pathPart;
     } else if (patternPart !== pathPart) {
       // La parte estática no coincide
       return null;
