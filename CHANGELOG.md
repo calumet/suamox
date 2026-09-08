@@ -2,6 +2,22 @@
 
 ## 0.13.0 (2026-09-08)
 
+### Breaking Changes
+
+- **`router`: `revalidar()` pasa a llamarse `revalidate()`.** El API publico esta en ingles (`loader`, `getStaticPaths`, `prerender`, `onRequest`) y esta era la unica excepcion. Afecta a la funcion del paquete y al metodo de `RouterInstance`.
+
+  Migracion: renombra los usos.
+
+  ```diff
+  - import { revalidar } from "@calumet/suamox-router";
+  - await revalidar();
+  + import { revalidate } from "@calumet/suamox-router";
+  + await revalidate();
+
+  - await router.revalidar();
+  + await router.revalidate();
+  ```
+
 ### Features
 
 - **`reroute`: traducir la URL a una ruta antes de casar.** Un `src/reroute.ts` que exporte `reroute(pathname)` decide contra que ruta se casa cada URL, sin tocar la barra de direcciones. El caso que lo motiva es el prefijo de idioma: `src/pages/` deja de saber que existen los idiomas, y `/en/mision-y-vision` y `/mision-y-vision` casan los dos `[slug].tsx`.

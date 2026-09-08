@@ -45,7 +45,7 @@ startRouter(options): Promise<RouterInstance>
 `RouterInstance`:
 
 - `navigate(to, options?)`: navegación programática.
-- `revalidar()`: vuelve a ejecutar los loaders de la ruta activa (igual que el `revalidar()` del paquete).
+- `revalidate()`: vuelve a ejecutar los loaders de la ruta activa (igual que el `revalidate()` del paquete).
 - `dispose()`: limpia listeners del router.
 
 ## Navegación programática
@@ -66,15 +66,15 @@ await router.navigate("/perfil", { replace: true, scroll: false });
 Vuelve a ejecutar los loaders de la ruta activa, incluidos los de sus layouts, y actualiza lo que devuelve `useLoaderData()`. Sirve para refrescar la pantalla después de una escritura sin recargarla entera:
 
 ```tsx
-import { revalidar } from "@calumet/suamox-router";
+import { revalidate } from "@calumet/suamox-router";
 
 async function guardar(body: FormData) {
   await fetch("/api/configuracion", { method: "PUT", body });
-  await revalidar();
+  await revalidate();
 }
 ```
 
-`revalidar()` del paquete apunta al router activo, así que puedes llamarlo desde cualquier componente sin guardar la instancia de `startRouter()`. La instancia también lo expone (`router.revalidar()`); es la misma función. Si lo llamas antes de que el router se registre, la revalidación queda pendiente y corre en cuanto hay router.
+`revalidate()` del paquete apunta al router activo, así que puedes llamarlo desde cualquier componente sin guardar la instancia de `startRouter()`. La instancia también lo expone (`router.revalidate()`); es la misma función. Si lo llamas antes de que el router se registre, la revalidación queda pendiente y corre en cuanto hay router.
 
 La promesa resuelve cuando la pantalla ya tiene los datos nuevos, así que sirve para pintar un estado de pendiente. Si un loader falla, la promesa rechaza y los datos anteriores se quedan en pantalla.
 

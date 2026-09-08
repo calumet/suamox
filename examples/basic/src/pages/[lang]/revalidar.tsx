@@ -1,5 +1,5 @@
 import type { LoaderContext } from "@calumet/suamox";
-import { revalidar } from "@calumet/suamox-router";
+import { revalidate } from "@calumet/suamox-router";
 import { useEffect, useState } from "react";
 
 let ticks = 0;
@@ -18,7 +18,7 @@ export default function RevalidarPage({ data }: { data: { ticks: number } | null
   const onClick = async (): Promise<void> => {
     setPendiente(true);
     try {
-      await revalidar();
+      await revalidate();
     } finally {
       setPendiente(false);
     }
