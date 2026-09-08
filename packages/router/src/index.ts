@@ -373,6 +373,8 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
   const revalidateRoute = (): Promise<void> =>
     renderLocation(new URL(window.location.href), { scroll: false, revalidate: true });
 
+  let lastPrefetchPath: string | null = null;
+
   const prefetchRoute = (url: URL): void => {
     if (url.origin !== window.location.origin) {
       return;
@@ -380,7 +382,15 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     if (isSameDocumentHash(url)) {
       return;
     }
-    const match = resolveMatch(routes, stripBase(url.pathname, base));
+    const path = stripBase(url.pathname, base);
+    // Un solo hover dispara decenas de mouseover: sin esto se re-casa la ruta,
+    // y con ella el reroute de la app, en cada pasada del puntero
+    if (path === lastPrefetchPath) {
+      return;
+    }
+    lastPrefetchPath = path;
+
+    const match = resolveMatch(routes, path);
     if (!match || !match.route.load) {
       return;
     }
@@ -392,6 +402,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
       .then(() => {})
       .catch(() => {
         prefetched.delete(key);
+        lastPrefetchPath = null;
       });
     prefetched.set(key, loadPromise);
   };

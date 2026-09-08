@@ -93,4 +93,35 @@ describe("reroute", () => {
 
     expect(matchRoute(routes, "/x")?.pathname).toBe("/ingresar");
   });
+
+  // `/\evil.com` y `//evil.com` resuelven al origen evil.com, no a una ruta
+  it.each(["//evil.com", "/\\evil.com", "\\\\evil.com", "/\\/evil.com"])(
+    "no deja que %s salga del origen",
+    (salida) => {
+      registerReroute(() => salida);
+
+      const pathname = matchRoute(routes, "/x")?.pathname ?? "/";
+      expect(new URL(pathname, "http://app.example").origin).toBe("http://app.example");
+    },
+  );
+
+  it("tampoco lo deja pasar sin reroute, al decodificar la URL", () => {
+    const pathname = matchRoute(routes, "/%5Cevil.com")?.pathname ?? "/";
+
+    expect(new URL(pathname, "http://app.example").origin).toBe("http://app.example");
+  });
+
+  it("un hook que lanza avisa una vez, no en cada peticion", () => {
+    const errores = vi.spyOn(console, "error").mockImplementation(() => {});
+    registerReroute(() => {
+      throw new Error("boom");
+    });
+
+    for (let i = 0; i < 20; i++) {
+      matchRoute(routes, "/mision-y-vision");
+    }
+
+    expect(errores).toHaveBeenCalledTimes(1);
+    errores.mockRestore();
+  });
 });

@@ -266,6 +266,23 @@ const rerouteStore = globalThis as typeof globalThis & { [rerouteKey]?: RerouteF
  */
 export function registerReroute(fn: RerouteFn | null): void {
   rerouteStore[rerouteKey] = fn ?? null;
+  rerouteErrorReported = false;
+}
+
+let rerouteErrorReported = false;
+
+/**
+ * Deja el pathname con exactamente una barra inicial y sin la final.
+ *
+ * El parser de URL trata `\` como `/` en esquemas especiales, asi que tanto
+ * `//evil.com` como `/\evil.com` resuelven al origen `evil.com` y no a una ruta.
+ * Este valor acaba en `context.pathname`, que las guias tratan como de confianza.
+ */
+function normalizePathname(pathname: string): string {
+  const withLeadingSlash = `/${pathname.replace(/^[/\\]+/, "")}`;
+  return withLeadingSlash !== "/" && withLeadingSlash.endsWith("/")
+    ? withLeadingSlash.slice(0, -1)
+    : withLeadingSlash;
 }
 
 function applyReroute(pathname: string): string {
@@ -278,37 +295,38 @@ function applyReroute(pathname: string): string {
   try {
     rerouted = reroute(pathname);
   } catch (error) {
-    // Es codigo de la app y corre en cada match: que falle no puede tumbar la peticion
-    console.error("[suamox] reroute threw, using the requested pathname:", error);
+    // Es codigo de la app y corre en cada match: que falle no puede tumbar la
+    // peticion. Se avisa una vez porque si no, un hook roto inunda el log
+    if (!rerouteErrorReported) {
+      rerouteErrorReported = true;
+      console.error("[suamox] reroute threw, using the requested pathname:", error);
+    }
     return pathname;
   }
 
-  if (typeof rerouted !== "string") {
-    return pathname;
+  return typeof rerouted === "string" ? normalizePathname(rerouted) : pathname;
+}
+
+/**
+ * Traduce una URL a la ruta contra la que hay que casar: la decodifica, la
+ * normaliza y le aplica el reroute. Es lo que el middleware tiene que ver, y el
+ * adaptador la llama directamente para no depender de que `matchRoute` case.
+ */
+export function resolveRoutePathname(pathname: string): string {
+  let decoded = pathname === "" ? "/" : pathname;
+  try {
+    decoded = decodeURIComponent(decoded);
+  } catch {
+    // Secuencias % inválidas, usar el path original
   }
-  // `//algo` sale del origen actual al resolverse como URL, asi que se colapsa
-  const normalized = `/${rerouted.replace(/^\/+/, "")}`;
-  return normalized !== "/" && normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+  return applyReroute(normalizePathname(decoded));
 }
 
 /**
  * Hace match de un pathname contra rutas y extrae params
  */
 export function matchRoute(routes: RouteRecord[], pathname: string): MatchResult | null {
-  // Normalizar pathname y decodificar URL encoding
-  let normalizedPath = pathname === "" ? "/" : pathname;
-  try {
-    normalizedPath = decodeURIComponent(normalizedPath);
-  } catch {
-    // Secuencias % inválidas, usar el path original
-  }
-  // Normalizar trailing slash (excepto root "/")
-  if (normalizedPath !== "/" && normalizedPath.endsWith("/")) {
-    normalizedPath = normalizedPath.slice(0, -1);
-  }
-
-  // El reroute corre despues de normalizar y su salida no se vuelve a decodificar
-  const target = applyReroute(normalizedPath);
+  const target = resolveRoutePathname(pathname);
 
   for (const route of routes) {
     const match = matchPattern(route, target);

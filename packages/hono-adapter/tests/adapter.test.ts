@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { RedirectResponse, stripBase } from "@calumet/suamox";
+import { RedirectResponse, registerReroute, stripBase } from "@calumet/suamox";
 import type { RenderOptions, RenderResult } from "@calumet/suamox";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,6 +23,9 @@ vi.mock("@calumet/suamox", async (importOriginal) => {
     serializeData: mocks.serializeData,
     matchRoute: mocks.matchRoute,
     resolveRouteModule: mocks.resolveRouteModule,
+    // El real: es el que traduce la URL para el middleware y lo que se prueba
+    resolveRoutePathname: actual.resolveRoutePathname,
+    registerReroute: actual.registerReroute,
     stripBase: actual.stripBase,
     RedirectResponse: actual.RedirectResponse,
   };
@@ -879,11 +882,13 @@ describe("createDevHandler middleware", () => {
     expect(pathname).toBe("/panel");
   });
 
-  // Si el middleware viera la URL pedida, un alias saltaria cualquier guardia por ruta
+  // Si el middleware viera la URL pedida, un alias saltaria cualquier guardia por ruta.
+  // No se lee de `match`: un entry-server puede exportar su propio matchRoute
   it("receives the rerouted pathname, not the requested one", async () => {
     const route = { path: "/panel", params: [], loader: vi.fn(() => Promise.resolve(null)) };
-    mocks.matchRoute.mockReturnValue({ route, params: {}, pathname: "/panel" });
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
     mocks.resolveRouteModule.mockResolvedValue(route);
+    registerReroute((p) => (p.startsWith("/alias/") ? p.slice(6) : undefined));
 
     let pathname: string | undefined;
     const middlewareFn = vi.fn(async (ctx: { pathname: string }, next: () => Promise<Response>) => {
@@ -901,8 +906,35 @@ describe("createDevHandler middleware", () => {
 
     const app = createDevHandler({ vite });
     await app.request("http://localhost/__data?path=/alias/panel");
+    registerReroute(null);
 
     expect(pathname).toBe("/panel");
+  });
+
+  // `/\evil.com` resuelve al origen evil.com, y las guias dicen que confies en pathname
+  it("never hands the middleware a pathname that resolves off-origin", async () => {
+    const route = { path: "/*", params: ["all"], loader: vi.fn(() => Promise.resolve(null)) };
+    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    let pathname: string | undefined;
+    const middlewareFn = vi.fn(async (ctx: { pathname: string }, next: () => Promise<Response>) => {
+      pathname = ctx.pathname;
+      return next();
+    });
+
+    const vite = {
+      environments: {
+        ssr: { runner: { import: createSsrImport([route], middlewareFn) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite });
+    await app.request("http://localhost/__data?path=/%5Cevil.com");
+
+    expect(new URL(pathname!, "http://app.example").origin).toBe("http://app.example");
   });
 
   it("translates a redirect thrown by the middleware into a 302", async () => {

@@ -17,6 +17,7 @@ import {
   generateHTML,
   matchRoute,
   renderPage,
+  resolveRoutePathname,
   resolveRouteModule,
   serializeData,
   stripBase,
@@ -505,7 +506,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         middlewareFn,
         c.req.raw,
         url,
-        match.pathname ?? strippedPathname,
+        resolveRoutePathname(strippedPathname),
         match.params,
         async (locals) => {
           const method = c.req.method.toUpperCase();
@@ -576,7 +577,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         middlewareFn,
         c.req.raw,
         reqUrl,
-        match.pathname ?? strippedPathname,
+        resolveRoutePathname(strippedPathname),
         match.params,
         async (locals) => {
           const loaderUrl = new URL(path, reqUrl.origin);
@@ -674,7 +675,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         middlewareFn,
         c.req.raw,
         url,
-        match?.pathname ?? strippedPathname,
+        resolveRoutePathname(strippedPathname),
         match?.params ?? {},
         async (locals) => {
           // Resolver módulo de ruta para detectar prerender y getStaticPaths
@@ -1084,7 +1085,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         entry.onRequest,
         safeRequest,
         safeUrl,
-        match.pathname ?? strippedPathname,
+        resolveRoutePathname(strippedPathname),
         match.params,
         async (locals) => {
           const method = c.req.method.toUpperCase();
@@ -1149,7 +1150,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         entry.onRequest,
         safeRequest,
         safeUrl,
-        match.pathname ?? strippedPathname,
+        resolveRoutePathname(strippedPathname),
         match.params,
         async (locals) => {
           const loaderUrl = new URL(path, safeOrigin);
@@ -1255,7 +1256,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         entry.onRequest,
         safeRequest,
         safeUrl,
-        match?.pathname ?? strippedPathname,
+        resolveRoutePathname(strippedPathname),
         match?.params ?? {},
         async (locals) => {
           // Ejecutar hook onBeforeRender

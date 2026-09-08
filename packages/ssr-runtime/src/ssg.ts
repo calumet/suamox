@@ -4,7 +4,14 @@ import { pathToFileURL } from "node:url";
 
 import { hashInlineScript } from "./csp";
 
-import { generateHTML, matchRoute, registerReroute, renderPage, resolveRouteModule } from "./index";
+import {
+  generateHTML,
+  matchRoute,
+  registerReroute,
+  renderPage,
+  resolveRoutePathname,
+  resolveRouteModule,
+} from "./index";
 import type { RerouteFn, RouteRecord } from "./index";
 
 interface PrerenderAssets {
@@ -256,9 +263,10 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
   ): Promise<void> => {
     await renderRoute(pathname, route, props);
     for (const variant of variants?.(pathname) ?? []) {
-      // Sin un reroute que devuelva la variante a su ruta canonica el HTML
-      // saldria siendo un 404, y en silencio
-      if (matchRoute(routes, variant)?.route !== route) {
+      // Sin un reroute que devuelva la variante a esta misma pagina el HTML
+      // saldria siendo un 404, o el de otra entrada de getStaticPaths, y en silencio
+      const back = matchRoute(routes, variant);
+      if (back?.route !== route || back.pathname !== resolveRoutePathname(pathname)) {
         console.warn(`[suamox] Variant ${variant} does not reroute back to ${pathname}. Skipping.`);
         continue;
       }
@@ -350,7 +358,11 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
     routeVariants?: (pathname: string) => string[];
   };
 
-  registerReroute(serverModule.routeReroute ?? null);
+  // Solo si el entry lo re-exporta: el `import()` de arriba ya ejecuto el registro
+  // que hace `virtual:pages/server`, y un `null` aqui lo borraria
+  if (serverModule.routeReroute) {
+    registerReroute(serverModule.routeReroute);
+  }
 
   if (!serverModule.routes) {
     throw new Error("SSR entry must export routes.");
