@@ -3,12 +3,12 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { hashInlineScript } from "./csp";
+import { renderPage } from "./server";
 
 import {
   generateHTML,
   matchRoute,
   registerReroute,
-  renderPage,
   resolveRoutePathname,
   resolveRouteModule,
 } from "./index";

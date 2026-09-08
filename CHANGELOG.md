@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.14.0 (2026-09-08)
+
+### Breaking Changes
+
+- **`ssr-runtime`: `renderPage` se mueve a `@calumet/suamox/server`.** Era la unica pieza del entry principal que importaba `react-dom/server`, y ese import estatico arrastraba la libreria entera al bundle del navegador.
+
+  Migracion: cambia el import. Solo afecta a codigo de servidor —adaptadores y entries SSR—; nada del navegador lo usaba.
+
+  ```diff
+  - import { renderPage } from "@calumet/suamox";
+  + import { renderPage } from "@calumet/suamox/server";
+  ```
+
+  Si declaras los tipos de `virtual:pages/server` a mano, actualiza tambien esa linea:
+
+  ```diff
+  - export const renderPage: typeof import("@calumet/suamox").renderPage;
+  + export const renderPage: typeof import("@calumet/suamox/server").renderPage;
+  ```
+
+### Correcciones
+
+- **`react-dom/server` viajaba entero al navegador: 197 KB que nunca se ejecutaban.** `react-dom` no declara `sideEffects: false`, asi que Rollup no podia sacudirlo, y cualquier chunk que tocara `@calumet/suamox` —el router lo toca siempre— lo arrastraba. Ademas iba con `<link rel="modulepreload">` en el HTML, o sea que se descargaba y parseaba en cada visita.
+
+  Medido sobre `examples/basic`: el JS del cliente pasa de **453.667 a 256.429 bytes**, un 43% menos. El chunk de 197.238 bytes con `renderToStaticMarkup`, `renderToString` y `renderToReadableStream` desaparece, y ya no aparece en la lista de precarga.
+
+  Cierra #30.
+
 ## 0.13.0 (2026-09-08)
 
 ### Breaking Changes

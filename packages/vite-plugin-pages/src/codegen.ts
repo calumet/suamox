@@ -155,7 +155,8 @@ export function generateRoutesModule(
   // El middleware solo se incluye en el bundle del servidor, nunca en el cliente.
   const runtimeReExports =
     target === "server"
-      ? `\nexport { renderPage, matchRoute, resolveRouteModule, RedirectResponse } from "@calumet/suamox";\n` +
+      ? `\nexport { matchRoute, resolveRouteModule, RedirectResponse } from "@calumet/suamox";\n` +
+        `export { renderPage } from "@calumet/suamox/server";\n` +
         (hasMiddleware && middlewarePath
           ? `export { onRequest } from ${JSON.stringify(middlewarePath)};\n`
           : "")

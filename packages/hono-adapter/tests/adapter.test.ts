@@ -46,6 +46,9 @@ const createSsrImport = (routes: unknown[], middlewareFn?: unknown) =>
     if (id === "@calumet/suamox") {
       return Promise.resolve(runtimeModule);
     }
+    if (id === "@calumet/suamox/server") {
+      return Promise.resolve({ renderPage: mocks.renderPage });
+    }
     if (id === "virtual:pages/server") {
       return Promise.resolve({
         routes,

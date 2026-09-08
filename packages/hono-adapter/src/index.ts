@@ -16,12 +16,12 @@ import {
   RedirectResponse,
   generateHTML,
   matchRoute,
-  renderPage,
   resolveRoutePathname,
   resolveRouteModule,
   serializeData,
   stripBase,
 } from "@calumet/suamox";
+import { renderPage } from "@calumet/suamox/server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import type { Context } from "hono";
 import { Hono } from "hono";
@@ -465,6 +465,11 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
   const loadRuntime = () =>
     ssrRunner(vite).import<typeof import("@calumet/suamox")>("@calumet/suamox");
 
+  // `renderPage` vive aparte para que `react-dom/server` no llegue al bundle del
+  // navegador, pero tiene que salir del mismo runner por la misma razon
+  const loadServerRuntime = () =>
+    ssrRunner(vite).import<typeof import("@calumet/suamox/server")>("@calumet/suamox/server");
+
   const loadMiddleware = async (): Promise<MiddlewareFunction | undefined> => {
     const mod = await ssrRunner(vite).import<{ onRequest?: MiddlewareFunction }>(
       "virtual:pages/server",
@@ -708,7 +713,8 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
           }
 
           // Renderizar página
-          let result = await runtime.renderPage(renderContext);
+          const serverRuntime = await loadServerRuntime();
+          let result = await serverRuntime.renderPage(renderContext);
 
           // Ejecutar hook onAfterRender
           if (onAfterRender) {
