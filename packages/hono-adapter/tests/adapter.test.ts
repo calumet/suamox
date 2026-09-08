@@ -855,7 +855,7 @@ describe("createDevHandler middleware", () => {
 
   it("receives the requested route as pathname on /__data", async () => {
     const route = { path: "/panel", params: [], loader: vi.fn(() => Promise.resolve(null)) };
-    mocks.matchRoute.mockReturnValue({ route, params: {} });
+    mocks.matchRoute.mockReturnValue({ route, params: {}, pathname: "/panel" });
     mocks.resolveRouteModule.mockResolvedValue(route);
 
     let pathname: string | undefined;
@@ -876,6 +876,32 @@ describe("createDevHandler middleware", () => {
     const response = await app.request("http://localhost/__data?path=/panel");
 
     expect(response.status).toBe(200);
+    expect(pathname).toBe("/panel");
+  });
+
+  // Si el middleware viera la URL pedida, un alias saltaria cualquier guardia por ruta
+  it("receives the rerouted pathname, not the requested one", async () => {
+    const route = { path: "/panel", params: [], loader: vi.fn(() => Promise.resolve(null)) };
+    mocks.matchRoute.mockReturnValue({ route, params: {}, pathname: "/panel" });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    let pathname: string | undefined;
+    const middlewareFn = vi.fn(async (ctx: { pathname: string }, next: () => Promise<Response>) => {
+      pathname = ctx.pathname;
+      return next();
+    });
+
+    const vite = {
+      environments: {
+        ssr: { runner: { import: createSsrImport([route], middlewareFn) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite });
+    await app.request("http://localhost/__data?path=/alias/panel");
+
     expect(pathname).toBe("/panel");
   });
 

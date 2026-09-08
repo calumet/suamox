@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { matchRoute, registerReroute } from "../src/index";
 import type { RouteRecord } from "../src/index";
@@ -68,5 +68,29 @@ describe("reroute", () => {
     registerReroute(null);
 
     expect(matchRoute(routes, "/mision-y-vision")?.route.path).toBe("/:slug");
+  });
+
+  it("devuelve el pathname contra el que caso, para que el middleware lo use", () => {
+    registerReroute((pathname) => (pathname === "/en/ingresar" ? "/ingresar" : undefined));
+
+    expect(matchRoute(routes, "/en/ingresar")?.pathname).toBe("/ingresar");
+    expect(matchRoute(routes, "/ingresar/")?.pathname).toBe("/ingresar");
+  });
+
+  it("un hook que lanza no tumba el match", () => {
+    const errores = vi.spyOn(console, "error").mockImplementation(() => {});
+    registerReroute(() => {
+      throw new Error("boom");
+    });
+
+    expect(matchRoute(routes, "/mision-y-vision")?.route.path).toBe("/:slug");
+    expect(errores).toHaveBeenCalled();
+    errores.mockRestore();
+  });
+
+  it("colapsa las barras iniciales de la salida", () => {
+    registerReroute(() => "//ingresar");
+
+    expect(matchRoute(routes, "/x")?.pathname).toBe("/ingresar");
   });
 });

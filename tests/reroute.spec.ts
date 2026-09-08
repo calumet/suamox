@@ -64,6 +64,22 @@ test.describe("reroute", () => {
     await expect(page.locator("h1")).toHaveText("Counter");
   });
 
+  // El middleware ve la ruta rerouteada: si viera la pedida, el alias saltaria el guardia
+  test("el guardia del middleware tambien corta la URL con alias", async ({ page }) => {
+    await page.goto("/mx/protegido");
+
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.locator("h1")).toHaveText("Welcome to Suamox");
+  });
+
+  test("el guardia tambien corta por el endpoint de datos", async ({ request }) => {
+    const response = await request.get("/__data?path=/mx/protegido", {
+      headers: { "sec-fetch-site": "same-origin" },
+    });
+
+    expect(await response.text()).toContain("__redirect");
+  });
+
   test("las variantes del alias se prerenderizan", async ({ page }, testInfo) => {
     const response = await page.goto("/mx/blog/hello-world");
 

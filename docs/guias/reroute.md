@@ -53,7 +53,8 @@ Sirve igual para URLs traducidas (`/fr/a-propos` -> `/about`), alias y migracion
 
 - **Tiene que ser pura.** La misma entrada da siempre la misma salida, sin fetch ni estado.
 - **Corre en cliente y servidor.** Es la razón de que viva en un archivo propio y no en `src/middleware.ts`, que es solo del servidor: si los dos lados no casaran la misma ruta, la hidratación no coincidiría.
-- **Aplica también a `/api/`**, porque todo el match pasa por el mismo sitio.
+- **No aplica a `/api/`.** El servidor enruta las peticiones de API por el path crudo, antes de casar, así que un alias no las alcanza: `/en/api/algo` no llega al handler, cae en las páginas.
+- **El middleware ve la ruta ya traducida.** `context.pathname` es contra lo que se casó, no lo que pidió el navegador, para que un guardia y la página que se renderiza nunca discrepen. La URL original sigue en `context.url`.
 - Viaja al bundle del cliente, así que no importes nada pesado ni nada de servidor.
 - Crear el archivo por primera vez pide reiniciar el dev server; editarlo no.
 

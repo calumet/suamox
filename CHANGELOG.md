@@ -36,6 +36,10 @@
 
   El hook se registra en el modulo generado de **cliente y servidor**, al reves que el middleware, que es solo del servidor: si un lado casara una ruta distinta del otro, la hidratacion no coincidiria. Por eso vive en su propio archivo y no en `src/middleware.ts`.
 
+  `context.pathname` del middleware pasa a ser **la ruta que caso**, con el reroute ya aplicado, en SSR, en `/__data` y en las rutas de API. Si siguiera siendo la URL pedida, un guardia por ruta se evaluaria sobre una direccion y se renderizaria otra: con un alias `/mx/*` y un `pathname.startsWith("/protegido")`, `/mx/protegido` servia la pagina protegida. `matchRoute` devuelve ese pathname en `MatchResult.pathname`. La URL original sigue intacta en `context.url`.
+
+  El reroute **no** alcanza a `/api/`: el servidor enruta esas peticiones por el path crudo, antes de casar.
+
   Esto es lo que el segmento opcional `[[lang]]` no puede hacer. `[[lang]]/[slug].tsx` genera `/:lang` y `/:slug`, que casan las mismas URLs, y nada en el patron permite saber si `/mision-y-vision` es el idioma o el slug: es ambiguo, no dificil. Remix documenta la misma ambiguedad y la resuelve casando avidamente mas un redirect en el loader; con reroute el idioma no entra a la tabla de rutas y la ambiguedad no llega a existir.
 
   Ver [reroute](./docs/guias/reroute.md).

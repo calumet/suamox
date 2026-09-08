@@ -54,7 +54,7 @@ export interface LoaderContext {
 export interface MiddlewareContext {
   request: Request;
   url: URL;
-  /** Ruta de la pagina pedida, sin `base`. En `/__data` es la ruta pedida, no `/__data`. */
+  /** Ruta que caso, sin `base` y con el reroute aplicado. En `/__data` es la pagina, no `/__data`. */
   pathname: string;
   params: Record<string, string>;
   locals: Record<string, unknown>;
@@ -210,6 +210,12 @@ export function isSafeRedirectUrl(location: string, baseOrigin?: string): boolea
 export interface MatchResult {
   route: RouteRecord;
   params: Record<string, string>;
+  /**
+   * Ruta contra la que se caso, ya normalizada y con el reroute aplicado.
+   * Opcional porque el adaptador puede recibir un `matchRoute` de una version
+   * anterior del runtime, que no lo devuelve.
+   */
+  pathname?: string;
 }
 
 export interface RenderOptions {
@@ -248,7 +254,10 @@ const renderHeadToString = (nodes: React.ReactNode[]): string => {
 
 export type RerouteFn = (pathname: string) => string | void;
 
-let activeReroute: RerouteFn | null = null;
+// En globalThis, como el contexto de head y el de client-value: el adaptador y
+// la app pueden cargar copias distintas del modulo y las dos tienen que casar igual
+const rerouteKey = Symbol.for("suamox.reroute");
+const rerouteStore = globalThis as typeof globalThis & { [rerouteKey]?: RerouteFn | null };
 
 /**
  * Registra el hook que traduce una URL a la ruta que debe casar.
@@ -256,21 +265,30 @@ let activeReroute: RerouteFn | null = null;
  * dos, cada lado casaria una ruta distinta y la hidratacion no coincidiria.
  */
 export function registerReroute(fn: RerouteFn | null): void {
-  activeReroute = fn ?? null;
+  rerouteStore[rerouteKey] = fn ?? null;
 }
 
 function applyReroute(pathname: string): string {
-  if (!activeReroute) {
+  const reroute = rerouteStore[rerouteKey];
+  if (!reroute) {
     return pathname;
   }
-  const rerouted = activeReroute(pathname);
+
+  let rerouted: string | void;
+  try {
+    rerouted = reroute(pathname);
+  } catch (error) {
+    // Es codigo de la app y corre en cada match: que falle no puede tumbar la peticion
+    console.error("[suamox] reroute threw, using the requested pathname:", error);
+    return pathname;
+  }
+
   if (typeof rerouted !== "string") {
     return pathname;
   }
-  const withLeadingSlash = rerouted.startsWith("/") ? rerouted : `/${rerouted}`;
-  return withLeadingSlash !== "/" && withLeadingSlash.endsWith("/")
-    ? withLeadingSlash.slice(0, -1)
-    : withLeadingSlash;
+  // `//algo` sale del origen actual al resolverse como URL, asi que se colapsa
+  const normalized = `/${rerouted.replace(/^\/+/, "")}`;
+  return normalized !== "/" && normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
 }
 
 /**
@@ -298,6 +316,7 @@ export function matchRoute(routes: RouteRecord[], pathname: string): MatchResult
       return {
         route,
         params: match.params,
+        pathname: target,
       };
     }
   }
