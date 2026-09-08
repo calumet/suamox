@@ -400,6 +400,45 @@ describe("scanRoutes middleware detection", () => {
   });
 });
 
+describe("scanRoutes reroute detection", () => {
+  it("detects src/reroute.ts when present", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+
+    await writeFileWithDirs(
+      join(pagesDir, "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+    await writeFileWithDirs(join(root, "src", "reroute.ts"), "export function reroute() {}");
+
+    const result = await scanRoutes({
+      pagesDir: "src/pages",
+      extensions: [".tsx", ".ts"],
+      root,
+    });
+
+    expect(result.reroutePath?.endsWith("/src/reroute.ts")).toBe(true);
+  });
+
+  it("leaves reroutePath undefined when the file does not exist", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+
+    await writeFileWithDirs(
+      join(pagesDir, "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+
+    const result = await scanRoutes({
+      pagesDir: "src/pages",
+      extensions: [".tsx", ".ts"],
+      root,
+    });
+
+    expect(result.reroutePath).toBeUndefined();
+  });
+});
+
 describe("API route scanning", () => {
   it("detects API routes in src/api/ directory", async () => {
     const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));

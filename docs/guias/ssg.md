@@ -24,6 +24,10 @@ export async function getStaticPaths() {
 }
 ```
 
+## Variantes del reroute
+
+Las URLs que solo existen por [reroute](./reroute.md) no están en la tabla de rutas, así que el prerenderizado no las ve. Exporta `variants` desde `src/reroute.ts` y el SSG escribe además esas URLs por cada página que ya iba a generar.
+
 ## Comandos
 
 Build completo recomendado:

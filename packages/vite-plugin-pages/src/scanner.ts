@@ -215,6 +215,7 @@ export interface ScanResult {
   errors: string[];
   hasMiddleware: boolean;
   middlewarePath?: string;
+  reroutePath?: string;
 }
 
 /**
@@ -383,11 +384,25 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     }
   }
 
+  // Detectar reroute global (src/reroute.ts)
+  let reroutePath: string | undefined;
+  for (const ext of extensions) {
+    const candidate = resolve(srcDir, `reroute${ext}`);
+    try {
+      await access(candidate);
+      reroutePath = candidate.replace(/\\/g, "/");
+      break;
+    } catch {
+      // no existe, continuar
+    }
+  }
+
   return {
     routes: sortedRoutes,
     apiRoutes,
     errors,
     hasMiddleware,
     middlewarePath,
+    reroutePath,
   };
 }

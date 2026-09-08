@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { createElement } from "react";
 import { beforeEach, afterEach, describe, expect, it } from "vitest";
 
+import { registerReroute } from "../src/index";
 import type { RouteRecord } from "../src/index";
 import { prerender } from "../src/ssg";
 
@@ -30,6 +31,7 @@ describe("prerender", () => {
   });
 
   afterEach(async () => {
+    registerReroute(null);
     await rm(outDir, { recursive: true, force: true });
   });
 
@@ -229,5 +231,38 @@ describe("prerender", () => {
 
     const indexHtml = await readFile(join(outDir, "index.html"), "utf-8");
     expect(indexHtml).toContain('<link rel="stylesheet" href="/client/assets/app.css">');
+  });
+
+  it("writes the variants of every prerendered pathname", async () => {
+    registerReroute((pathname) =>
+      pathname.startsWith("/en") ? pathname.slice(3) || "/" : undefined,
+    );
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/",
+        prerender: true,
+        component: (() => createElement("div", null, "Home")) as RouteRecord["component"],
+      }),
+      createMockRoute({
+        path: "/blog/:slug",
+        params: ["slug"],
+        isIndex: false,
+        prerender: true,
+        component: (() => createElement("div", null, "Post")) as RouteRecord["component"],
+        getStaticPaths: () => Promise.resolve([{ params: { slug: "hola" } }]),
+      }),
+    ];
+
+    await prerender({
+      routes,
+      outDir,
+      baseUrl: "http://localhost",
+      variants: (pathname) => [pathname === "/" ? "/en" : `/en${pathname}`],
+    });
+
+    expect(await readFile(join(outDir, "en", "index.html"), "utf-8")).toContain("Home");
+    expect(await readFile(join(outDir, "en", "blog", "hola", "index.html"), "utf-8")).toContain(
+      "Post",
+    );
   });
 });

@@ -44,6 +44,8 @@ export function loader({ params }: LoaderContext) {
 - **Lo que sigue tiene que ser estático.** `[[lang]]/[producto].tsx` y `[[lang]]/[...resto].tsx` dan error: generarían `/:producto` y `/:lang/:producto`, que casan las mismas URLs, y nada permite saber si `/bandera` es el producto `bandera` o el idioma `bandera`. Distinguirlos pide poder restringir qué valores acepta el parámetro, que es otra pieza.
 - `[[...resto]]` no existe: un catch-all ya casa cero segmentos.
 
+Si lo que buscas es el prefijo de idioma y tienes páginas con parámetro, el segmento opcional no da: usa [reroute](./reroute.md) y deja el idioma fuera de la tabla de rutas.
+
 ### Prioridad
 
 Las dos rutas del mismo archivo nunca compiten, porque tienen distinto número de segmentos. Frente a otras rutas manda la regla de siempre, estático antes que dinámico: `/ingresar` le gana a `/:lang`.

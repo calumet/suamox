@@ -246,6 +246,33 @@ const renderHeadToString = (nodes: React.ReactNode[]): string => {
   return [startTag, content, endTag].filter(Boolean).join("\n");
 };
 
+export type RerouteFn = (pathname: string) => string | void;
+
+let activeReroute: RerouteFn | null = null;
+
+/**
+ * Registra el hook que traduce una URL a la ruta que debe casar.
+ * Lo llama `virtual:pages` en cliente y servidor: si solo lo hiciera uno de los
+ * dos, cada lado casaria una ruta distinta y la hidratacion no coincidiria.
+ */
+export function registerReroute(fn: RerouteFn | null): void {
+  activeReroute = fn ?? null;
+}
+
+function applyReroute(pathname: string): string {
+  if (!activeReroute) {
+    return pathname;
+  }
+  const rerouted = activeReroute(pathname);
+  if (typeof rerouted !== "string") {
+    return pathname;
+  }
+  const withLeadingSlash = rerouted.startsWith("/") ? rerouted : `/${rerouted}`;
+  return withLeadingSlash !== "/" && withLeadingSlash.endsWith("/")
+    ? withLeadingSlash.slice(0, -1)
+    : withLeadingSlash;
+}
+
 /**
  * Hace match de un pathname contra rutas y extrae params
  */
@@ -262,8 +289,11 @@ export function matchRoute(routes: RouteRecord[], pathname: string): MatchResult
     normalizedPath = normalizedPath.slice(0, -1);
   }
 
+  // El reroute corre despues de normalizar y su salida no se vuelve a decodificar
+  const target = applyReroute(normalizedPath);
+
   for (const route of routes) {
-    const match = matchPattern(route, normalizedPath);
+    const match = matchPattern(route, target);
     if (match) {
       return {
         route,

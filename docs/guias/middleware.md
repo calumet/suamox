@@ -118,3 +118,5 @@ Este hook es diferente al middleware de `src/middleware.ts`:
 | Se incluye en el build     | Server bundle       | Codigo del servidor |
 
 Para logica de aplicacion (auth, sesion, i18n), usa `src/middleware.ts`. Para logica de infraestructura del servidor (logging de Hono, headers personalizados), usa el hook del adapter.
+
+Los dos son solo del servidor. Si lo que quieres es cambiar contra que ruta casa una URL, eso tiene que pasar tambien en el cliente: va en [`src/reroute.ts`](./reroute.md).

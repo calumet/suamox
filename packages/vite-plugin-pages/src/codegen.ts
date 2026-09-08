@@ -11,6 +11,7 @@ export interface GenerateRoutesOptions {
   target?: "client" | "server";
   hasMiddleware?: boolean;
   middlewarePath?: string;
+  reroutePath?: string;
   apiRoutes?: ApiRouteRecord[];
 }
 
@@ -27,6 +28,7 @@ export function generateRoutesModule(
     target = "client",
     hasMiddleware = false,
     middlewarePath,
+    reroutePath,
   } = options;
   const apiRoutes: ApiRouteRecord[] = options.apiRoutes ?? [];
   const defaultPrerender = defaultMode === "ssg";
@@ -132,6 +134,22 @@ export function generateRoutesModule(
 
   const normalizedBase = base.replace(/\/+$/, "") || "/";
 
+  // El reroute va en los dos modulos, al reves que el middleware: si solo lo
+  // registrara el servidor, el cliente casaria otra ruta al hidratar.
+  const rerouteCode = reroutePath
+    ? `import * as __reroute from ${JSON.stringify(reroutePath)};\n` +
+      `import { registerReroute } from "@calumet/suamox";\n` +
+      `registerReroute(__reroute.reroute);\n`
+    : "";
+
+  // El SSG corre fuera de este bundle, con otra instancia del runtime, asi que
+  // el registro de arriba no le llega: necesita las funciones para registrarlas
+  const rerouteExports =
+    target === "server" && reroutePath
+      ? `export const routeReroute = __reroute.reroute;\n` +
+        `export const routeVariants = __reroute.variants;\n`
+      : "";
+
   // En el módulo servidor, re-exportar funciones del runtime para que
   // el prod handler use la misma instancia que las páginas.
   // El middleware solo se incluye en el bundle del servidor, nunca en el cliente.
@@ -171,13 +189,13 @@ export function generateRoutesModule(
   }
 
   return `${declarations.join("\n")}
-
+${rerouteCode}
 export const routes = [
 ${routeObjects.join(",\n")}
 ];
 
 export const base = ${JSON.stringify(normalizedBase)};
-${runtimeReExports}${apiRoutesCode}
+${rerouteExports}${runtimeReExports}${apiRoutesCode}
 export default routes;
 `;
 }

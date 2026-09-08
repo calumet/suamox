@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.13.0 (2026-09-08)
+
+### Features
+
+- **`reroute`: traducir la URL a una ruta antes de casar.** Un `src/reroute.ts` que exporte `reroute(pathname)` decide contra que ruta se casa cada URL, sin tocar la barra de direcciones. El caso que lo motiva es el prefijo de idioma: `src/pages/` deja de saber que existen los idiomas, y `/en/mision-y-vision` y `/mision-y-vision` casan los dos `[slug].tsx`.
+
+  ```ts
+  // src/reroute.ts
+  const IDIOMAS = ["en"];
+
+  export function reroute(pathname: string): string | void {
+    const [, primero, ...resto] = pathname.split("/");
+    if (IDIOMAS.includes(primero)) {
+      return "/" + resto.join("/");
+    }
+  }
+  ```
+
+  El hook se registra en el modulo generado de **cliente y servidor**, al reves que el middleware, que es solo del servidor: si un lado casara una ruta distinta del otro, la hidratacion no coincidiria. Por eso vive en su propio archivo y no en `src/middleware.ts`.
+
+  Esto es lo que el segmento opcional `[[lang]]` no puede hacer. `[[lang]]/[slug].tsx` genera `/:lang` y `/:slug`, que casan las mismas URLs, y nada en el patron permite saber si `/mision-y-vision` es el idioma o el slug: es ambiguo, no dificil. Remix documenta la misma ambiguedad y la resuelve casando avidamente mas un redirect en el loader; con reroute el idioma no entra a la tabla de rutas y la ambiguedad no llega a existir.
+
+  Ver [reroute](./docs/guias/reroute.md).
+
+- **`ssr-runtime`: `variants` para prerenderizar las URLs del reroute.** La tabla de rutas no conoce las URLs que solo existen por el reroute, asi que el SSG no las encontraba. `src/reroute.ts` puede exportar el sentido inverso y el prerenderizado escribe esas variantes por cada pathname que ya iba a generar, `getStaticPaths` incluido.
+
+  ```ts
+  export function variants(pathname: string): string[] {
+    return IDIOMAS.map((idioma) => (pathname === "/" ? `/${idioma}` : `/${idioma}${pathname}`));
+  }
+  ```
+
+  Si una variante no vuelve a su ruta canonica —`variants` y `reroute` tienen que ser inversas— el SSG la salta y avisa, en vez de escribir un 404 en silencio.
+
 ## 0.12.0 (2026-09-06)
 
 ### Features

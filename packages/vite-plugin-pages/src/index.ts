@@ -49,6 +49,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       defaultMode,
       base: basePath,
       target: "client",
+      reroutePath: result.reroutePath,
     });
     serverModuleCode = generateRoutesModule(result.routes, {
       defaultMode,
@@ -56,6 +57,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       target: "server",
       hasMiddleware: result.hasMiddleware,
       middlewarePath: result.middlewarePath,
+      reroutePath: result.reroutePath,
       apiRoutes: result.apiRoutes,
     });
 
