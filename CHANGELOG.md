@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.15.0 (2026-09-08)
+
+### Breaking Changes
+
+- **`ssr-runtime`: `isSafeRedirectUrl` pasa a llamarse `hasSafeRedirectProtocol`.** El nombre prometia validar el destino y solo miraba el esquema: `isSafeRedirectUrl("https://evil.com")` devolvia `true`. No era un fallo de la funcion —hace exactamente lo que pedia la CVE de la que salio, [GHSA-2w69-qvjg-hvjx](https://github.com/remix-run/react-router/security/advisories/GHSA-2w69-qvjg-hvjx), que es XSS por protocolo, no open redirect— sino del nombre.
+
+  Migracion: renombra los usos. Si el destino viene del usuario, cambia ademas a `isSameOriginRedirect` (ver abajo).
+
+  ```diff
+  - import { isSafeRedirectUrl } from "@calumet/suamox";
+  + import { hasSafeRedirectProtocol } from "@calumet/suamox";
+  ```
+
+### Features
+
+- **`ssr-runtime`: `isSameOriginRedirect()` para destinos que vengan del usuario.** Comprueba que la URL resuelva dentro del propio origen, que es lo que cierra un open redirect. Cubre las formas que no lo parecen: `//evil.com` y `/\evil.com` resuelven las dos al origen `evil.com`, porque el parser de URL trata `\` como `/`.
+
+  ```ts
+  const returnTo = ctx.query.get("returnTo");
+  redirect(returnTo && isSameOriginRedirect(returnTo, ctx.url.origin) ? returnTo : "/");
+  ```
+
+  El reparto queda: `hasSafeRedirectProtocol` para lo que escribe la app —un `redirect("https://checkout.stripe.com/...")` es legitimo, y es lo que aplica el router a los redirects que llegan por `/__data`—, `isSameOriginRedirect` para lo que llega de fuera. La guia de data loading tenia el ejemplo al reves: recomendaba la validacion por protocolo justo para un `?returnTo=`.
+
+  Cierra #35.
+
+### Correcciones
+
+- **`ssr-runtime`: `matchRoute` re-partia el patron y el pathname por cada ruta candidata.** Con 24 rutas, una URL que no casa hacia hasta 48 `split` y 48 arrays por llamada, y `matchRoute` corre en cada peticion del servidor, en cada navegacion del cliente y en cada hover sobre un enlace.
+
+  El patron de una ruta se compila una vez y se guarda en un `WeakMap` por objeto de ruta; el pathname se parte una sola vez por llamada, no una por candidata.
+
+  | caso                             | antes     | despues  |          |
+  | -------------------------------- | --------- | -------- | -------- |
+  | estatica pronto en la tabla      | 235 ns    | 228 ns   | -3%      |
+  | dinamica al final                | 531 ns    | 391 ns   | -26%     |
+  | sin match, recorre toda la tabla | 740 ns    | 379 ns   | **-49%** |
+  | pathname de 200 segmentos        | 28.056 ns | 6.106 ns | **-78%** |
+
+  Cierra #32.
+
 ## 0.14.1 (2026-09-08)
 
 ### Correcciones

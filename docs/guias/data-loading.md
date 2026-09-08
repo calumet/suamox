@@ -414,27 +414,37 @@ export async function loader(ctx: LoaderContext) {
 
 ### Valida URLs de redirect que vengan del usuario
 
-Si construyes un redirect usando input del usuario (query params, form data, etc.), valida la URL antes de redirigir. Usa `isSafeRedirectUrl()` para bloquear protocolos peligrosos como `javascript:` o `data:`:
+Si el destino sale de input del usuario —un `?returnTo=`, un campo de formulario—, valídalo con **`isSameOriginRedirect()`**, que comprueba que resuelva dentro de tu propio origen:
 
 ```tsx
-import { redirect, isSafeRedirectUrl, type LoaderContext } from "@calumet/suamox";
+import { redirect, isSameOriginRedirect, type LoaderContext } from "@calumet/suamox";
 
 export async function loader(ctx: LoaderContext) {
   const returnTo = ctx.query.get("returnTo");
-  if (returnTo && !isSafeRedirectUrl(returnTo, ctx.url.origin)) {
-    redirect("/");
-  }
-  redirect(returnTo || "/");
+  redirect(returnTo && isSameOriginRedirect(returnTo, ctx.url.origin) ? returnTo : "/");
 }
 ```
 
 En código cliente aplica la misma validación:
 
 ```tsx
-import { isSafeRedirectUrl } from "@calumet/suamox";
+import { isSameOriginRedirect } from "@calumet/suamox";
 
 const next = new URLSearchParams(window.location.search).get("next");
-if (next && isSafeRedirectUrl(next)) {
+if (next && isSameOriginRedirect(next)) {
   window.location.href = next;
 }
 ```
+
+Cubre las formas que no lo parecen: `//evil.com` y `/\evil.com` resuelven las dos al origen `evil.com`, porque el parser de URL trata `\` como `/`. Comprobar que empieza por `/` no alcanza.
+
+### La otra función, y cuándo se usa
+
+`hasSafeRedirectProtocol()` mira **solo el protocolo**: bloquea `javascript:`, `data:` y compañía, y da por bueno cualquier destino externo. Es lo que aplica el router a los redirects que llegan por `/__data`, porque `redirect("https://checkout.stripe.com/...")` desde un loader es legítimo.
+
+|                             | protocolo peligroso | otro origen    |
+| --------------------------- | ------------------- | -------------- |
+| `hasSafeRedirectProtocol()` | bloquea             | **deja pasar** |
+| `isSameOriginRedirect()`    | bloquea             | bloquea        |
+
+Para un destino que venga del usuario, `isSameOriginRedirect()`. Para uno que escribes tú en el código, ninguna de las dos hace falta.
