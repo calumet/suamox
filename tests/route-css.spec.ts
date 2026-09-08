@@ -44,6 +44,28 @@ test.describe("CSS de pagina y layout en el HTML prerenderizado", () => {
     });
   }
 
+  // El camino SSR resuelve el manifest por su cuenta, no por el del SSG
+  test(`/blog/dinamico enlaza las hojas de estilo sin estar prerenderizada`, async ({
+    page,
+    request,
+  }) => {
+    const response = await page.goto("/blog/dinamico");
+    const html = await response!.text();
+
+    const hrefs = [...html.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)].map((m) => m[1]!);
+    const sheets = await Promise.all(
+      hrefs.map(async (href) => {
+        const css = await request.get(href);
+        expect(css.status()).toBe(200);
+        return css.text();
+      }),
+    );
+    const allCss = sheets.join("\n");
+
+    expect(allCss).toContain(".blog-dynamic-marker");
+    expect(allCss).toContain(LAYOUT_MARKER.selector);
+  });
+
   // Sin JS no hay hidratacion: si el estilo aplica, viene del HTML prerenderizado.
   test.describe("sin JavaScript", () => {
     test.use({ javaScriptEnabled: false });

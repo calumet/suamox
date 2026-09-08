@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.14.1 (2026-09-08)
+
+### Correcciones
+
+- **`hono-adapter`: en SSR de produccion ninguna pagina emitia su CSS ni sus preload.** `toManifestKey` generaba `src/pages/blog/dinamico.tsx`, pero el build del cliente importa paginas y layouts con el query de stripping, asi que el manifest las indexa como `src/pages/blog/dinamico.tsx?__suamox-client-route`. El lookup no resolvia nunca y cada pagina salia con la hoja global y nada mas: FOUC y un round trip extra.
+
+  No se veia porque los unicos tests de CSS por ruta cubren `/blog` y `/blog/hello-world`, que son SSG y resuelven el manifest por otro camino, el de `ssg.ts`, que si tenia la clave bien. Se agrega `/blog/dinamico` al ejemplo —misma carpeta y mismo layout, pero sin `prerender`— y su e2e.
+
+  De paso, `collectManifestAssets` recibe ahora la ruta ya casada en vez de casarla por su cuenta: usaba el `matchRoute` del adaptador, que no es el del bundle del servidor, asi que con un `src/reroute.ts` declarado resolvian distinto y habria calculado los assets de otra pagina. Tambien ahorra un match por peticion.
+
+  Cierra #33.
+
+- **`hono-adapter`: el hook `onRequest` del adaptador no corria para las paginas SSG.** El HTML prerenderizado se servia antes que el hook, asi que el logging y los headers de infraestructura se saltaban toda ruta con `prerender = true`. Ahora se sirve entre `onRequest` y el middleware de la app.
+
+  El middleware de `src/middleware.ts` sigue sin correr para esas paginas, y es deliberado: su HTML se genero en el build y es el mismo para todo el mundo, asi que no hay nada que un guardia por peticion pueda decidir. Es lo que hacen React Router, SvelteKit y Astro. Queda escrito en `docs/guias/middleware.md` y `docs/guias/ssg.md`: **una pagina prerenderizada no se puede proteger con middleware**.
+
+  Cierra #31.
+
 ## 0.14.0 (2026-09-08)
 
 ### Breaking Changes

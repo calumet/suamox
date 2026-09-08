@@ -31,6 +31,13 @@ import pc from "picocolors";
 import { normalizePath, type EnvironmentModuleNode, type ViteDevServer } from "vite";
 import type { ModuleRunner } from "vite/module-runner";
 
+/**
+ * Espejo de `CLIENT_ROUTE_QUERY` de `@calumet/suamox-vite-plugin-pages`. No se importa
+ * de ahi para no depender de un paquete de build desde el runtime; hay otra copia en
+ * `ssr-runtime/src/ssg.ts`, y si cambia alla hay que cambiarla en las tres.
+ */
+const CLIENT_ROUTE_QUERY = "__suamox-client-route";
+
 /** Respuesta de `/__data`, en el mismo formato que `window.__INITIAL_DATA__`. */
 function dataResponse(c: Context, value: unknown): Response {
   return c.body(serializeData(value), 200, { "Content-Type": "application/json" });
@@ -892,16 +899,19 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
       return null;
     }
-    return relativePath;
+    // El build del cliente importa paginas y layouts con el query de stripping, asi
+    // que el manifest las indexa con el query incluido
+    return `${relativePath}?${CLIENT_ROUTE_QUERY}`;
   };
 
   const isScriptAsset = (filePath: string): boolean => {
     return filePath.endsWith(".js") || filePath.endsWith(".mjs");
   };
 
+  // Recibe la ruta ya casada, no la casa: el `matchRoute` de este modulo no es
+  // el mismo que el del bundle del servidor, y con un reroute resolverian distinto
   const collectManifestAssets = (
-    routes: RouteRecord[],
-    pathname: string,
+    route: RouteRecord | undefined,
   ): { preloadScripts: string[]; styles: string[] } => {
     const preloadScripts = new Set<string>();
     const styles = new Set<string>();
@@ -940,13 +950,12 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 
     visit("index.html");
 
-    const matched = matchRoute(routes, pathname);
-    const routeKey = matched?.route?.filePath ? toManifestKey(matched.route.filePath) : null;
+    const routeKey = route?.filePath ? toManifestKey(route.filePath) : null;
     if (routeKey) {
       visit(routeKey);
     }
 
-    for (const layoutPath of matched?.route?.layoutFilePaths ?? []) {
+    for (const layoutPath of route?.layoutFilePaths ?? []) {
       const layoutKey = toManifestKey(layoutPath);
       if (layoutKey) {
         visit(layoutKey);
@@ -1236,17 +1245,20 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     }
     const url = new URL(c.req.url);
 
-    const staticHtml = await readStaticHtml(url.pathname);
-    if (staticHtml) {
-      const status = url.pathname === "/404" ? 404 : 200;
-      return c.html(staticHtml, status);
-    }
-
     try {
       // Ejecutar hook onRequest
       if (onRequest) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         await onRequest(c);
+      }
+
+      // El HTML prerenderizado se sirve despues del hook del adaptador, que es
+      // infraestructura y aplica a toda respuesta, y antes del middleware de la
+      // app, que no corre para una pagina SSG: su HTML ya esta en disco
+      const staticHtml = await readStaticHtml(url.pathname);
+      if (staticHtml) {
+        const status = url.pathname === "/404" ? 404 : 200;
+        return c.html(staticHtml, status);
       }
 
       const entry = await loadServerEntry();
@@ -1294,7 +1306,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
           const nonce = options.csp ? crearNonce() : undefined;
 
           // Generar HTML completo (sin hidratación para rutas prerender)
-          const { preloadScripts, styles } = collectManifestAssets(entry.routes, strippedPathname);
+          const { preloadScripts, styles } = collectManifestAssets(match?.route);
           const prodInitialData = isPrerender
             ? undefined
             : result.layoutData

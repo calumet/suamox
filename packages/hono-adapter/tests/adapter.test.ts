@@ -31,6 +31,10 @@ vi.mock("@calumet/suamox", async (importOriginal) => {
   };
 });
 
+vi.mock("@calumet/suamox/server", () => ({
+  renderPage: mocks.renderPage,
+}));
+
 import { createDevHandler, createHonoApp, createProdHandler } from "../src/index";
 
 const runtimeModule = {
@@ -608,7 +612,8 @@ describe("createProdHandler", () => {
           imports: ["assets/chunk.js"],
           css: ["assets/client.css"],
         },
-        "src/pages/index.tsx": {
+        // El build del cliente indexa paginas y layouts con el query de stripping
+        "src/pages/index.tsx?__suamox-client-route": {
           file: "assets/index.js",
           imports: ["assets/chunk.js"],
           css: ["assets/index.css"],
@@ -655,6 +660,49 @@ describe("createProdHandler", () => {
     );
     expect(body).toContain("/assets/client.js");
     expect(body).toContain("/assets/client.css");
+  });
+
+  // El HTML prerenderizado ya esta en disco: el middleware de la app no lo puede
+  // cambiar, pero el hook del adaptador es infraestructura y aplica igual
+  it("serves prerendered HTML after the adapter hook and without the app middleware", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-static-"));
+    const serverDir = join(root, "dist", "server");
+    const clientDir = join(root, "dist", "client", ".vite");
+    const staticDir = join(root, "dist", "static");
+
+    await mkdir(serverDir, { recursive: true });
+    await mkdir(clientDir, { recursive: true });
+    await mkdir(join(staticDir, "estatica"), { recursive: true });
+    await writeFile(
+      join(serverDir, "entry-server.mjs"),
+      `export const routes = [];
+       export function onRequest(context, next) {
+         globalThis.__middlewareCorrio = true;
+         return next();
+       }`,
+    );
+    await writeFile(join(clientDir, "manifest.json"), "{}");
+    await writeFile(join(staticDir, "estatica", "index.html"), "<html>prerenderizada</html>");
+
+    (globalThis as { __middlewareCorrio?: boolean }).__middlewareCorrio = false;
+    const onRequest = vi.fn((c: { header: (name: string, value: string) => void }) => {
+      c.header("x-adapter-hook", "1");
+    });
+
+    const app = createProdHandler({
+      root,
+      clientDir: join(root, "dist", "client"),
+      serverEntry: join(root, "dist", "server", "entry-server.mjs"),
+      staticDir,
+      onRequest,
+    });
+
+    const response = await app.request("http://localhost/estatica");
+
+    expect(await response.text()).toBe("<html>prerenderizada</html>");
+    expect(onRequest).toHaveBeenCalled();
+    expect(response.headers.get("x-adapter-hook")).toBe("1");
+    expect((globalThis as { __middlewareCorrio?: boolean }).__middlewareCorrio).toBe(false);
   });
 });
 
