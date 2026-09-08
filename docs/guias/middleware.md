@@ -24,13 +24,13 @@ export async function onRequest(
 
 El objeto `context` contiene:
 
-| Propiedad  | Tipo                      | Descripcion                                   |
-| ---------- | ------------------------- | --------------------------------------------- |
-| `request`  | `Request`                 | La peticion HTTP original                     |
-| `url`      | `URL`                     | La URL parseada                               |
-| `pathname` | `string`                  | La ruta de la pagina pedida, sin `base`       |
-| `params`   | `Record<string, string>`  | Parametros de la ruta                         |
-| `locals`   | `Record<string, unknown>` | Objeto mutable para pasar datos a los loaders |
+| Propiedad  | Tipo                      | Descripcion                                            |
+| ---------- | ------------------------- | ------------------------------------------------------ |
+| `request`  | `Request`                 | La peticion HTTP original                              |
+| `url`      | `URL`                     | La URL parseada                                        |
+| `pathname` | `string`                  | La ruta que caso, sin `base` y con el reroute aplicado |
+| `params`   | `Record<string, string>`  | Parametros de la ruta                                  |
+| `locals`   | `Record<string, unknown>` | Objeto mutable para pasar datos a los loaders          |
 
 Para cortar rutas usa `context.pathname`, no `context.url.pathname`: en las peticiones al endpoint `/__data` la URL es `/__data` y la ruta pedida viaja en el parametro `path`, asi que un guardia que lea `url` no se dispara en ninguna navegacion del cliente.
 
@@ -94,7 +94,7 @@ Peticion HTTP
   -> Render
 ```
 
-El middleware se ejecuta tanto para peticiones SSR como para el endpoint `/__data` (navegacion client-side) y para las rutas de API. Esto garantiza que los loaders siempre reciben los mismos `locals` sin importar si la pagina se carga por primera vez o se navega con el router. En los tres casos `context.pathname` es la ruta pedida.
+El middleware se ejecuta tanto para peticiones SSR como para el endpoint `/__data` (navegacion client-side) y para las rutas de API. Esto garantiza que los loaders siempre reciben los mismos `locals` sin importar si la pagina se carga por primera vez o se navega con el router. En los tres casos `context.pathname` es la ruta que caso, con el [reroute](./reroute.md) ya aplicado, para que un guardia y la pagina que se renderiza nunca discrepen.
 
 ## Diferencia con onRequest del adapter
 
@@ -118,3 +118,5 @@ Este hook es diferente al middleware de `src/middleware.ts`:
 | Se incluye en el build     | Server bundle       | Codigo del servidor |
 
 Para logica de aplicacion (auth, sesion, i18n), usa `src/middleware.ts`. Para logica de infraestructura del servidor (logging de Hono, headers personalizados), usa el hook del adapter.
+
+Los dos son solo del servidor. Si lo que quieres es cambiar contra que ruta casa una URL, eso tiene que pasar tambien en el cliente: va en [`src/reroute.ts`](./reroute.md).

@@ -31,7 +31,7 @@ export interface NavigateOptions {
 export interface RouterInstance {
   navigate: (to: string, options?: NavigateOptions) => Promise<void>;
   /** Reejecuta los loaders de la ruta activa y sus layouts. */
-  revalidar: () => Promise<void>;
+  revalidate: () => Promise<void>;
   dispose: () => void;
 }
 
@@ -127,15 +127,15 @@ const ensureAdapter = async (adapter?: HydrationAdapter): Promise<HydrationAdapt
 };
 
 let activeRouter: RouterInstance | null = null;
-let revalidacionPendiente = false;
+let pendingRevalidation = false;
 
 /** Reejecuta los loaders de la ruta activa y sus layouts, sin tener que guardar la instancia. */
-export function revalidar(): Promise<void> {
+export function revalidate(): Promise<void> {
   if (activeRouter) {
-    return activeRouter.revalidar();
+    return activeRouter.revalidate();
   }
   // Sin router todavia (hidratacion en curso): se corre al registrarse, no se descarta
-  revalidacionPendiente = true;
+  pendingRevalidation = true;
   return Promise.resolve();
 }
 
@@ -145,7 +145,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
   if (!canUseDOM()) {
     return {
       navigate: async () => {},
-      revalidar: async () => {},
+      revalidate: async () => {},
       dispose: () => {},
     };
   }
@@ -154,7 +154,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
   if (!rootElement) {
     return {
       navigate: async () => {},
-      revalidar: async () => {},
+      revalidate: async () => {},
       dispose: () => {},
     };
   }
@@ -370,8 +370,10 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     await renderLocation(url, { scroll: options?.scroll ?? true });
   };
 
-  const revalidarRuta = (): Promise<void> =>
+  const revalidateRoute = (): Promise<void> =>
     renderLocation(new URL(window.location.href), { scroll: false, revalidate: true });
+
+  let lastPrefetchPath: string | null = null;
 
   const prefetchRoute = (url: URL): void => {
     if (url.origin !== window.location.origin) {
@@ -380,7 +382,15 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     if (isSameDocumentHash(url)) {
       return;
     }
-    const match = resolveMatch(routes, stripBase(url.pathname, base));
+    const path = stripBase(url.pathname, base);
+    // Un solo hover dispara decenas de mouseover: sin esto se re-casa la ruta,
+    // y con ella el reroute de la app, en cada pasada del puntero
+    if (path === lastPrefetchPath) {
+      return;
+    }
+    lastPrefetchPath = path;
+
+    const match = resolveMatch(routes, path);
     if (!match || !match.route.load) {
       return;
     }
@@ -392,6 +402,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
       .then(() => {})
       .catch(() => {
         prefetched.delete(key);
+        lastPrefetchPath = null;
       });
     prefetched.set(key, loadPromise);
   };
@@ -479,7 +490,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
 
   const instance: RouterInstance = {
     navigate,
-    revalidar: revalidarRuta,
+    revalidate: revalidateRoute,
     dispose: () => {
       if (activeRouter === instance) {
         activeRouter = null;
@@ -495,9 +506,9 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
   };
 
   activeRouter = instance;
-  if (revalidacionPendiente) {
-    revalidacionPendiente = false;
-    void instance.revalidar();
+  if (pendingRevalidation) {
+    pendingRevalidation = false;
+    void instance.revalidate();
   }
   return instance;
 }

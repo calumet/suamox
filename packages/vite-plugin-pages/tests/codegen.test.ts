@@ -527,6 +527,37 @@ describe("generateRoutesModule", () => {
     expect(code).not.toContain("onRequest");
     expect(code).not.toContain("middleware");
   });
+
+  it("registers the reroute in both targets", () => {
+    const routes: RouteRecord[] = [];
+    const reroutePath = "/project/src/reroute.ts";
+
+    for (const target of ["client", "server"] as const) {
+      const code = generateRoutesModule(routes, { target, reroutePath });
+
+      expect(code).toContain(`import * as __reroute from "${reroutePath}"`);
+      expect(code).toContain("registerReroute(__reroute.reroute)");
+    }
+  });
+
+  it("exports the reroute functions in server target only, for the SSG", () => {
+    const routes: RouteRecord[] = [];
+    const reroutePath = "/project/src/reroute.ts";
+
+    const serverCode = generateRoutesModule(routes, { target: "server", reroutePath });
+    const clientCode = generateRoutesModule(routes, { target: "client", reroutePath });
+
+    expect(serverCode).toContain("export const routeReroute = __reroute.reroute;");
+    expect(serverCode).toContain("export const routeVariants = __reroute.variants;");
+    expect(clientCode).not.toContain("routeVariants");
+    expect(clientCode).not.toContain("routeReroute");
+  });
+
+  it("emits nothing when there is no reroute file", () => {
+    const code = generateRoutesModule([], { target: "server" });
+
+    expect(code).not.toContain("reroute");
+  });
 });
 
 describe("API routes codegen", () => {

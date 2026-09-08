@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.13.0 (2026-09-08)
+
+### Breaking Changes
+
+- **`router`: `revalidar()` pasa a llamarse `revalidate()`.** El API publico esta en ingles (`loader`, `getStaticPaths`, `prerender`, `onRequest`) y esta era la unica excepcion. Afecta a la funcion del paquete y al metodo de `RouterInstance`.
+
+  Migracion: renombra los usos.
+
+  ```diff
+  - import { revalidar } from "@calumet/suamox-router";
+  - await revalidar();
+  + import { revalidate } from "@calumet/suamox-router";
+  + await revalidate();
+
+  - await router.revalidar();
+  + await router.revalidate();
+  ```
+
+### Features
+
+- **`reroute`: traducir la URL a una ruta antes de casar.** Un `src/reroute.ts` que exporte `reroute(pathname)` decide contra que ruta se casa cada URL, sin tocar la barra de direcciones. El caso que lo motiva es el prefijo de idioma: `src/pages/` deja de saber que existen los idiomas, y `/en/mision-y-vision` y `/mision-y-vision` casan los dos `[slug].tsx`.
+
+  ```ts
+  // src/reroute.ts
+  const IDIOMAS = ["en"];
+
+  export function reroute(pathname: string): string | void {
+    const [, primero, ...resto] = pathname.split("/");
+    if (IDIOMAS.includes(primero)) {
+      return "/" + resto.join("/");
+    }
+  }
+  ```
+
+  El hook se registra en el modulo generado de **cliente y servidor**, al reves que el middleware, que es solo del servidor: si un lado casara una ruta distinta del otro, la hidratacion no coincidiria. Por eso vive en su propio archivo y no en `src/middleware.ts`.
+
+  `context.pathname` del middleware pasa a ser **la ruta que caso**, con el reroute ya aplicado, en SSR, en `/__data` y en las rutas de API. Si siguiera siendo la URL pedida, un guardia por ruta se evaluaria sobre una direccion y se renderizaria otra: con un alias `/mx/*` y un `pathname.startsWith("/protegido")`, `/mx/protegido` servia la pagina protegida. Lo calcula `resolveRoutePathname()`, que el adaptador llama directamente en vez de leerlo del resultado del match: `entry.matchRoute` es un punto de extension del entry-server y no puede ser de donde sale un valor con relevancia de seguridad. La URL original sigue intacta en `context.url`.
+
+  Ese pathname va **decodificado**, asi que se normaliza antes de entregarlo: el parser de URL trata `\` como `/` en esquemas especiales, y sin colapsar las barras iniciales `/%5Cevil.com` llegaba al middleware como `/\evil.com`, que resuelve al origen `evil.com`. Un `redirect(context.pathname)` habria sido un open redirect, y `isSafeRedirectUrl()` lo da por bueno porque solo mira el protocolo. Pasaba con o sin reroute, en cuanto la app tuviera un catch-all.
+
+  Un alias de prefijo **no** alcanza `/api/`, porque el servidor monta esas peticiones por el path crudo; el path de la API sí se reroutea una vez dentro.
+
+  Esto es lo que el segmento opcional `[[lang]]` no puede hacer. `[[lang]]/[slug].tsx` genera `/:lang` y `/:slug`, que casan las mismas URLs, y nada en el patron permite saber si `/mision-y-vision` es el idioma o el slug: es ambiguo, no dificil. Remix documenta la misma ambiguedad y la resuelve casando avidamente mas un redirect en el loader; con reroute el idioma no entra a la tabla de rutas y la ambiguedad no llega a existir.
+
+  Ver [reroute](./docs/guias/reroute.md).
+
+- **`ssr-runtime`: `variants` para prerenderizar las URLs del reroute.** La tabla de rutas no conoce las URLs que solo existen por el reroute, asi que el SSG no las encontraba. `src/reroute.ts` puede exportar el sentido inverso y el prerenderizado escribe esas variantes por cada pathname que ya iba a generar, `getStaticPaths` incluido.
+
+  ```ts
+  export function variants(pathname: string): string[] {
+    return IDIOMAS.map((idioma) => (pathname === "/" ? `/${idioma}` : `/${idioma}${pathname}`));
+  }
+  ```
+
+  Si una variante no vuelve a su ruta canonica —`variants` y `reroute` tienen que ser inversas— el SSG la salta y avisa, en vez de escribir un 404 en silencio.
+
 ## 0.12.0 (2026-09-06)
 
 ### Features

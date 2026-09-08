@@ -54,7 +54,7 @@ export interface LoaderContext {
 export interface MiddlewareContext {
   request: Request;
   url: URL;
-  /** Ruta de la pagina pedida, sin `base`. En `/__data` es la ruta pedida, no `/__data`. */
+  /** Ruta que caso, sin `base` y con el reroute aplicado. En `/__data` es la pagina, no `/__data`. */
   pathname: string;
   params: Record<string, string>;
   locals: Record<string, unknown>;
@@ -210,6 +210,12 @@ export function isSafeRedirectUrl(location: string, baseOrigin?: string): boolea
 export interface MatchResult {
   route: RouteRecord;
   params: Record<string, string>;
+  /**
+   * Ruta contra la que se caso, ya normalizada y con el reroute aplicado.
+   * Opcional porque el adaptador puede recibir un `matchRoute` de una version
+   * anterior del runtime, que no lo devuelve.
+   */
+  pathname?: string;
 }
 
 export interface RenderOptions {
@@ -246,28 +252,89 @@ const renderHeadToString = (nodes: React.ReactNode[]): string => {
   return [startTag, content, endTag].filter(Boolean).join("\n");
 };
 
+export type RerouteFn = (pathname: string) => string | void;
+
+// En globalThis, como el contexto de head y el de client-value: el adaptador y
+// la app pueden cargar copias distintas del modulo y las dos tienen que casar igual
+const rerouteKey = Symbol.for("suamox.reroute");
+const rerouteStore = globalThis as typeof globalThis & { [rerouteKey]?: RerouteFn | null };
+
+/**
+ * Registra el hook que traduce una URL a la ruta que debe casar.
+ * Lo llama `virtual:pages` en cliente y servidor: si solo lo hiciera uno de los
+ * dos, cada lado casaria una ruta distinta y la hidratacion no coincidiria.
+ */
+export function registerReroute(fn: RerouteFn | null): void {
+  rerouteStore[rerouteKey] = fn ?? null;
+  rerouteErrorReported = false;
+}
+
+let rerouteErrorReported = false;
+
+/**
+ * Deja el pathname con exactamente una barra inicial y sin la final.
+ *
+ * El parser de URL trata `\` como `/` en esquemas especiales, asi que tanto
+ * `//evil.com` como `/\evil.com` resuelven al origen `evil.com` y no a una ruta.
+ * Este valor acaba en `context.pathname`, que las guias tratan como de confianza.
+ */
+function normalizePathname(pathname: string): string {
+  const withLeadingSlash = `/${pathname.replace(/^[/\\]+/, "")}`;
+  return withLeadingSlash !== "/" && withLeadingSlash.endsWith("/")
+    ? withLeadingSlash.slice(0, -1)
+    : withLeadingSlash;
+}
+
+function applyReroute(pathname: string): string {
+  const reroute = rerouteStore[rerouteKey];
+  if (!reroute) {
+    return pathname;
+  }
+
+  let rerouted: string | void;
+  try {
+    rerouted = reroute(pathname);
+  } catch (error) {
+    // Es codigo de la app y corre en cada match: que falle no puede tumbar la
+    // peticion. Se avisa una vez porque si no, un hook roto inunda el log
+    if (!rerouteErrorReported) {
+      rerouteErrorReported = true;
+      console.error("[suamox] reroute threw, using the requested pathname:", error);
+    }
+    return pathname;
+  }
+
+  return typeof rerouted === "string" ? normalizePathname(rerouted) : pathname;
+}
+
+/**
+ * Traduce una URL a la ruta contra la que hay que casar: la decodifica, la
+ * normaliza y le aplica el reroute. Es lo que el middleware tiene que ver, y el
+ * adaptador la llama directamente para no depender de que `matchRoute` case.
+ */
+export function resolveRoutePathname(pathname: string): string {
+  let decoded = pathname === "" ? "/" : pathname;
+  try {
+    decoded = decodeURIComponent(decoded);
+  } catch {
+    // Secuencias % inválidas, usar el path original
+  }
+  return applyReroute(normalizePathname(decoded));
+}
+
 /**
  * Hace match de un pathname contra rutas y extrae params
  */
 export function matchRoute(routes: RouteRecord[], pathname: string): MatchResult | null {
-  // Normalizar pathname y decodificar URL encoding
-  let normalizedPath = pathname === "" ? "/" : pathname;
-  try {
-    normalizedPath = decodeURIComponent(normalizedPath);
-  } catch {
-    // Secuencias % inválidas, usar el path original
-  }
-  // Normalizar trailing slash (excepto root "/")
-  if (normalizedPath !== "/" && normalizedPath.endsWith("/")) {
-    normalizedPath = normalizedPath.slice(0, -1);
-  }
+  const target = resolveRoutePathname(pathname);
 
   for (const route of routes) {
-    const match = matchPattern(route, normalizedPath);
+    const match = matchPattern(route, target);
     if (match) {
       return {
         route,
         params: match.params,
+        pathname: target,
       };
     }
   }

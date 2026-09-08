@@ -12,6 +12,8 @@ declare module "virtual:pages/server" {
   export const resolveRouteModule: typeof import("@calumet/suamox").resolveRouteModule;
   export const RedirectResponse: typeof import("@calumet/suamox").RedirectResponse;
   export const base: string;
+  export const routeReroute: import("@calumet/suamox").RerouteFn | undefined;
+  export const routeVariants: ((pathname: string) => string[]) | undefined;
   export const onRequest:
     | ((
         context: import("@calumet/suamox").MiddlewareContext,

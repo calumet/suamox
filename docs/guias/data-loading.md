@@ -133,7 +133,7 @@ Por ejemplo, al navegar de `/es/about` a `/es/contact`, el layout `[lang]/layout
 
 ### Revalidar
 
-`revalidar()` del router vuelve a ejecutar los loaders de la ruta activa, layouts incluidos, sin el smart refetch. Ver [Router](./router.md#revalidar).
+`revalidate()` del router vuelve a ejecutar los loaders de la ruta activa, layouts incluidos, sin el smart refetch. Ver [Router](./router.md#revalidar).
 
 ## `useLoaderData()`
 

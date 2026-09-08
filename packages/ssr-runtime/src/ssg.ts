@@ -4,8 +4,15 @@ import { pathToFileURL } from "node:url";
 
 import { hashInlineScript } from "./csp";
 
-import { generateHTML, renderPage, resolveRouteModule } from "./index";
-import type { RouteRecord } from "./index";
+import {
+  generateHTML,
+  matchRoute,
+  registerReroute,
+  renderPage,
+  resolveRoutePathname,
+  resolveRouteModule,
+} from "./index";
+import type { RerouteFn, RouteRecord } from "./index";
 
 interface PrerenderAssets {
   scripts?: string[];
@@ -27,6 +34,11 @@ export interface PrerenderOptions {
   }) => PrerenderAssets | Promise<PrerenderAssets>;
   /** Emite el `<meta>` de CSP con el hash de cada script inline de la pagina */
   csp?: boolean | { directives?: string };
+  /**
+   * Sentido inverso del reroute: dado un pathname canonico, las URLs extra que
+   * tambien hay que prerenderizar. La tabla de rutas no las conoce.
+   */
+  variants?: (pathname: string) => string[];
 }
 
 export interface RunSsgOptions {
@@ -186,6 +198,7 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
     styles = [],
     preloadScripts = [],
     resolveAssets,
+    variants,
   } = options;
 
   const normalizedBase = base === "/" ? "" : base;
@@ -243,6 +256,24 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
     await writeFile(filePath, html);
   };
 
+  const renderWithVariants = async (
+    pathname: string,
+    route: RouteRecord,
+    props?: Record<string, unknown>,
+  ): Promise<void> => {
+    await renderRoute(pathname, route, props);
+    for (const variant of variants?.(pathname) ?? []) {
+      // Sin un reroute que devuelva la variante a esta misma pagina el HTML
+      // saldria siendo un 404, o el de otra entrada de getStaticPaths, y en silencio
+      const back = matchRoute(routes, variant);
+      if (back?.route !== route || back.pathname !== resolveRoutePathname(pathname)) {
+        console.warn(`[suamox] Variant ${variant} does not reroute back to ${pathname}. Skipping.`);
+        continue;
+      }
+      await renderRoute(variant, route, props);
+    }
+  };
+
   for (const route of routes) {
     const resolvedRoute = await resolveRouteModule(route);
 
@@ -264,12 +295,12 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
       const staticPaths = await resolvedRoute.getStaticPaths();
       for (const entry of staticPaths) {
         const pathname = resolvePrerenderPath(resolvedRoute, entry.params ?? {});
-        await renderRoute(pathname, resolvedRoute, entry.props);
+        await renderWithVariants(pathname, resolvedRoute, entry.props);
       }
       continue;
     }
 
-    await renderRoute(resolvedRoute.path, resolvedRoute);
+    await renderWithVariants(resolvedRoute.path, resolvedRoute);
   }
 }
 
@@ -323,7 +354,15 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
   const serverModule = (await import(pathToFileURL(resolvedServerEntry).href)) as {
     routes?: RouteRecord[];
     base?: string;
+    routeReroute?: RerouteFn;
+    routeVariants?: (pathname: string) => string[];
   };
+
+  // Solo si el entry lo re-exporta: el `import()` de arriba ya ejecuto el registro
+  // que hace `virtual:pages/server`, y un `null` aqui lo borraria
+  if (serverModule.routeReroute) {
+    registerReroute(serverModule.routeReroute);
+  }
 
   if (!serverModule.routes) {
     throw new Error("SSR entry must export routes.");
@@ -376,6 +415,7 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
       styles: resolveRouteStyles(route),
     }),
     csp: options.csp,
+    variants: serverModule.routeVariants,
   });
 
   const staticClientDir = join(resolvedOutDir, "client");

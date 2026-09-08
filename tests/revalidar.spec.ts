@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("revalidar()", () => {
+test.describe("revalidate()", () => {
   test("re-ejecuta los loaders de la ruta activa sin recargar la pagina", async ({ page }) => {
     await page.goto("/es/revalidar");
     await expect(page.locator("h1")).toHaveText("Revalidar");

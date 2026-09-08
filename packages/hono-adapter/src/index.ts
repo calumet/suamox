@@ -17,6 +17,7 @@ import {
   generateHTML,
   matchRoute,
   renderPage,
+  resolveRoutePathname,
   resolveRouteModule,
   serializeData,
   stripBase,
@@ -290,8 +291,9 @@ const collectPageCssFromSsrGraph = (vite: ViteDevServer, filePath: string): stri
  * **before** calling `next()`, writes made after `next()` resolves will
  * mutate the same object the pipeline already consumed.
  *
- * `context.pathname` is the requested page route without `base`. Use it to
- * guard routes: on the `/__data` endpoint `url.pathname` is `/__data`, so a
+ * `context.pathname` is the matched route without `base`, with the reroute
+ * already applied, so a guard and the page that renders never disagree. Use it
+ * to guard routes: on the `/__data` endpoint `url.pathname` is `/__data`, so a
  * guard reading `url` never fires during client-side navigation.
  *
  * Calling `next()` executes the full pipeline (loaders + render) and returns
@@ -504,7 +506,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         middlewareFn,
         c.req.raw,
         url,
-        strippedPathname,
+        resolveRoutePathname(strippedPathname),
         match.params,
         async (locals) => {
           const method = c.req.method.toUpperCase();
@@ -575,7 +577,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         middlewareFn,
         c.req.raw,
         reqUrl,
-        strippedPathname,
+        resolveRoutePathname(strippedPathname),
         match.params,
         async (locals) => {
           const loaderUrl = new URL(path, reqUrl.origin);
@@ -673,7 +675,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         middlewareFn,
         c.req.raw,
         url,
-        strippedPathname,
+        resolveRoutePathname(strippedPathname),
         match?.params ?? {},
         async (locals) => {
           // Resolver módulo de ruta para detectar prerender y getStaticPaths
@@ -1083,7 +1085,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         entry.onRequest,
         safeRequest,
         safeUrl,
-        strippedPathname,
+        resolveRoutePathname(strippedPathname),
         match.params,
         async (locals) => {
           const method = c.req.method.toUpperCase();
@@ -1148,7 +1150,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         entry.onRequest,
         safeRequest,
         safeUrl,
-        strippedPathname,
+        resolveRoutePathname(strippedPathname),
         match.params,
         async (locals) => {
           const loaderUrl = new URL(path, safeOrigin);
@@ -1254,7 +1256,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         entry.onRequest,
         safeRequest,
         safeUrl,
-        strippedPathname,
+        resolveRoutePathname(strippedPathname),
         match?.params ?? {},
         async (locals) => {
           // Ejecutar hook onBeforeRender

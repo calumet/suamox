@@ -15,6 +15,7 @@ docs/
     css.md
     routing.md
     router.md
+    reroute.md
     head.md
     data-loading.md
     ssr.md
@@ -29,11 +30,12 @@ docs/
 2. [CSS](./guias/css.md)
 3. [Routing](./guias/routing.md)
 4. [Router](./guias/router.md)
-5. [Head](./guias/head.md)
-6. [Data loading](./guias/data-loading.md)
-7. [SSR](./guias/ssr.md)
-8. [SSG](./guias/ssg.md)
-9. [Publicación en GitHub Packages](./operaciones/github-packages-checklist.md)
+5. [Reroute](./guias/reroute.md)
+6. [Head](./guias/head.md)
+7. [Data loading](./guias/data-loading.md)
+8. [SSR](./guias/ssr.md)
+9. [SSG](./guias/ssg.md)
+10. [Publicación en GitHub Packages](./operaciones/github-packages-checklist.md)
 
 ## Mantenimiento
 
