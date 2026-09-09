@@ -10,45 +10,59 @@ Suamox usa enrutado por sistema de archivos con base en `src/pages`.
 - `src/pages/blog/[slug].tsx` -> `/blog/:slug`
 - `src/pages/[...all].tsx` -> `/*`
 - `src/pages/(admin)/dashboard.tsx` -> `/dashboard`
-- `src/pages/[[lang]]/ingresar.tsx` -> `/ingresar` y `/:lang/ingresar`
 
 ## Segmentos soportados
 
 - Estático: `about.tsx` -> `/about`
 - Dinámico: `[id].tsx` -> `/:id`
-- Opcional: `[[lang]]/about.tsx` -> `/about` y `/:lang/about`
 - Catch-all: `[...rest].tsx` -> `/*`
 - Grupo de rutas: `(grupo)` (no aparece en URL)
 
-## Segmento opcional
+## Prioridad
 
-Un segmento entre dobles corchetes es opcional: el archivo compila a dos rutas, una sin el parámetro y otra con él.
+Cuando varias rutas casan la misma URL, gana la más específica:
+
+1. **Más segmentos** antes que menos.
+2. **Estático** antes que dinámico, segmento a segmento: `/admin/correos` le gana a `/:lang/correos`.
+3. **Index** antes que un hermano dinámico del mismo largo: `[lang]/index.tsx` (`/:lang`) le gana a `[slug].tsx` (`/:slug`).
+4. **Catch-all** siempre al final.
+
+La regla 3 existe porque sin ella las dos puntúan igual y desempataba el orden alfabético del path generado, así que renombrar `[slug]` a `[articulo]` cambiaba qué página servía `/en`.
+
+Lo que sí queda empatado son dos patrones con la **misma forma** —`/blog/:slug` y `/blog/:id`—, que casan exactamente las mismas URLs. Ahí cuál gane es arbitrario se ordene como se ordene; el orden es estable entre builds, pero si te encuentras en ese caso, el arreglo es no tener las dos rutas.
+
+## Segmento opcional (deprecado)
+
+> **Deprecado.** `[[lang]]/about.tsx` sigue funcionando y avisa al arrancar. Se quita en una versión próxima. Usa [reroute](./reroute.md).
+
+Un segmento entre dobles corchetes compilaba a dos rutas, una sin el parámetro y otra con él, para tener un idioma por defecto sin prefijo. **No sirve para eso en cuanto la app tiene páginas con parámetro**: `[[lang]]/[slug].tsx` genera `/:lang` y `/:slug`, que casan las mismas URLs, y nada en el patrón permite saber si `/mision-y-vision` es el idioma o el slug.
+
+Con reroute el idioma no entra a la tabla de rutas, así que la ambigüedad no llega a existir:
 
 ```txt
-src/pages/[[lang]]/ingresar.tsx  ->  /ingresar  y  /:lang/ingresar
-src/pages/[[lang]]/index.tsx     ->  /          y  /:lang
+src/
+  reroute.ts
+  pages/
+    ingresar.tsx      ->  /ingresar  y  /en/ingresar
+    [slug].tsx        ->  /:slug     y  /en/:slug
 ```
 
-Sirve para tener un idioma por defecto sin prefijo sin duplicar la pantalla. Las dos rutas comparten archivo, layouts y loader. En la ruta sin prefijo el parámetro llega **indefinido**, no como cadena vacía:
+### Migración
 
-```tsx
-export function loader({ params }: LoaderContext) {
-  const lang = params.lang ?? "es";
-  return { lang };
-}
+Mueve la página fuera de la carpeta opcional y lee el prefijo de `url`, que llega intacta al loader:
+
+```diff
+- // src/pages/[[lang]]/ingresar.tsx
+- export function loader({ params }: LoaderContext) {
+-   return { idioma: params.lang ?? "es" };
+- }
++ // src/pages/ingresar.tsx
++ export function loader({ url }: LoaderContext) {
++   return { idioma: idiomaDe(url) };
++ }
 ```
 
-### Reglas
-
-- **Uno por ruta.** Varios opcionales multiplican las rutas generadas.
-- **Lo que sigue tiene que ser estático.** `[[lang]]/[producto].tsx` y `[[lang]]/[...resto].tsx` dan error: generarían `/:producto` y `/:lang/:producto`, que casan las mismas URLs, y nada permite saber si `/bandera` es el producto `bandera` o el idioma `bandera`. Distinguirlos pide poder restringir qué valores acepta el parámetro, que es otra pieza.
-- `[[...resto]]` no existe: un catch-all ya casa cero segmentos.
-
-Si lo que buscas es el prefijo de idioma y tienes páginas con parámetro, el segmento opcional no da: usa [reroute](./reroute.md) y deja el idioma fuera de la tabla de rutas.
-
-### Prioridad
-
-Las dos rutas del mismo archivo nunca compiten, porque tienen distinto número de segmentos. Frente a otras rutas manda la regla de siempre, estático antes que dinámico: `/ingresar` le gana a `/:lang`.
+Y declara el prefijo una vez en `src/reroute.ts`. Ver [reroute](./reroute.md).
 
 ## El root de la app
 

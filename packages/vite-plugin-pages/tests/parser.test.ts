@@ -325,6 +325,60 @@ describe("static vs dynamic priority", () => {
   });
 });
 
+describe("index vs dynamic priority", () => {
+  const pagesDir = "/test/src/pages";
+
+  // El desempate era alfabetico sobre el path generado, asi que renombrar la
+  // carpeta del parametro cambiaba que pagina servia una URL
+  it.each(["[slug].tsx", "[articulo].tsx", "[zzz].tsx"])(
+    "el index gana a %s sin que importe el nombre del parametro",
+    (archivo) => {
+      const { route: index } = parseRoute(join(pagesDir, "[lang]/index.tsx"), pagesDir);
+      const { route: dinamica } = parseRoute(join(pagesDir, archivo), pagesDir);
+
+      const sorted = sortRoutes([dinamica, index]);
+
+      expect(sorted[0]?.path).toBe("/:lang");
+    },
+  );
+
+  it("un segmento estatico sigue ganandole al index", () => {
+    const { route: index } = parseRoute(join(pagesDir, "[lang]/index.tsx"), pagesDir);
+    const { route: estatica } = parseRoute(join(pagesDir, "ingresar.tsx"), pagesDir);
+
+    const sorted = sortRoutes([index, estatica]);
+
+    expect(sorted[0]?.path).toBe("/ingresar");
+    expect(sorted[1]?.path).toBe("/:lang");
+  });
+
+  it("dos patrones con la misma forma empatan, y el orden es estable", () => {
+    const { route: slug } = parseRoute(join(pagesDir, "blog/[slug].tsx"), pagesDir);
+    const { route: id } = parseRoute(join(pagesDir, "blog/[id].tsx"), pagesDir);
+
+    expect(slug.priority).toBe(id.priority);
+    expect(sortRoutes([slug, id])[0]?.path).toBe(sortRoutes([id, slug])[0]?.path);
+  });
+});
+
+describe("deprecacion del segmento opcional", () => {
+  const pagesDir = "/test/src/pages";
+
+  it("avisa al parsear un opcional", () => {
+    const { warnings } = parseRoute(join(pagesDir, "[[lang]]/ingresar.tsx"), pagesDir);
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("deprecated");
+    expect(warnings[0]).toContain("src/reroute.ts");
+  });
+
+  it("no avisa por una ruta normal", () => {
+    const { warnings } = parseRoute(join(pagesDir, "blog/[slug].tsx"), pagesDir);
+
+    expect(warnings).toHaveLength(0);
+  });
+});
+
 describe("validateRoutes", () => {
   it("should detect duplicate paths", () => {
     const routes: RouteRecord[] = [

@@ -10,6 +10,7 @@ import type { RouteRecord, RouteSegment, ParsedRoute } from "./types.js";
  */
 export function parseRoute(filePath: string, pagesDir: string): ParsedRoute {
   const errors: string[] = [];
+  const warnings: string[] = [];
   const relativePath = relative(pagesDir, filePath);
 
   // Quitar extensión
@@ -113,6 +114,11 @@ export function parseRoute(filePath: string, pagesDir: string): ParsedRoute {
 
   const optionalIndex = segments.findIndex((segment) => segment.type === "optional");
   if (optionalIndex !== -1) {
+    warnings.push(
+      "Optional segments are deprecated and will be removed in a future release. " +
+        "Use src/reroute.ts instead: https://github.com/calumet/suamox/blob/main/docs/guias/reroute.md",
+    );
+
     if (segments.some((segment, i) => segment.type === "optional" && i !== optionalIndex)) {
       errors.push("Only one optional segment is allowed per route");
     }
@@ -131,7 +137,7 @@ export function parseRoute(filePath: string, pagesDir: string): ParsedRoute {
   // Calcular prioridad (más alta = se evalúa primero)
   // Segmentos estáticos tienen más prioridad, luego params, luego catch-all
   // Rutas más profundas tienen mayor prioridad
-  const priority = calculatePriority(segments);
+  const priority = calculatePriority(segments, isIndex);
 
   const route: RouteRecord = {
     path,
@@ -143,14 +149,14 @@ export function parseRoute(filePath: string, pagesDir: string): ParsedRoute {
     priority,
   };
 
-  return { route, errors };
+  return { route, errors, warnings };
 }
 
 /**
  * Calcula la prioridad de la ruta para ordenamiento
  * Las rutas con mayor prioridad se evalúan primero
  */
-function calculatePriority(segments: RouteSegment[]): number {
+function calculatePriority(segments: RouteSegment[], isIndex: boolean): number {
   let priority = 0;
 
   // La profundidad suma prioridad (rutas más específicas primero)
@@ -170,6 +176,13 @@ function calculatePriority(segments: RouteSegment[]): number {
       // Catch-all reduce la prioridad de forma importante
       priority -= 1000;
     }
+  }
+
+  // Un index le gana a su hermano dinamico del mismo largo: `[lang]/index.tsx`
+  // antes que `[slug].tsx`, por regla y no por como se llame el parametro.
+  // Vale menos que un segmento estatico (10) para que `/ingresar` siga ganando a `/:lang`
+  if (isIndex) {
+    priority += 2;
   }
 
   // Caso especial: sin segmentos (index raiz), darle prioridad alta
@@ -202,7 +215,7 @@ export function expandOptionalSegment(route: RouteRecord): RouteRecord[] {
     path: "/" + segments.map((segment) => segment.value).join("/"),
     params: route.params.filter((param) => param !== paramName),
     segments,
-    priority: calculatePriority(segments),
+    priority: calculatePriority(segments, route.isIndex),
   };
 
   return [withoutParam, route];
@@ -218,7 +231,9 @@ export function sortRoutes(routes: RouteRecord[]): RouteRecord[] {
       return b.priority - a.priority;
     }
 
-    // Si la prioridad es igual, ordenar alfabéticamente para consistencia
+    // Empatan solo dos patrones con la misma forma —`/blog/:slug` y `/blog/:id`—,
+    // que casan las mismas URLs: cual gane es arbitrario se ordene como se ordene.
+    // Alfabetico para que al menos sea estable entre builds
     return a.path.localeCompare(b.path);
   });
 }

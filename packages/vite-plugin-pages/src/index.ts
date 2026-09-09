@@ -68,6 +68,13 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       });
     }
 
+    if (logErrors && result.warnings.length > 0) {
+      console.warn(pc.yellow("\n[suamox:pages] Route warnings:"));
+      result.warnings.forEach((warn) => {
+        console.warn(pc.yellow(`  - ${warn}`));
+      });
+    }
+
     if (server) {
       // Cada entorno (client, ssr, ...) tiene su propio module graph. El modulo
       // virtual del cliente vive en `client` y el del servidor en `ssr`, asi que
