@@ -324,6 +324,19 @@ type MiddlewareFunction = (
  *
  * El que no llama a `next()` corta: el pipeline no llega a correr.
  */
+const isResponseLike = (value: unknown): value is Response => {
+  if (value instanceof Response) {
+    return true;
+  }
+  const candidate = value as { status?: unknown; headers?: unknown } | null;
+  return (
+    typeof candidate === "object" &&
+    candidate !== null &&
+    typeof candidate.status === "number" &&
+    typeof candidate.headers === "object"
+  );
+};
+
 /** La cadena que el plugin dejo en la ruta. Paginas y rutas de API la traen igual */
 const routeMiddleware = (route: unknown): MiddlewareFunction[] => {
   const chain = (route as { middleware?: MiddlewareFunction[] } | undefined)?.middleware;
@@ -362,7 +375,9 @@ const runMiddleware = async (
     }
 
     const result = await fn(context, () => dispatch(index + 1));
-    if (!(result instanceof Response)) {
+    // `instanceof` es por realm: una Response de undici o de un polyfill no lo
+    // pasaria, y devolverla era valido antes
+    if (!isResponseLike(result)) {
       throw new TypeError(
         "[suamox] middleware must return the Response from next(), or its own Response",
       );
@@ -632,6 +647,12 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
           // Dentro del pipeline: cargar el modulo de la pagina antes correria sus
           // efectos de nivel superior en una peticion que el guardia va a denegar
           const resolved = await runtime.resolveRouteModule(match.route);
+          // Una ruta csr no corre loaders: si aqui los corriera, la pagina
+          // renderizaria distinto segun se llegue por navegacion o por URL directa.
+          // El viaje a /__data de una ruta csr existe solo para correr el guardia
+          if (resolved.csr) {
+            return dataResponse(c, null);
+          }
           const loaderUrl = new URL(path, reqUrl.origin);
           reqUrl.searchParams.forEach((value, key) => {
             if (key !== "path" && key !== "stableLayouts") {
@@ -1210,6 +1231,12 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
           // Dentro del pipeline: cargar el modulo de la pagina antes correria sus
           // efectos de nivel superior en una peticion que el guardia va a denegar
           const resolved = await entry.resolveRouteModule(match.route);
+          // Una ruta csr no corre loaders: si aqui los corriera, la pagina
+          // renderizaria distinto segun se llegue por navegacion o por URL directa.
+          // El viaje a /__data de una ruta csr existe solo para correr el guardia
+          if (resolved.csr) {
+            return dataResponse(c, null);
+          }
           const loaderUrl = new URL(path, safeOrigin);
           originalUrl.searchParams.forEach((value, key) => {
             if (key !== "path" && key !== "stableLayouts") {

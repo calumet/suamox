@@ -16,6 +16,12 @@ export interface ChunkModules {
 }
 
 const SERVER_FILE_RE = /\.server\.(ts|tsx|js|jsx)$/;
+
+/**
+ * `middleware` es un nombre de archivo corriente —hay uno en medio node_modules y
+ * en cualquier `src/lib/`—, asi que solo cuenta dentro de los directorios donde el
+ * framework le da significado. Al reves de `.server.*`, que es convencion nuestra.
+ */
 const MIDDLEWARE_FILE_RE = /(^|\/)middleware\.(ts|tsx|js|jsx)$/;
 
 /** Stub con el que Vite reemplaza un builtin de Node al bundlear para el browser */
@@ -23,12 +29,18 @@ const BROWSER_EXTERNAL = "__vite-browser-external";
 
 const normalize = (id: string): string => (id.split("?")[0] ?? id).replace(/\\/g, "/");
 
-function classify(id: string, apiDir: string): LeakReason | null {
+function classify(
+  id: string,
+  apiDir: string,
+  middlewareDirs: readonly string[],
+): LeakReason | null {
   // Vite no deja `node:fs` en el bundle: lo sustituye por su stub vacio, asi que
   // el marcador de un builtin filtrado es el stub, no el nombre del modulo
   if (id.includes(BROWSER_EXTERNAL) || id.startsWith("node:")) return "node-builtin";
   if (SERVER_FILE_RE.test(id)) return "server-file";
-  if (MIDDLEWARE_FILE_RE.test(id)) return "middleware";
+  if (MIDDLEWARE_FILE_RE.test(id) && middlewareDirs.some((dir) => id.startsWith(dir))) {
+    return "middleware";
+  }
   if (id.startsWith(apiDir)) return "api-route";
   return null;
 }
@@ -41,14 +53,20 @@ function classify(id: string, apiDir: string): LeakReason | null {
  * resuelve primero, un import dinamico). Mira los ids que Rollup incluyo, no el
  * texto del bundle, asi que no depende de que un nombre sobreviva al minificador.
  */
-export function findServerLeaks(chunks: readonly ChunkModules[], apiDir: string): ServerLeak[] {
-  const normalizedApiDir = normalize(apiDir).replace(/\/+$/, "") + "/";
+export function findServerLeaks(
+  chunks: readonly ChunkModules[],
+  apiDir: string,
+  pagesDir?: string,
+): ServerLeak[] {
+  const asDir = (path: string): string => normalize(path).replace(/\/+$/, "") + "/";
+  const normalizedApiDir = asDir(apiDir);
+  const middlewareDirs = pagesDir ? [asDir(pagesDir), normalizedApiDir] : [normalizedApiDir];
   const leaks: ServerLeak[] = [];
 
   for (const chunk of chunks) {
     for (const id of chunk.ids) {
       const clean = normalize(id);
-      const reason = classify(clean, normalizedApiDir);
+      const reason = classify(clean, normalizedApiDir, middlewareDirs);
       if (reason) {
         leaks.push({ fileName: chunk.fileName, moduleId: clean, reason });
       }

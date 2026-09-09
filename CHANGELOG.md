@@ -23,12 +23,14 @@
 
   **El router pide `/__data` cuando la ruta tiene middleware, aunque no tenga loader.** Sin eso el guardia solo correria en la carga directa y no al navegar dentro de la SPA. React Router tiene ese mismo agujero y su solucion documentada es anadir un `loader` vacio a mano; aca no hace falta porque el plugin ya sabe en build que rutas tienen middleware. Hasta ahora la garantia dependia de que hubiera algun loader en la cadena de la pagina —en el ejemplo lo hay, el de `root.tsx`—, asi que era correcta por accidente.
 
-  El guardia es codigo de servidor y no viaja al bundle del cliente: al navegador solo llega la bandera `hasMiddleware`. El plugin corta el build si una pagina intenta importar algo de un `middleware.ts`, porque ese archivo no pasa por el stripping —no es un archivo de ruta— y sus secretos acabarian en el navegador.
+  El guardia es codigo de servidor y no viaja al bundle del cliente: al navegador solo llega la bandera `hasMiddleware`. Si una pagina importa algo de un `middleware.ts`, el validador de fugas corta el build, porque ese archivo no pasa por el stripping —no es un archivo de ruta— y sus secretos acabarian en el navegador. Solo cuenta dentro de `src/pages/` y `src/api/`: `middleware` es un nombre corriente y un `src/lib/middleware.ts` o uno de `node_modules` es codigo de cliente normal.
+
+  Un `middleware.ts` que no exporte `onRequest` **rompe el build**. El modulo generado ata la cadena con `__mwN.onRequest`, asi que sin ese export quedaba `undefined`, el adaptador lo filtraba y la carpeta se quedaba sin guardia sin que nadie avisara.
 
   Dos combinaciones que dejarian el guardia sin correr se cierran en vez de documentarse:
 
   - **`prerender = true` + middleware rompe el build.** El HTML prerenderizado se sirve desde disco sin middleware, asi que la pagina saldria entera; y solo en produccion, porque en desarrollo no hay `dist/static` y el guardia si corre.
-  - **`csr = true` + middleware.** La condicion de csr en el router se salta el viaje al servidor, y con el el guardia. Ahora una ruta con middleware lo hace igual.
+  - **`csr = true` + middleware.** La condicion de csr en el router se salta el viaje al servidor, y con el el guardia. Ahora una ruta con middleware lo hace igual, y el endpoint `/__data` no corre los loaders de una ruta csr: ese viaje existe solo para el guardia, y correrlos habria hecho que la pagina renderizara distinto segun se llegue por navegacion o por URL directa.
 
   Ademas, dos rutas duplicadas **rompen el build** en vez de avisar: cual gana depende del orden, y si una esta en una carpeta protegida y la otra no, eso decide si el guardia corre. En desarrollo se sigue avisando sin cortar.
 

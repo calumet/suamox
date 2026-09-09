@@ -32,7 +32,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
   let root: string;
   let basePath = "/";
   let routesCache: RouteRecord[] | null = null;
-  let duplicateErrors: string[] = [];
+  let fatalErrors: string[] = [];
   let apiRoutesCache: ApiRouteRecord[] = [];
   let clientModuleCode: string | null = null;
   let serverModuleCode: string | null = null;
@@ -45,7 +45,10 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     });
 
     routesCache = result.routes;
-    duplicateErrors = result.errors.filter((err) => err.includes("Duplicate route path"));
+    // Los que dejan la app en un estado en que un guardia puede no correr
+    fatalErrors = result.errors.filter(
+      (err) => err.includes("Duplicate route path") || err.includes('must export "onRequest"'),
+    );
     apiRoutesCache = result.apiRoutes;
     clientModuleCode = generateRoutesModule(result.routes, {
       defaultMode,
@@ -141,14 +144,13 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     async buildStart() {
       await updateRoutes();
 
-      // Cual de las dos rutas duplicadas gana depende del orden, y si una esta en
-      // una carpeta protegida y la otra no, eso decide si el guardia corre. En dev
-      // solo se avisa; el build no puede publicar una app asi
-      if (!server && duplicateErrors.length > 0) {
+      // Rutas duplicadas: cual gana depende del orden, y si una esta en carpeta
+      // protegida y la otra no, eso decide si el guardia corre. Middleware sin
+      // `onRequest`: la carpeta se queda sin guardia. En dev solo se avisa; el
+      // build no puede publicar una app asi
+      if (!server && fatalErrors.length > 0) {
         this.error(
-          `[suamox:pages] ${duplicateErrors.length} duplicate route path(s):\n${duplicateErrors
-            .map((err) => `  - ${err}`)
-            .join("\n")}`,
+          `[suamox:pages] Route errors:\n${fatalErrors.map((e) => `  - ${e}`).join("\n")}`,
         );
       }
 
@@ -207,7 +209,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       // El middleware de directorio no pasa por el stripping —no es un archivo de
       // ruta— asi que una pagina que importe algo de el se llevaria el guardia,
       // y sus secretos, al bundle del navegador
-      if (isMiddlewareModule(cleanId)) {
+      if (isMiddlewareModule(cleanId, root, pagesDir)) {
         const importerRel = importer ? importer.replace(/\\/g, "/") : "unknown";
         throw new Error(
           `[suamox:pages] Cannot import middleware "${cleanId}" from client code (${importerRel}). ` +
@@ -267,7 +269,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
         chunks.push({ fileName, ids: [...Object.keys(output.modules), ...output.imports] });
       }
 
-      const leaks = findServerLeaks(chunks, resolve(root, "src/api"));
+      const leaks = findServerLeaks(chunks, resolve(root, "src/api"), resolve(root, pagesDir));
       if (leaks.length > 0) {
         this.error(formatLeakError(leaks, root));
       }
@@ -280,8 +282,21 @@ function isServerFile(id: string): boolean {
   return /\.server\.(ts|tsx|js|jsx)$/.test(id);
 }
 
-function isMiddlewareModule(id: string): boolean {
-  return /(^|\/)middleware\.(ts|tsx|js|jsx)$/.test(id.replace(/\\/g, "/"));
+/**
+ * `middleware` es un nombre corriente —lo hay en node_modules y en cualquier
+ * `src/lib/`—, asi que solo cuenta dentro de los directorios donde el framework
+ * le da significado. Fuera de ahi es codigo de la app como cualquier otro.
+ */
+function isMiddlewareModule(id: string, root: string, pagesDir: string): boolean {
+  const normalized = id.replace(/\\/g, "/");
+  if (!/(^|\/)middleware\.(ts|tsx|js|jsx)$/.test(normalized)) {
+    return false;
+  }
+
+  const asDir = (path: string): string => path.replace(/\\/g, "/").replace(/\/+$/, "") + "/";
+  return [resolve(root, pagesDir), resolve(root, "src/api")].some((dir) =>
+    normalized.startsWith(asDir(dir)),
+  );
 }
 
 export default suamoxPages;

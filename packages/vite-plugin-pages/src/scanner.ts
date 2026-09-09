@@ -321,6 +321,26 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
 
   const errors: string[] = [];
   const warnings: string[] = [];
+
+  // El codegen ata la cadena con `__mwN.onRequest`. Si el archivo no lo exporta,
+  // eso es `undefined`, el filtro del adaptador lo descarta y la carpeta se queda
+  // sin guardia sin que nadie se entere: hay que cortarlo aqui
+  await Promise.all(
+    middlewareFiles.map(async (file) => {
+      const content = await readFile(file, "utf-8");
+      const exports = parseExports(file, content);
+      const hasOnRequest = exports
+        ? exports.names.has("onRequest")
+        : /\bexport\s+(async\s+)?function\s+onRequest\b/.test(content) ||
+          /\bexport\s+(const|let|var)\s+onRequest\b/.test(content) ||
+          /\bexport\s*{\s*[^}]*\bonRequest\b[^}]*}/.test(content);
+
+      if (!hasOnRequest) {
+        errors.push(`${file}: A middleware file must export "onRequest"`);
+      }
+    }),
+  );
+
   const parsedRoutes = await Promise.all(
     pageFiles.map(async (file): Promise<RouteRecord[]> => {
       const {
