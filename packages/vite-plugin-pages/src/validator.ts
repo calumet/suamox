@@ -38,7 +38,9 @@ function classify(
   // el marcador de un builtin filtrado es el stub, no el nombre del modulo
   if (id.includes(BROWSER_EXTERNAL) || id.startsWith("node:")) return "node-builtin";
   if (SERVER_FILE_RE.test(id)) return "server-file";
-  if (MIDDLEWARE_FILE_RE.test(id) && middlewareDirs.some((dir) => id.startsWith(dir))) {
+  // `startsWith` cubre a la vez los directorios (terminados en `/`) y la ruta
+  // exacta del middleware global
+  if (MIDDLEWARE_FILE_RE.test(id) && middlewareDirs.some((entry) => id.startsWith(entry))) {
     return "middleware";
   }
   if (id.startsWith(apiDir)) return "api-route";
@@ -57,10 +59,17 @@ export function findServerLeaks(
   chunks: readonly ChunkModules[],
   apiDir: string,
   pagesDir?: string,
+  globalMiddleware?: string,
 ): ServerLeak[] {
   const asDir = (path: string): string => normalize(path).replace(/\/+$/, "") + "/";
   const normalizedApiDir = asDir(apiDir);
-  const middlewareDirs = pagesDir ? [asDir(pagesDir), normalizedApiDir] : [normalizedApiDir];
+  // El global vive en `src/`, fuera de los dos directorios, asi que va por su
+  // ruta exacta: acotar a `src/` entero volveria a marcar cualquier src/lib/middleware.ts
+  const middlewareDirs = [
+    ...(pagesDir ? [asDir(pagesDir)] : []),
+    normalizedApiDir,
+    ...(globalMiddleware ? [normalize(globalMiddleware)] : []),
+  ];
   const leaks: ServerLeak[] = [];
 
   for (const chunk of chunks) {

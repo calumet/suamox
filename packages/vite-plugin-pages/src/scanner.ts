@@ -162,6 +162,41 @@ function collectMiddlewareForFile(
   return chain.reverse();
 }
 
+/**
+ * El codegen ata la cadena con `__mwN.onRequest`. Si el archivo no lo exporta, eso
+ * es `undefined` y la carpeta se queda sin guardia, asi que se corta aqui. Es un
+ * aviso temprano: la garantia de verdad la da el adaptador al montar la cadena.
+ */
+async function checkMiddlewareExports(files: readonly string[], errors: string[]): Promise<void> {
+  await Promise.all(
+    files.map(async (file) => {
+      let content: string;
+      try {
+        content = await readFile(file, "utf-8");
+      } catch {
+        // Desaparecio entre el glob y la lectura: el guardado de un editor
+        return;
+      }
+
+      // Con un `export *` el nombre puede venir de otro modulo y no se decide aqui
+      if (/\bexport\s*\*/.test(content)) {
+        return;
+      }
+
+      const exports = parseExports(file, content);
+      const hasOnRequest = exports
+        ? exports.names.has("onRequest")
+        : /\bexport\s+(async\s+)?function\s+onRequest\b/.test(content) ||
+          /\bexport\s+(const|let|var)\s+onRequest\b/.test(content) ||
+          /\bexport\s*{\s*[^}]*\bonRequest\b[^}]*}/.test(content);
+
+      if (!hasOnRequest) {
+        errors.push(`${file}: A middleware file must export "onRequest"`);
+      }
+    }),
+  );
+}
+
 /** Solo cuenta en la raiz de `pages/`; un `root.tsx` anidado es una pagina normal */
 function isRootFile(filePath: string, extensions: string[], pagesDir: string): boolean {
   const matchedExtension = extensions.find((extension) => filePath.endsWith(extension));
@@ -322,24 +357,7 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // El codegen ata la cadena con `__mwN.onRequest`. Si el archivo no lo exporta,
-  // eso es `undefined`, el filtro del adaptador lo descarta y la carpeta se queda
-  // sin guardia sin que nadie se entere: hay que cortarlo aqui
-  await Promise.all(
-    middlewareFiles.map(async (file) => {
-      const content = await readFile(file, "utf-8");
-      const exports = parseExports(file, content);
-      const hasOnRequest = exports
-        ? exports.names.has("onRequest")
-        : /\bexport\s+(async\s+)?function\s+onRequest\b/.test(content) ||
-          /\bexport\s+(const|let|var)\s+onRequest\b/.test(content) ||
-          /\bexport\s*{\s*[^}]*\bonRequest\b[^}]*}/.test(content);
-
-      if (!hasOnRequest) {
-        errors.push(`${file}: A middleware file must export "onRequest"`);
-      }
-    }),
-  );
+  await checkMiddlewareExports(middlewareFiles, errors);
 
   const parsedRoutes = await Promise.all(
     pageFiles.map(async (file): Promise<RouteRecord[]> => {
@@ -406,10 +424,14 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
       ignore: ["**/node_modules/**", "**/.git/**"],
     });
 
+    const apiMiddlewareFiles = allApiFiles.filter((f) => isMiddlewareFile(f, extensions));
     const apiMiddlewareMap = new Map<string, string>();
-    for (const file of allApiFiles.filter((f) => isMiddlewareFile(f, extensions))) {
+    for (const file of apiMiddlewareFiles) {
       apiMiddlewareMap.set(dirname(file), file);
     }
+    // Los de API se comprueban igual que los de pages: la guia los vende como
+    // equivalentes, y sin esto el guardia de una carpeta de API falla abierto
+    await checkMiddlewareExports(apiMiddlewareFiles, errors);
     const apiFiles = allApiFiles.filter((file) => !isMiddlewareFile(file, extensions));
 
     for (const file of apiFiles) {

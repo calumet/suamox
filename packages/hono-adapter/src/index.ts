@@ -337,10 +337,29 @@ const isResponseLike = (value: unknown): value is Response => {
   );
 };
 
-/** La cadena que el plugin dejo en la ruta. Paginas y rutas de API la traen igual */
+/**
+ * La cadena que el plugin dejo en la ruta. Paginas y rutas de API la traen igual.
+ *
+ * Lanza si una entrada no es funcion en vez de descartarla: eso pasa cuando el
+ * `middleware.ts` no exporta `onRequest` con la forma esperada, y descartarla
+ * dejaria la carpeta sin guardia en silencio. Es la garantia de verdad; el
+ * chequeo del plugin en build es solo el aviso temprano.
+ */
 const routeMiddleware = (route: unknown): MiddlewareFunction[] => {
   const chain = (route as { middleware?: MiddlewareFunction[] } | undefined)?.middleware;
-  return Array.isArray(chain) ? chain : [];
+  if (!Array.isArray(chain)) {
+    return [];
+  }
+  for (const fn of chain) {
+    if (typeof fn !== "function") {
+      const path = (route as { path?: string } | undefined)?.path ?? "unknown";
+      throw new Error(
+        `[suamox] Route "${path}" has a middleware that is not a function. ` +
+          `A middleware file must export "onRequest" as a function.`,
+      );
+    }
+  }
+  return chain;
 };
 
 const runMiddleware = async (

@@ -131,6 +131,18 @@ describe("middleware de directorio", () => {
     expect(leaks[0]?.reason).toBe("middleware");
   });
 
+  // Vive en `src/`, fuera de los dos directorios, asi que va por su ruta exacta
+  it("tambien el global, que esta fuera de pages y de api", () => {
+    const leaks = findServerLeaks(
+      chunk(["/proyecto/src/middleware.ts"]),
+      API_DIR,
+      PAGES_DIR,
+      "/proyecto/src/middleware.ts",
+    );
+
+    expect(leaks[0]?.reason).toBe("middleware");
+  });
+
   // `middleware` es un nombre corriente: fuera de pages/ y api/ es codigo normal,
   // y marcarlo rompia el build de apps que funcionaban
   it.each([

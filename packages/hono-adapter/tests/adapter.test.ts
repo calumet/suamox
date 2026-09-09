@@ -1034,6 +1034,32 @@ describe("createDevHandler middleware", () => {
     expect(response.status).toBe(500);
   });
 
+  // Descartarla dejaria la carpeta sin guardia en silencio: es el fallo que la
+  // feature existe para evitar, asi que falla cerrado
+  it("rejects a route middleware entry that is not a function", async () => {
+    const route = {
+      path: "/panel",
+      params: [],
+      middleware: [{ handler: () => undefined }],
+      loader: vi.fn(() => Promise.resolve(null)),
+    };
+    mocks.matchRoute.mockReturnValue({ route, params: {}, pathname: "/panel" });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const vite = {
+      environments: {
+        ssr: { runner: { import: createSsrImport([route]) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite });
+    const response = await app.request("http://localhost/__data?path=/panel");
+
+    expect(response.status).toBe(500);
+  });
+
   it("translates a redirect thrown by the middleware into a 302", async () => {
     const middlewareFn = vi.fn(() => {
       throw new RedirectResponse("/login");

@@ -25,7 +25,7 @@
 
   El guardia es codigo de servidor y no viaja al bundle del cliente: al navegador solo llega la bandera `hasMiddleware`. Si una pagina importa algo de un `middleware.ts`, el validador de fugas corta el build, porque ese archivo no pasa por el stripping —no es un archivo de ruta— y sus secretos acabarian en el navegador. Solo cuenta dentro de `src/pages/` y `src/api/`: `middleware` es un nombre corriente y un `src/lib/middleware.ts` o uno de `node_modules` es codigo de cliente normal.
 
-  Un `middleware.ts` que no exporte `onRequest` **rompe el build**. El modulo generado ata la cadena con `__mwN.onRequest`, asi que sin ese export quedaba `undefined`, el adaptador lo filtraba y la carpeta se quedaba sin guardia sin que nadie avisara.
+  Un `middleware.ts` que no exporte `onRequest` **rompe el build**, en `src/pages/` y en `src/api/` por igual. El modulo generado ata la cadena con `__mwN.onRequest`, asi que sin ese export quedaba `undefined`, el adaptador lo filtraba y la carpeta se quedaba sin guardia sin que nadie avisara. La garantia de verdad la da el adaptador: si una entrada de la cadena no es una funcion, lanza en vez de descartarla, porque un `export const onRequest = { handler }` pasa cualquier comprobacion por nombre. El chequeo del build es el aviso temprano, y no corta ante un `export *`, donde el nombre puede venir de otro modulo.
 
   Dos combinaciones que dejarian el guardia sin correr se cierran en vez de documentarse:
 

@@ -33,6 +33,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
   let basePath = "/";
   let routesCache: RouteRecord[] | null = null;
   let fatalErrors: string[] = [];
+  let globalMiddlewarePath: string | undefined;
   let apiRoutesCache: ApiRouteRecord[] = [];
   let clientModuleCode: string | null = null;
   let serverModuleCode: string | null = null;
@@ -45,6 +46,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     });
 
     routesCache = result.routes;
+    globalMiddlewarePath = result.middlewarePath;
     // Los que dejan la app en un estado en que un guardia puede no correr
     fatalErrors = result.errors.filter(
       (err) => err.includes("Duplicate route path") || err.includes('must export "onRequest"'),
@@ -128,7 +130,11 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
         if (isWatchedFile(file)) {
           const type = file.startsWith(absoluteApiDir) ? "API route" : "Page";
           console.log(pc.green(`[suamox:pages] ${type} added: ${file}`));
-          void updateRoutes();
+          // Sin el catch, un archivo que desaparece a mitad del escaneo tumba el
+          // dev server con un rechazo no capturado
+          void updateRoutes().catch((error: unknown) => {
+            console.error(pc.red(`[suamox:pages] Route scan failed: ${String(error)}`));
+          });
         }
       });
 
@@ -136,7 +142,11 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
         if (isWatchedFile(file)) {
           const type = file.startsWith(absoluteApiDir) ? "API route" : "Page";
           console.log(pc.yellow(`[suamox:pages] ${type} removed: ${file}`));
-          void updateRoutes();
+          // Sin el catch, un archivo que desaparece a mitad del escaneo tumba el
+          // dev server con un rechazo no capturado
+          void updateRoutes().catch((error: unknown) => {
+            console.error(pc.red(`[suamox:pages] Route scan failed: ${String(error)}`));
+          });
         }
       });
     },
@@ -269,7 +279,12 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
         chunks.push({ fileName, ids: [...Object.keys(output.modules), ...output.imports] });
       }
 
-      const leaks = findServerLeaks(chunks, resolve(root, "src/api"), resolve(root, pagesDir));
+      const leaks = findServerLeaks(
+        chunks,
+        resolve(root, "src/api"),
+        resolve(root, pagesDir),
+        globalMiddlewarePath,
+      );
       if (leaks.length > 0) {
         this.error(formatLeakError(leaks, root));
       }
