@@ -1,7 +1,7 @@
 import { isAbsolute, relative } from "node:path";
 
 /** Motivo por el que un modulo no deberia estar en el bundle del cliente */
-export type LeakReason = "server-file" | "api-route" | "node-builtin";
+export type LeakReason = "server-file" | "api-route" | "middleware" | "node-builtin";
 
 export interface ServerLeak {
   fileName: string;
@@ -17,16 +17,36 @@ export interface ChunkModules {
 
 const SERVER_FILE_RE = /\.server\.(ts|tsx|js|jsx)$/;
 
+/**
+ * `middleware` es un nombre de archivo corriente —hay uno en medio node_modules y
+ * en cualquier `src/lib/`—, asi que solo cuenta dentro de los directorios donde el
+ * framework le da significado. Al reves de `.server.*`, que es convencion nuestra.
+ */
+const MIDDLEWARE_FILE_RE = /(^|\/)middleware\.(ts|tsx|js|jsx)$/;
+
 /** Stub con el que Vite reemplaza un builtin de Node al bundlear para el browser */
 const BROWSER_EXTERNAL = "__vite-browser-external";
 
 const normalize = (id: string): string => (id.split("?")[0] ?? id).replace(/\\/g, "/");
 
-function classify(id: string, apiDir: string): LeakReason | null {
+function classify(
+  id: string,
+  apiDir: string,
+  middlewareDirs: readonly string[],
+  globalMiddleware?: string,
+): LeakReason | null {
   // Vite no deja `node:fs` en el bundle: lo sustituye por su stub vacio, asi que
   // el marcador de un builtin filtrado es el stub, no el nombre del modulo
   if (id.includes(BROWSER_EXTERNAL) || id.startsWith("node:")) return "node-builtin";
   if (SERVER_FILE_RE.test(id)) return "server-file";
+  // El global va por igualdad y antes del regex: en su forma `src/middleware/index.ts`
+  // el basename es `index`, asi que el regex lo descartaria sin llegar a compararlo
+  if (globalMiddleware && id === globalMiddleware) {
+    return "middleware";
+  }
+  if (MIDDLEWARE_FILE_RE.test(id) && middlewareDirs.some((dir) => id.startsWith(dir))) {
+    return "middleware";
+  }
   if (id.startsWith(apiDir)) return "api-route";
   return null;
 }
@@ -39,14 +59,24 @@ function classify(id: string, apiDir: string): LeakReason | null {
  * resuelve primero, un import dinamico). Mira los ids que Rollup incluyo, no el
  * texto del bundle, asi que no depende de que un nombre sobreviva al minificador.
  */
-export function findServerLeaks(chunks: readonly ChunkModules[], apiDir: string): ServerLeak[] {
-  const normalizedApiDir = normalize(apiDir).replace(/\/+$/, "") + "/";
+export function findServerLeaks(
+  chunks: readonly ChunkModules[],
+  apiDir: string,
+  pagesDir?: string,
+  globalMiddleware?: string,
+): ServerLeak[] {
+  const asDir = (path: string): string => normalize(path).replace(/\/+$/, "") + "/";
+  const normalizedApiDir = asDir(apiDir);
+  // El global vive en `src/`, fuera de los dos directorios, asi que va aparte y por
+  // igualdad: acotar a `src/` entero volveria a marcar cualquier src/lib/middleware.ts
+  const middlewareDirs = [...(pagesDir ? [asDir(pagesDir)] : []), normalizedApiDir];
+  const normalizedGlobal = globalMiddleware ? normalize(globalMiddleware) : undefined;
   const leaks: ServerLeak[] = [];
 
   for (const chunk of chunks) {
     for (const id of chunk.ids) {
       const clean = normalize(id);
-      const reason = classify(clean, normalizedApiDir);
+      const reason = classify(clean, normalizedApiDir, middlewareDirs, normalizedGlobal);
       if (reason) {
         leaks.push({ fileName: chunk.fileName, moduleId: clean, reason });
       }
@@ -59,6 +89,7 @@ export function findServerLeaks(chunks: readonly ChunkModules[], apiDir: string)
 const REASON_LABEL: Record<LeakReason, string> = {
   "server-file": "server-only file (*.server.*)",
   "api-route": "API route (src/api/)",
+  middleware: "middleware (middleware.*)",
   "node-builtin": "Node builtin, unavailable in the browser",
 };
 

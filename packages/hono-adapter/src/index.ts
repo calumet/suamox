@@ -317,21 +317,125 @@ type MiddlewareFunction = (
   next: () => Promise<Response>,
 ) => Response | Promise<Response>;
 
+/**
+ * Corre la cadena de middleware alrededor del pipeline: primero el global de
+ * `src/middleware.ts` y despues los `middleware.ts` de la ruta, de la raiz de
+ * `pages/` hacia su carpeta. Todos comparten el mismo `locals`.
+ *
+ * El que no llama a `next()` corta: el pipeline no llega a correr.
+ */
+const isResponseLike = (value: unknown): value is Response => {
+  if (value instanceof Response) {
+    return true;
+  }
+  const candidate = value as { status?: unknown; headers?: unknown } | null;
+  return (
+    typeof candidate === "object" &&
+    candidate !== null &&
+    typeof candidate.status === "number" &&
+    typeof candidate.headers === "object"
+  );
+};
+
+/**
+ * La cadena que el plugin dejo en la ruta. Paginas y rutas de API la traen igual.
+ *
+ * Lanza si una entrada no es funcion en vez de descartarla: eso pasa cuando el
+ * `middleware.ts` no exporta `onRequest` con la forma esperada, y descartarla
+ * dejaria la carpeta sin guardia en silencio. Es la garantia de verdad; el
+ * chequeo del plugin en build es solo el aviso temprano.
+ */
+const routeMiddleware = (route: unknown): MiddlewareFunction[] => {
+  const chain = (route as { middleware?: MiddlewareFunction[] } | undefined)?.middleware;
+  if (!Array.isArray(chain)) {
+    return [];
+  }
+  for (const fn of chain) {
+    if (typeof fn !== "function") {
+      const path = (route as { path?: string } | undefined)?.path ?? "unknown";
+      throw new Error(
+        `[suamox] Route "${path}" has a middleware that is not a function. ` +
+          `A middleware file must export "onRequest" as a function.`,
+      );
+    }
+  }
+  return chain;
+};
+
 const runMiddleware = async (
-  middlewareFn: MiddlewareFunction | undefined,
+  middlewares: ReadonlyArray<MiddlewareFunction | undefined>,
   request: Request,
   url: URL,
   pathname: string,
   params: Record<string, string>,
   pipeline: (locals: Record<string, unknown>) => Promise<Response>,
 ): Promise<Response> => {
-  if (!middlewareFn) {
+  // `undefined` es "no hay middleware global", legitimo. Cualquier otra cosa que no
+  // sea funcion es un `middleware.ts` mal escrito, y descartarla dejaria la ruta sin
+  // guardia en silencio: es el fallo que todo esto existe para evitar
+  const chain = middlewares.filter((fn): fn is MiddlewareFunction => {
+    if (fn === undefined) {
+      return false;
+    }
+    if (typeof fn !== "function") {
+      throw new TypeError(
+        '[suamox] A middleware file must export "onRequest" as a function, and one of ' +
+          "them does not. The request was refused instead of served without it.",
+      );
+    }
+    return true;
+  });
+
+  if (chain.length === 0) {
     return pipeline({});
   }
 
   const locals: Record<string, unknown> = {};
   const context = { request, url, pathname, params, locals };
-  return middlewareFn(context, () => pipeline(locals));
+
+  let reached = -1;
+  let calledNextTwice = false;
+
+  const dispatch = async (index: number): Promise<Response> => {
+    // Llamar a `next()` dos veces correria los loaders y el render otra vez, en
+    // silencio. Es lo que hacen Koa y Hono en este caso
+    if (index <= reached) {
+      calledNextTwice = true;
+      throw new Error("[suamox] middleware called next() more than once");
+    }
+    reached = index;
+
+    const fn = chain[index];
+    if (!fn) {
+      return pipeline(locals);
+    }
+
+    // El rechazo se marca como manejado: si el middleware no espera su segundo
+    // `next()`, un rechazo huerfano tumbaria el proceso despues de responder
+    const next = (): Promise<Response> => {
+      const pending = dispatch(index + 1);
+      pending.catch(() => {});
+      return pending;
+    };
+
+    const result = await fn(context, next);
+    // `instanceof` es por realm: una Response de undici o de un polyfill no lo
+    // pasaria, y devolverla era valido antes
+    if (!isResponseLike(result)) {
+      throw new TypeError(
+        "[suamox] middleware must return the Response from next(), or its own Response",
+      );
+    }
+    return result;
+  };
+
+  const response = await dispatch(0);
+  // Si alguien llamo a `next()` dos veces y se trago el rechazo, la peticion falla
+  // igual: responder con normalidad esconderia que el pipeline corrio de mas
+  if (calledNextTwice) {
+    throw new Error("[suamox] middleware called next() more than once");
+  }
+  return response;
 };
 
 /**
@@ -515,7 +619,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
 
       const middlewareFn = await loadMiddleware();
       return await runMiddleware(
-        middlewareFn,
+        [middlewareFn, ...routeMiddleware(match?.route)],
         c.req.raw,
         url,
         resolveRoutePathname(strippedPathname),
@@ -580,18 +684,25 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         return c.json(null, 404);
       }
 
-      const resolved = await runtime.resolveRouteModule(match.route);
-
       // Ejecutar middleware y pipeline de datos
       const middlewareFn = await loadMiddleware();
       const reqUrl = new URL(c.req.url);
       return await runMiddleware(
-        middlewareFn,
+        [middlewareFn, ...routeMiddleware(match?.route)],
         c.req.raw,
         reqUrl,
         resolveRoutePathname(strippedPathname),
         match.params,
         async (locals) => {
+          // Dentro del pipeline: cargar el modulo de la pagina antes correria sus
+          // efectos de nivel superior en una peticion que el guardia va a denegar
+          const resolved = await runtime.resolveRouteModule(match.route);
+          // Una ruta csr no corre loaders: si aqui los corriera, la pagina
+          // renderizaria distinto segun se llegue por navegacion o por URL directa.
+          // El viaje a /__data de una ruta csr existe solo para correr el guardia
+          if (resolved.csr) {
+            return dataResponse(c, null);
+          }
           const loaderUrl = new URL(path, reqUrl.origin);
           reqUrl.searchParams.forEach((value, key) => {
             if (key !== "path" && key !== "stableLayouts") {
@@ -684,7 +795,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       // Ejecutar middleware de usuario y pipeline SSR
       const middlewareFn = await loadMiddleware();
       return await runMiddleware(
-        middlewareFn,
+        [middlewareFn, ...routeMiddleware(match?.route)],
         c.req.raw,
         url,
         resolveRoutePathname(strippedPathname),
@@ -1047,6 +1158,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     isCatchAll: boolean;
     isIndex: boolean;
     priority: number;
+    middleware?: MiddlewareFunction[];
   };
 
   type ServerEntryRuntime = {
@@ -1097,7 +1209,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       if (!match) return c.notFound();
 
       return await runMiddleware(
-        entry.onRequest,
+        [entry.onRequest, ...routeMiddleware(match?.route)],
         safeRequest,
         safeUrl,
         resolveRoutePathname(strippedPathname),
@@ -1153,8 +1265,6 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         return c.json(null, 404);
       }
 
-      const resolved = await entry.resolveRouteModule(match.route);
-
       const safeOrigin = resolveRequestOrigin(c.req.raw, allowedHosts);
       const originalUrl = new URL(c.req.url);
       const safeUrl = new URL(`${safeOrigin}${originalUrl.pathname}${originalUrl.search}`);
@@ -1162,12 +1272,21 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 
       // Ejecutar middleware y pipeline de datos
       return await runMiddleware(
-        entry.onRequest,
+        [entry.onRequest, ...routeMiddleware(match?.route)],
         safeRequest,
         safeUrl,
         resolveRoutePathname(strippedPathname),
         match.params,
         async (locals) => {
+          // Dentro del pipeline: cargar el modulo de la pagina antes correria sus
+          // efectos de nivel superior en una peticion que el guardia va a denegar
+          const resolved = await entry.resolveRouteModule(match.route);
+          // Una ruta csr no corre loaders: si aqui los corriera, la pagina
+          // renderizaria distinto segun se llegue por navegacion o por URL directa.
+          // El viaje a /__data de una ruta csr existe solo para correr el guardia
+          if (resolved.csr) {
+            return dataResponse(c, null);
+          }
           const loaderUrl = new URL(path, safeOrigin);
           originalUrl.searchParams.forEach((value, key) => {
             if (key !== "path" && key !== "stableLayouts") {
@@ -1271,7 +1390,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       const safeRequest = new Request(safeUrl, { headers: c.req.raw.headers });
 
       return await runMiddleware(
-        entry.onRequest,
+        [entry.onRequest, ...routeMiddleware(match?.route)],
         safeRequest,
         safeUrl,
         resolveRoutePathname(strippedPathname),

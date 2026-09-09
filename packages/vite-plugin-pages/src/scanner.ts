@@ -116,6 +116,87 @@ function isLayoutFile(filePath: string, extensions: string[]): boolean {
   return basename(filePath, matchedExtension) === "layout";
 }
 
+function isMiddlewareFile(filePath: string, extensions: string[]): boolean {
+  const matchedExtension = extensions.find((extension) => filePath.endsWith(extension));
+  if (!matchedExtension) {
+    return false;
+  }
+
+  return basename(filePath, matchedExtension) === "middleware";
+}
+
+/**
+ * Cadena de middleware de una pagina: de la raiz de `pages/` hacia su carpeta.
+ *
+ * Va por directorio y no por la cadena de layouts a proposito: una pagina con
+ * `layout = false` se salta los layouts, y un guardia no se puede desactivar
+ * cambiando la presentacion. Ademas asi un grupo `(admin)/` se protege sin
+ * necesidad de inventarle un layout.
+ */
+function collectMiddlewareForFile(
+  filePath: string,
+  middlewareMap: Map<string, string>,
+  pagesDir: string,
+): string[] {
+  const chain: string[] = [];
+  let currentDir = dirname(filePath);
+
+  while (true) {
+    const middlewareFile = middlewareMap.get(currentDir);
+    if (middlewareFile) {
+      chain.push(middlewareFile);
+    }
+
+    if (currentDir === pagesDir) {
+      break;
+    }
+
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) {
+      break;
+    }
+
+    currentDir = parentDir;
+  }
+
+  return chain.reverse();
+}
+
+/**
+ * El codegen ata la cadena con `__mwN.onRequest`. Si el archivo no lo exporta, eso
+ * es `undefined` y la carpeta se queda sin guardia, asi que se corta aqui. Es un
+ * aviso temprano: la garantia de verdad la da el adaptador al montar la cadena.
+ */
+async function checkMiddlewareExports(files: readonly string[], errors: string[]): Promise<void> {
+  await Promise.all(
+    files.map(async (file) => {
+      let content: string;
+      try {
+        content = await readFile(file, "utf-8");
+      } catch {
+        // Desaparecio entre el glob y la lectura: el guardado de un editor
+        return;
+      }
+
+      // Con un `export *` el nombre puede venir de otro modulo y no se decide aqui
+      if (/\bexport\s*\*/.test(content)) {
+        return;
+      }
+
+      const exports = parseExports(file, content);
+      const hasOnRequest = exports
+        ? exports.names.has("onRequest")
+        : /\bexport\s+(async\s+)?function\s+onRequest\b/.test(content) ||
+          /\bexport\s+(const|let|var)\s+onRequest\b/.test(content) ||
+          /\bexport\s*{\s*[^}]*\bonRequest\b[^}]*}/.test(content);
+
+      if (!hasOnRequest) {
+        errors.push(`${file}: A middleware file must export "onRequest"`);
+      }
+    }),
+  );
+}
+
 /** Solo cuenta en la raiz de `pages/`; un `root.tsx` anidado es una pagina normal */
 function isRootFile(filePath: string, extensions: string[], pagesDir: string): boolean {
   const matchedExtension = extensions.find((extension) => filePath.endsWith(extension));
@@ -239,12 +320,21 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
 
   const rootFile = files.find((file) => isRootFile(file, extensions, absolutePagesDir));
   const layoutFiles = files.filter((file) => isLayoutFile(file, extensions));
-  const pageFiles = files.filter((file) => !isLayoutFile(file, extensions) && file !== rootFile);
+  const middlewareFiles = files.filter((file) => isMiddlewareFile(file, extensions));
+  const pageFiles = files.filter(
+    (file) =>
+      !isLayoutFile(file, extensions) && !isMiddlewareFile(file, extensions) && file !== rootFile,
+  );
   const layoutMap = new Map<string, string>();
   const layoutLoaderMap = new Map<string, boolean>();
+  const middlewareMap = new Map<string, string>();
 
   for (const layoutFile of layoutFiles) {
     layoutMap.set(dirname(layoutFile), layoutFile);
+  }
+
+  for (const middlewareFile of middlewareFiles) {
+    middlewareMap.set(dirname(middlewareFile), middlewareFile);
   }
 
   // Detectar loaders en layout files y en el root
@@ -266,6 +356,9 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
 
   const errors: string[] = [];
   const warnings: string[] = [];
+
+  await checkMiddlewareExports(middlewareFiles, errors);
+
   const parsedRoutes = await Promise.all(
     pageFiles.map(async (file): Promise<RouteRecord[]> => {
       const {
@@ -294,6 +387,7 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
 
       route.layouts = rootFile ? [rootFile, ...chain] : chain;
       route.layoutMetas = rootMeta ? [rootMeta, ...metas] : metas;
+      route.middlewares = collectMiddlewareForFile(file, middlewareMap, absolutePagesDir);
 
       if (exports) {
         route.hasLoader = exports.names.has("loader");
@@ -324,11 +418,21 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
 
   try {
     await access(apiDir);
-    const apiFiles = await fg(pattern, {
+    const allApiFiles = await fg(pattern, {
       cwd: apiDir,
       absolute: true,
       ignore: ["**/node_modules/**", "**/.git/**"],
     });
+
+    const apiMiddlewareFiles = allApiFiles.filter((f) => isMiddlewareFile(f, extensions));
+    const apiMiddlewareMap = new Map<string, string>();
+    for (const file of apiMiddlewareFiles) {
+      apiMiddlewareMap.set(dirname(file), file);
+    }
+    // Los de API se comprueban igual que los de pages: la guia los vende como
+    // equivalentes, y sin esto el guardia de una carpeta de API falla abierto
+    await checkMiddlewareExports(apiMiddlewareFiles, errors);
+    const apiFiles = allApiFiles.filter((file) => !isMiddlewareFile(file, extensions));
 
     for (const file of apiFiles) {
       const {
@@ -365,6 +469,7 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
           isCatchAll: route.isCatchAll,
           isIndex: route.isIndex,
           priority: route.priority,
+          middlewares: collectMiddlewareForFile(route.filePath, apiMiddlewareMap, apiDir),
         });
       }
     }
@@ -398,6 +503,11 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
         // no existe, continuar
       }
     }
+  }
+
+  // El global se comprueba igual que los de directorio: es la tercera procedencia
+  if (middlewarePath) {
+    await checkMiddlewareExports([middlewarePath], errors);
   }
 
   // Detectar reroute global (src/reroute.ts)

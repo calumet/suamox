@@ -400,6 +400,144 @@ describe("scanRoutes middleware detection", () => {
   });
 });
 
+describe("scanRoutes middleware por directorio", () => {
+  const crearArbol = async (root: string): Promise<void> => {
+    const pagesDir = join(root, "src", "pages");
+    const pagina = "export default function Page() { return null; }";
+    const mw = "export function onRequest(ctx, next) { return next(); }";
+
+    await writeFileWithDirs(join(pagesDir, "index.tsx"), pagina);
+    await writeFileWithDirs(join(pagesDir, "middleware.ts"), mw);
+    await writeFileWithDirs(join(pagesDir, "(admin)", "middleware.ts"), mw);
+    await writeFileWithDirs(join(pagesDir, "(admin)", "dashboard.tsx"), pagina);
+  };
+
+  it("un middleware.ts no genera ruta", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    await crearArbol(root);
+
+    const result = await scanRoutes({ pagesDir: "src/pages", extensions: [".tsx", ".ts"], root });
+
+    expect(result.routes.map((route) => route.path).sort()).toEqual(["/", "/dashboard"]);
+  });
+
+  it("encadena de la raiz de pages hacia la carpeta de la pagina", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    await crearArbol(root);
+
+    const result = await scanRoutes({ pagesDir: "src/pages", extensions: [".tsx", ".ts"], root });
+    const dashboard = result.routes.find((route) => route.path === "/dashboard");
+    const home = result.routes.find((route) => route.path === "/");
+
+    expect(dashboard?.middlewares).toHaveLength(2);
+    expect(dashboard?.middlewares?.[0]).toContain("pages/middleware.ts");
+    expect(dashboard?.middlewares?.[1]).toContain("(admin)/middleware.ts");
+    expect(home?.middlewares).toHaveLength(1);
+  });
+
+  // El codegen ata la cadena con `__mwN.onRequest`: sin ese export queda `undefined`,
+  // el adaptador lo filtra, y la carpeta se queda sin guardia sin que nadie avise
+  it("es error que un middleware.ts no exporte onRequest", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+    await writeFileWithDirs(
+      join(pagesDir, "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+    await writeFileWithDirs(
+      join(pagesDir, "middleware.ts"),
+      "export default function onRequest(ctx, next) { return next(); }",
+    );
+
+    const result = await scanRoutes({ pagesDir: "src/pages", extensions: [".tsx", ".ts"], root });
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('must export "onRequest"');
+  });
+
+  it("tambien comprueba los de src/api", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    await writeFileWithDirs(
+      join(root, "src", "pages", "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+    await writeFileWithDirs(
+      join(root, "src", "api", "admin", "middleware.ts"),
+      "export default function onRequest(ctx, next) { return next(); }",
+    );
+    await writeFileWithDirs(
+      join(root, "src", "api", "admin", "datos.ts"),
+      "export function GET() { return new Response('ok'); }",
+    );
+
+    const result = await scanRoutes({ pagesDir: "src/pages", extensions: [".tsx", ".ts"], root });
+
+    expect(result.errors.some((err) => err.includes('must export "onRequest"'))).toBe(true);
+  });
+
+  // Con un `export *` el nombre puede venir de otro modulo: romper el build aqui
+  // tumbaria una app correcta, y el adaptador lo comprueba al montar la cadena
+  it("tambien comprueba el global de src/middleware.ts", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    await writeFileWithDirs(
+      join(root, "src", "pages", "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+    await writeFileWithDirs(
+      join(root, "src", "middleware.ts"),
+      "export default function onRequest(ctx, next) { return next(); }",
+    );
+
+    const result = await scanRoutes({ pagesDir: "src/pages", extensions: [".tsx", ".ts"], root });
+
+    expect(result.errors.some((err) => err.includes('must export "onRequest"'))).toBe(true);
+  });
+
+  it("no rompe por un export * que puede traer onRequest", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+    await writeFileWithDirs(
+      join(pagesDir, "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+    await writeFileWithDirs(join(pagesDir, "middleware.ts"), 'export * from "./guard";');
+
+    const result = await scanRoutes({ pagesDir: "src/pages", extensions: [".tsx", ".ts"], root });
+
+    expect(result.errors).toEqual([]);
+  });
+
+  it("un middleware.ts con onRequest no da error", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+    await writeFileWithDirs(
+      join(pagesDir, "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+    await writeFileWithDirs(
+      join(pagesDir, "middleware.ts"),
+      "export function onRequest(ctx, next) { return next(); }",
+    );
+
+    const result = await scanRoutes({ pagesDir: "src/pages", extensions: [".tsx", ".ts"], root });
+
+    expect(result.errors).toEqual([]);
+  });
+
+  it("una pagina sin middleware en su cadena no lleva ninguno", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+    await writeFileWithDirs(
+      join(pagesDir, "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+
+    const result = await scanRoutes({ pagesDir: "src/pages", extensions: [".tsx", ".ts"], root });
+
+    expect(result.routes[0]?.middlewares).toEqual([]);
+  });
+});
+
 describe("scanRoutes reroute detection", () => {
   it("detects src/reroute.ts when present", async () => {
     const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));

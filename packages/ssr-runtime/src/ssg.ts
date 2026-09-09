@@ -286,6 +286,21 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
       continue;
     }
 
+    // El HTML prerenderizado se sirve desde disco sin pasar por el middleware, asi
+    // que una pagina protegida y prerenderizada saldria entera. Falla el build en
+    // vez de escribir el secreto: en dev el guardia si corre, y la divergencia se
+    // veria solo en produccion
+    // Por `hasMiddleware` y no por el array: la bandera va a los dos modulos
+    // generados, el array solo al del servidor, asi que asi falla cerrado
+    if (resolvedRoute.hasMiddleware || (resolvedRoute.middleware?.length ?? 0) > 0) {
+      throw new Error(
+        `Route ${resolvedRoute.path} has "prerender = true" and a middleware chain. ` +
+          `A prerendered page is served from disk without running middleware, so it ` +
+          `cannot be protected. Remove the prerender export or move the page out of ` +
+          `the guarded directory.`,
+      );
+    }
+
     if (isDynamicRoute(resolvedRoute)) {
       if (!resolvedRoute.getStaticPaths) {
         throw new Error(

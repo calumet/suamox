@@ -109,6 +109,51 @@ describe("findServerLeaks", () => {
   });
 });
 
+describe("middleware de directorio", () => {
+  const PAGES_DIR = "/proyecto/src/pages";
+
+  // No pasa por el stripping —no es un archivo de ruta— asi que una pagina que
+  // importe algo de el se llevaria el guardia y sus secretos al navegador
+  it("es una fuga si llega al bundle del cliente", () => {
+    const leaks = findServerLeaks(
+      chunk(["/proyecto/src/pages/(privado)/middleware.ts"]),
+      API_DIR,
+      PAGES_DIR,
+    );
+
+    expect(leaks).toHaveLength(1);
+    expect(leaks[0]?.reason).toBe("middleware");
+  });
+
+  it("tambien dentro de src/api", () => {
+    const leaks = findServerLeaks(chunk(["/proyecto/src/api/privado/middleware.ts"]), API_DIR);
+
+    expect(leaks[0]?.reason).toBe("middleware");
+  });
+
+  // Vive en `src/`, fuera de los dos directorios, asi que va por su ruta exacta.
+  // En su forma de carpeta el basename es `index`, que ningun regex de middleware casa
+  it.each(["/proyecto/src/middleware.ts", "/proyecto/src/middleware/index.ts"])(
+    "tambien el global en la forma %s",
+    (global) => {
+      const leaks = findServerLeaks(chunk([global]), API_DIR, PAGES_DIR, global);
+
+      expect(leaks[0]?.reason).toBe("middleware");
+    },
+  );
+
+  // `middleware` es un nombre corriente: fuera de pages/ y api/ es codigo normal,
+  // y marcarlo rompia el build de apps que funcionaban
+  it.each([
+    "/proyecto/node_modules/algun-paquete/middleware.js",
+    "/proyecto/src/lib/middleware.ts",
+    "/proyecto/src/pages/middleware-docs.tsx",
+    "/proyecto/src/pages/mi-middleware.ts",
+  ])("no marca %s", (id) => {
+    expect(findServerLeaks(chunk([id]), API_DIR, PAGES_DIR)).toEqual([]);
+  });
+});
+
 describe("formatLeakError", () => {
   it("agrupa por chunk y muestra rutas relativas al root", () => {
     const mensaje = formatLeakError(

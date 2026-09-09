@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.17.0 (2026-09-08)
+
+### Features
+
+- **Middleware por directorio: un `middleware.ts` dentro de `src/pages/` protege esa carpeta y todo lo que cuelga de ella.** Exporta el mismo `onRequest` que el global.
+
+  ```txt
+  src/
+    middleware.ts                 corre para todo
+    pages/
+      (privado)/
+        middleware.ts             corre solo para lo de esta carpeta
+        protegido.tsx             -> /protegido
+  ```
+
+  Es la forma preferida de autorizar, y sustituye al guardia por `pathname` en el global. **Los grupos de rutas quedan cubiertos**: `/protegido` no tiene nada en su URL que diga que esta en `(privado)`, y aun asi el guardia se aplica; con un guardia por `pathname` habria que mantener a mano la lista de rutas del grupo. Ese era el argumento de #34.
+
+  La cadena va **por directorio y no por la de layouts** a proposito: una pagina con `layout = false` se salta los layouts, y un guardia no se puede desactivar cambiando la presentacion.
+
+  Orden: primero el global, despues los de directorio de la raiz de `pages/` hacia la carpeta de la pagina. Todos comparten el mismo `locals`. El que no llama a `next()` corta. Funciona igual en `src/api/`.
+
+  **El router pide `/__data` cuando la ruta tiene middleware, aunque no tenga loader.** Sin eso el guardia solo correria en la carga directa y no al navegar dentro de la SPA. React Router tiene ese mismo agujero y su solucion documentada es anadir un `loader` vacio a mano; aca no hace falta porque el plugin ya sabe en build que rutas tienen middleware. Hasta ahora la garantia dependia de que hubiera algun loader en la cadena de la pagina —en el ejemplo lo hay, el de `root.tsx`—, asi que era correcta por accidente.
+
+  El guardia es codigo de servidor y no viaja al bundle del cliente: al navegador solo llega la bandera `hasMiddleware`. Si una pagina importa algo de un `middleware.ts`, el validador de fugas corta el build, porque ese archivo no pasa por el stripping —no es un archivo de ruta— y sus secretos acabarian en el navegador. Solo cuenta dentro de `src/pages/` y `src/api/`: `middleware` es un nombre corriente y un `src/lib/middleware.ts` o uno de `node_modules` es codigo de cliente normal.
+
+  Un `middleware.ts` que no exporte `onRequest` **rompe el build**, en `src/pages/`, en `src/api/` y en el global de `src/middleware.ts` por igual. El modulo generado ata la cadena con `__mwN.onRequest`, asi que sin ese export quedaba `undefined`, el adaptador lo filtraba y la carpeta se quedaba sin guardia sin que nadie avisara. La garantia de verdad la da el adaptador: si una entrada de la cadena no es una funcion, lanza en vez de descartarla, porque un `export const onRequest = { handler }` pasa cualquier comprobacion por nombre. El chequeo del build es el aviso temprano, y no corta ante un `export *`, donde el nombre puede venir de otro modulo.
+
+  Dos combinaciones que dejarian el guardia sin correr se cierran en vez de documentarse:
+
+  - **`prerender = true` + middleware de directorio rompe el build.** El HTML prerenderizado se sirve desde disco sin middleware, asi que la pagina saldria entera; y solo en produccion, porque en desarrollo no hay `dist/static` y el guardia si corre. El corte mira las cadenas de directorio: un guardia que solo viva en el global no lo dispara, porque tampoco corre en toda navegacion (ver #41).
+  - **`csr = true` + middleware.** La condicion de csr en el router se salta el viaje al servidor, y con el el guardia. Ahora una ruta con middleware lo hace igual, y el endpoint `/__data` no corre los loaders de una ruta csr: ese viaje existe solo para el guardia, y correrlos habria hecho que la pagina renderizara distinto segun se llegue por navegacion o por URL directa.
+
+  Ademas, dos rutas duplicadas **rompen el build** en vez de avisar: cual gana depende del orden, y si una esta en una carpeta protegida y la otra no, eso decide si el guardia corre. En desarrollo se sigue avisando sin cortar.
+
+  Ver [middleware](./docs/guias/middleware.md#middleware-por-directorio). Cierra #34.
+
 ## 0.16.0 (2026-09-08)
 
 ### Deprecaciones
