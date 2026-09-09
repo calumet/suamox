@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.16.0 (2026-09-08)
+
+### Deprecaciones
+
+- **`vite-plugin-pages`: el segmento opcional `[[lang]]` queda deprecado.** Sigue funcionando y ahora avisa al arrancar y en cada build. Se quita en una version proxima.
+
+  Existia para tener un idioma por defecto sin prefijo, y **no sirve para eso en cuanto la app tiene paginas con parametro**: `[[lang]]/[slug].tsx` genera `/:lang` y `/:slug`, que casan las mismas URLs, y nada en el patron permite saber si `/mision-y-vision` es el idioma o el slug. Con [reroute](./docs/guias/reroute.md) el idioma no entra a la tabla de rutas y la ambiguedad no llega a existir, con la mitad de entradas generadas.
+
+  Migracion: saca la pagina de la carpeta opcional y lee el prefijo de `url`, que llega intacta al loader.
+
+  ```diff
+  - // src/pages/[[lang]]/ingresar.tsx
+  - export function loader({ params }: LoaderContext) {
+  -   return { idioma: params.lang ?? "es" };
+  - }
+  + // src/pages/ingresar.tsx
+  + export function loader({ url }: LoaderContext) {
+  +   return { idioma: idiomaDe(url) };
+  + }
+  ```
+
+  El ejemplo ya esta migrado. Cierra #29.
+
+### Correcciones
+
+- **`vite-plugin-pages`: que ruta ganaba dependia de como se llamara el parametro.** `calculatePriority` no miraba `isIndex`, asi que `/:lang` —de `[lang]/index.tsx`— y `/:slug` puntuaban 105 los dos y desempataba el orden alfabetico del path generado. Renombrar `[slug].tsx` a `[articulo].tsx` invertia el resultado: `/en` pasaba de servir la home a servir la pagina del articulo. Mismo codigo, mismo arbol, comportamiento distinto por el nombre de un archivo.
+
+  Un index suma ahora 2 de prioridad, como el `indexRouteValue` de React Router, y le gana a su hermano dinamico por regla. Vale menos que un segmento estatico (10) para que `/ingresar` siga ganandole a `/:lang`.
+
+  Lo que sigue empatado son dos patrones con la **misma forma** —`/blog/:slug` y `/blog/:id`—, que casan exactamente las mismas URLs: ahi cual gane es arbitrario se ordene como se ordene, y el desempate alfabetico se queda para que al menos sea estable entre builds.
+
+  Cierra #28.
+
 ## 0.15.0 (2026-09-08)
 
 ### Breaking Changes

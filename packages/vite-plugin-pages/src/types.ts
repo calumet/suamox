@@ -31,6 +31,7 @@ export interface RouteSegment {
 export interface ParsedRoute {
   route: RouteRecord;
   errors: string[];
+  warnings: string[];
 }
 
 export interface StaticPathEntry {

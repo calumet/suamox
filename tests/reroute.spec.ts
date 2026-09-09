@@ -27,6 +27,20 @@ test.describe("reroute", () => {
     await expect(page.locator("h1")).toHaveText("Welcome to Suamox");
   });
 
+  // Una sola pagina sirve las dos direcciones, y el loader distingue por la URL,
+  // que llega intacta. Es lo que antes hacia el segmento opcional
+  test("la misma pagina sirve la direccion con prefijo y la de por defecto", async ({ page }) => {
+    await page.goto("/ingresar");
+    await expect(page.locator("h1")).toHaveText("Ingresar");
+    await expect(page.getByTestId("idioma")).toHaveText("es");
+    await expect(page.getByTestId("prefijado")).toHaveText("false");
+
+    await page.goto("/mx/ingresar");
+    await expect(page.locator("h1")).toHaveText("Ingresar");
+    await expect(page.getByTestId("idioma")).toHaveText("mx");
+    await expect(page.getByTestId("prefijado")).toHaveText("true");
+  });
+
   test("el cliente casa la misma ruta al hidratar", async ({ page }) => {
     await page.goto("/mx/counter");
 

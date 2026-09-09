@@ -213,6 +213,7 @@ export interface ScanResult {
   routes: RouteRecord[];
   apiRoutes: ApiRouteRecord[];
   errors: string[];
+  warnings: string[];
   hasMiddleware: boolean;
   middlewarePath?: string;
   reroutePath?: string;
@@ -264,12 +265,20 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     : null;
 
   const errors: string[] = [];
+  const warnings: string[] = [];
   const parsedRoutes = await Promise.all(
     pageFiles.map(async (file): Promise<RouteRecord[]> => {
-      const { route, errors: parseErrors } = parseRoute(file, absolutePagesDir);
+      const {
+        route,
+        errors: parseErrors,
+        warnings: parseWarnings,
+      } = parseRoute(file, absolutePagesDir);
 
       if (parseErrors.length > 0) {
         errors.push(...parseErrors.map((err) => `${file}: ${err}`));
+      }
+      if (parseWarnings.length > 0) {
+        warnings.push(...parseWarnings.map((warn) => `${file}: ${warn}`));
       }
 
       // Detectar loader / getStaticPaths / prerender / layout via AST (Oxc).
@@ -322,9 +331,16 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     });
 
     for (const file of apiFiles) {
-      const { route: parsedApiRoute, errors: parseErrors } = parseRoute(file, apiDir);
+      const {
+        route: parsedApiRoute,
+        errors: parseErrors,
+        warnings: parseWarnings,
+      } = parseRoute(file, apiDir);
       if (parseErrors.length > 0) {
         errors.push(...parseErrors.map((err) => `${file}: ${err}`));
+      }
+      if (parseWarnings.length > 0) {
+        warnings.push(...parseWarnings.map((warn) => `${file}: ${warn}`));
       }
 
       // Detectar metodos HTTP exportados
@@ -401,6 +417,7 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     routes: sortedRoutes,
     apiRoutes,
     errors,
+    warnings,
     hasMiddleware,
     middlewarePath,
     reroutePath,

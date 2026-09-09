@@ -1,7 +1,10 @@
 import type { LoaderContext } from "@calumet/suamox";
 
-export function loader({ params }: LoaderContext) {
-  return { idioma: params.lang ?? "es", prefijado: params.lang !== undefined };
+// El prefijo sale de la URL, que llega intacta al loader: el reroute de
+// src/reroute.ts solo decide contra que ruta se casa, no reescribe la direccion
+export function loader({ url }: LoaderContext) {
+  const prefijado = url.pathname === "/mx" || url.pathname.startsWith("/mx/");
+  return { idioma: prefijado ? "mx" : "es", prefijado };
 }
 
 interface IngresarData {
@@ -16,7 +19,7 @@ export default function IngresarPage({ data }: { data: IngresarData | null }) {
       <p data-testid="idioma">{data?.idioma ?? "sin datos"}</p>
       <p data-testid="prefijado">{String(data?.prefijado ?? false)}</p>
       <a href="/ingresar">Por defecto</a>
-      <a href="/en/ingresar">English</a>
+      <a href="/mx/ingresar">Con prefijo</a>
     </div>
   );
 }
