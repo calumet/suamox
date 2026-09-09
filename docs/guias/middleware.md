@@ -74,13 +74,19 @@ El que no llama a `next()` corta la cadena: ni los de abajo ni los loaders llega
 
 ### Navegación SPA
 
-El router pide `/__data` cuando la ruta tiene middleware, aunque no tenga loader. Sin eso el guardia solo correría en la carga directa y no al navegar dentro de la aplicación — y un guardia que corre a veces es peor que no tenerlo.
+El router pide `/__data` cuando la ruta tiene middleware, aunque no tenga loader **y aunque sea `csr`**. Sin eso el guardia solo correría en la carga directa y no al navegar dentro de la aplicación — y un guardia que corre a veces es peor que no tenerlo.
 
 React Router tiene ese mismo agujero y su solución documentada es añadir un `loader` vacío a mano. Aquí no hace falta: el plugin ya sabe en build qué rutas tienen middleware.
 
 ### En `src/api/`
 
 Funciona igual: un `middleware.ts` en una carpeta de `src/api/` cubre los endpoints que cuelgan de ella.
+
+### Es server-only
+
+Un `middleware.ts` nunca llega al bundle del navegador, y el plugin corta el build si una página intenta importar algo de él. Guarda ahí lo que quieras: claves, consultas, comprobaciones de sesión.
+
+Si necesitas compartir un helper entre el middleware y una página, ponlo en otro archivo: el que se importa desde el cliente sí viaja al navegador.
 
 ## locals
 
@@ -149,6 +155,17 @@ El middleware se ejecuta tanto para peticiones SSR como para el endpoint `/__dat
 Una pagina con `prerender = true` se sirve desde `dist/static` sin ejecutar el middleware. No es una limitacion que se pueda levantar: su HTML se genero en el build y es el mismo para todo el mundo, asi que no hay nada que un guardia por peticion pueda cambiar. **Una pagina prerenderizada no se puede proteger con middleware**; si necesita autorizacion, no la prerenderices.
 
 Es lo mismo que hacen React Router, SvelteKit y Astro: en los tres, los loaders y hooks de una ruta prerenderizada corren en el build y no en cada peticion.
+
+Combinar las dos cosas **rompe el build**, en vez de escribir el secreto en disco:
+
+```txt
+Route /privado has "prerender = true" and a middleware chain.
+A prerendered page is served from disk without running middleware, so it cannot
+be protected. Remove the prerender export or move the page out of the guarded
+directory.
+```
+
+Sin ese corte el fallo solo se veria en produccion: en desarrollo no hay `dist/static`, asi que el guardia si corre y la pagina redirige.
 
 El `onRequest` del adaptador si corre, porque es infraestructura y aplica a toda respuesta.
 

@@ -32,6 +32,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
   let root: string;
   let basePath = "/";
   let routesCache: RouteRecord[] | null = null;
+  let duplicateErrors: string[] = [];
   let apiRoutesCache: ApiRouteRecord[] = [];
   let clientModuleCode: string | null = null;
   let serverModuleCode: string | null = null;
@@ -44,6 +45,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     });
 
     routesCache = result.routes;
+    duplicateErrors = result.errors.filter((err) => err.includes("Duplicate route path"));
     apiRoutesCache = result.apiRoutes;
     clientModuleCode = generateRoutesModule(result.routes, {
       defaultMode,
@@ -139,6 +141,17 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     async buildStart() {
       await updateRoutes();
 
+      // Cual de las dos rutas duplicadas gana depende del orden, y si una esta en
+      // una carpeta protegida y la otra no, eso decide si el guardia corre. En dev
+      // solo se avisa; el build no puede publicar una app asi
+      if (!server && duplicateErrors.length > 0) {
+        this.error(
+          `[suamox:pages] ${duplicateErrors.length} duplicate route path(s):\n${duplicateErrors
+            .map((err) => `  - ${err}`)
+            .join("\n")}`,
+        );
+      }
+
       if (routesCache) {
         console.log(pc.cyan(`[suamox:pages] Found ${routesCache.length} route(s)`));
         routesCache.forEach((route) => {
@@ -188,6 +201,17 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
         throw new Error(
           `[suamox:pages] Cannot import API route "${cleanId}" from client code (${importerRel}). ` +
             `API routes in src/api/ are server-only.`,
+        );
+      }
+
+      // El middleware de directorio no pasa por el stripping —no es un archivo de
+      // ruta— asi que una pagina que importe algo de el se llevaria el guardia,
+      // y sus secretos, al bundle del navegador
+      if (isMiddlewareModule(cleanId)) {
+        const importerRel = importer ? importer.replace(/\\/g, "/") : "unknown";
+        throw new Error(
+          `[suamox:pages] Cannot import middleware "${cleanId}" from client code (${importerRel}). ` +
+            `middleware.{ts,tsx,js,jsx} files are server-only.`,
         );
       }
     },
@@ -254,6 +278,10 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
 /** Detecta si un path corresponde a un archivo .server.{ts,tsx,js,jsx} */
 function isServerFile(id: string): boolean {
   return /\.server\.(ts|tsx|js|jsx)$/.test(id);
+}
+
+function isMiddlewareModule(id: string): boolean {
+  return /(^|\/)middleware\.(ts|tsx|js|jsx)$/.test(id.replace(/\\/g, "/"));
 }
 
 export default suamoxPages;

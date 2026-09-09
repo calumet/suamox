@@ -1,7 +1,7 @@
 import { isAbsolute, relative } from "node:path";
 
 /** Motivo por el que un modulo no deberia estar en el bundle del cliente */
-export type LeakReason = "server-file" | "api-route" | "node-builtin";
+export type LeakReason = "server-file" | "api-route" | "middleware" | "node-builtin";
 
 export interface ServerLeak {
   fileName: string;
@@ -16,6 +16,7 @@ export interface ChunkModules {
 }
 
 const SERVER_FILE_RE = /\.server\.(ts|tsx|js|jsx)$/;
+const MIDDLEWARE_FILE_RE = /(^|\/)middleware\.(ts|tsx|js|jsx)$/;
 
 /** Stub con el que Vite reemplaza un builtin de Node al bundlear para el browser */
 const BROWSER_EXTERNAL = "__vite-browser-external";
@@ -27,6 +28,7 @@ function classify(id: string, apiDir: string): LeakReason | null {
   // el marcador de un builtin filtrado es el stub, no el nombre del modulo
   if (id.includes(BROWSER_EXTERNAL) || id.startsWith("node:")) return "node-builtin";
   if (SERVER_FILE_RE.test(id)) return "server-file";
+  if (MIDDLEWARE_FILE_RE.test(id)) return "middleware";
   if (id.startsWith(apiDir)) return "api-route";
   return null;
 }
@@ -59,6 +61,7 @@ export function findServerLeaks(chunks: readonly ChunkModules[], apiDir: string)
 const REASON_LABEL: Record<LeakReason, string> = {
   "server-file": "server-only file (*.server.*)",
   "api-route": "API route (src/api/)",
+  middleware: "middleware (middleware.*)",
   "node-builtin": "Node builtin, unavailable in the browser",
 };
 

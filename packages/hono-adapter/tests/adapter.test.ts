@@ -988,6 +988,52 @@ describe("createDevHandler middleware", () => {
     expect(new URL(pathname!, "http://app.example").origin).toBe("http://app.example");
   });
 
+  // Llamar next() dos veces correria los loaders y el render otra vez, en silencio
+  it("rejects a middleware that calls next() twice", async () => {
+    const route = { path: "/panel", params: [], loader: vi.fn(() => Promise.resolve(null)) };
+    mocks.matchRoute.mockReturnValue({ route, params: {}, pathname: "/panel" });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const middlewareFn = vi.fn(async (_ctx: unknown, next: () => Promise<Response>) => {
+      await next();
+      return next();
+    });
+
+    const vite = {
+      environments: {
+        ssr: { runner: { import: createSsrImport([route], middlewareFn) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite });
+    const response = await app.request("http://localhost/__data?path=/panel");
+
+    expect(response.status).toBe(500);
+  });
+
+  it("rejects a middleware that returns something other than a Response", async () => {
+    const route = { path: "/panel", params: [], loader: vi.fn(() => Promise.resolve(null)) };
+    mocks.matchRoute.mockReturnValue({ route, params: {}, pathname: "/panel" });
+    mocks.resolveRouteModule.mockResolvedValue(route);
+
+    const middlewareFn = vi.fn(() => ({ redirect: "/" }) as unknown as Response);
+
+    const vite = {
+      environments: {
+        ssr: { runner: { import: createSsrImport([route], middlewareFn) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite });
+    const response = await app.request("http://localhost/__data?path=/panel");
+
+    expect(response.status).toBe(500);
+  });
+
   it("translates a redirect thrown by the middleware into a 302", async () => {
     const middlewareFn = vi.fn(() => {
       throw new RedirectResponse("/login");

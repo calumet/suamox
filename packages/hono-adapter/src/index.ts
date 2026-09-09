@@ -346,12 +346,28 @@ const runMiddleware = async (
   const locals: Record<string, unknown> = {};
   const context = { request, url, pathname, params, locals };
 
-  const dispatch = (index: number): Promise<Response> => {
+  let reached = -1;
+
+  const dispatch = async (index: number): Promise<Response> => {
+    // Llamar a `next()` dos veces correria los loaders y el render otra vez, en
+    // silencio. Es lo que hacen Koa y Hono en este caso
+    if (index <= reached) {
+      throw new Error("[suamox] middleware called next() more than once");
+    }
+    reached = index;
+
     const fn = chain[index];
     if (!fn) {
       return pipeline(locals);
     }
-    return Promise.resolve(fn(context, () => dispatch(index + 1)));
+
+    const result = await fn(context, () => dispatch(index + 1));
+    if (!(result instanceof Response)) {
+      throw new TypeError(
+        "[suamox] middleware must return the Response from next(), or its own Response",
+      );
+    }
+    return result;
   };
 
   return dispatch(0);
@@ -603,8 +619,6 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         return c.json(null, 404);
       }
 
-      const resolved = await runtime.resolveRouteModule(match.route);
-
       // Ejecutar middleware y pipeline de datos
       const middlewareFn = await loadMiddleware();
       const reqUrl = new URL(c.req.url);
@@ -615,6 +629,9 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
         resolveRoutePathname(strippedPathname),
         match.params,
         async (locals) => {
+          // Dentro del pipeline: cargar el modulo de la pagina antes correria sus
+          // efectos de nivel superior en una peticion que el guardia va a denegar
+          const resolved = await runtime.resolveRouteModule(match.route);
           const loaderUrl = new URL(path, reqUrl.origin);
           reqUrl.searchParams.forEach((value, key) => {
             if (key !== "path" && key !== "stableLayouts") {
@@ -1177,8 +1194,6 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         return c.json(null, 404);
       }
 
-      const resolved = await entry.resolveRouteModule(match.route);
-
       const safeOrigin = resolveRequestOrigin(c.req.raw, allowedHosts);
       const originalUrl = new URL(c.req.url);
       const safeUrl = new URL(`${safeOrigin}${originalUrl.pathname}${originalUrl.search}`);
@@ -1192,6 +1207,9 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         resolveRoutePathname(strippedPathname),
         match.params,
         async (locals) => {
+          // Dentro del pipeline: cargar el modulo de la pagina antes correria sus
+          // efectos de nivel superior en una peticion que el guardia va a denegar
+          const resolved = await entry.resolveRouteModule(match.route);
           const loaderUrl = new URL(path, safeOrigin);
           originalUrl.searchParams.forEach((value, key) => {
             if (key !== "path" && key !== "stableLayouts") {

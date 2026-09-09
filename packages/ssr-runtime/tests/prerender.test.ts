@@ -233,6 +233,24 @@ describe("prerender", () => {
     expect(indexHtml).toContain('<link rel="stylesheet" href="/client/assets/app.css">');
   });
 
+  // El HTML prerenderizado se sirve desde disco sin middleware, asi que una pagina
+  // protegida y prerenderizada saldria entera, y solo en produccion
+  it("falla el build si una ruta prerenderizada tiene middleware", async () => {
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/privado",
+        isIndex: false,
+        prerender: true,
+        middleware: [(_ctx, next) => next()],
+        component: (() => createElement("div", null, "SECRETO")) as RouteRecord["component"],
+      }),
+    ];
+
+    await expect(prerender({ routes, outDir, baseUrl: "http://localhost" })).rejects.toThrow(
+      /prerender = true.*middleware chain/s,
+    );
+  });
+
   it("writes the variants of every prerendered pathname", async () => {
     registerReroute((pathname) =>
       pathname.startsWith("/en") ? pathname.slice(3) || "/" : undefined,

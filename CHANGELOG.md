@@ -23,7 +23,14 @@
 
   **El router pide `/__data` cuando la ruta tiene middleware, aunque no tenga loader.** Sin eso el guardia solo correria en la carga directa y no al navegar dentro de la SPA. React Router tiene ese mismo agujero y su solucion documentada es anadir un `loader` vacio a mano; aca no hace falta porque el plugin ya sabe en build que rutas tienen middleware. Hasta ahora la garantia dependia de que hubiera algun loader en la cadena de la pagina —en el ejemplo lo hay, el de `root.tsx`—, asi que era correcta por accidente.
 
-  El guardia es codigo de servidor y no viaja al bundle del cliente: el stripping ya funciona por allowlist, asi que al navegador solo llega la bandera `hasMiddleware`.
+  El guardia es codigo de servidor y no viaja al bundle del cliente: al navegador solo llega la bandera `hasMiddleware`. El plugin corta el build si una pagina intenta importar algo de un `middleware.ts`, porque ese archivo no pasa por el stripping —no es un archivo de ruta— y sus secretos acabarian en el navegador.
+
+  Dos combinaciones que dejarian el guardia sin correr se cierran en vez de documentarse:
+
+  - **`prerender = true` + middleware rompe el build.** El HTML prerenderizado se sirve desde disco sin middleware, asi que la pagina saldria entera; y solo en produccion, porque en desarrollo no hay `dist/static` y el guardia si corre.
+  - **`csr = true` + middleware.** La condicion de csr en el router se salta el viaje al servidor, y con el el guardia. Ahora una ruta con middleware lo hace igual.
+
+  Ademas, dos rutas duplicadas **rompen el build** en vez de avisar: cual gana depende del orden, y si una esta en una carpeta protegida y la otra no, eso decide si el guardia corre. En desarrollo se sigue avisando sin cortar.
 
   Ver [middleware](./docs/guias/middleware.md#middleware-por-directorio). Cierra #34.
 

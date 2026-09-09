@@ -109,6 +109,26 @@ describe("findServerLeaks", () => {
   });
 });
 
+describe("middleware de directorio", () => {
+  // No pasa por el stripping —no es un archivo de ruta— asi que una pagina que
+  // importe algo de el se llevaria el guardia y sus secretos al navegador
+  it("es una fuga si llega al bundle del cliente", () => {
+    const leaks = findServerLeaks(chunk(["/proyecto/src/pages/(privado)/middleware.ts"]), API_DIR);
+
+    expect(leaks).toHaveLength(1);
+    expect(leaks[0]?.reason).toBe("middleware");
+  });
+
+  it("no confunde una pagina que se llame parecido", () => {
+    const leaks = findServerLeaks(
+      chunk(["/proyecto/src/pages/middleware-docs.tsx", "/proyecto/src/pages/mi-middleware.ts"]),
+      API_DIR,
+    );
+
+    expect(leaks).toHaveLength(0);
+  });
+});
+
 describe("formatLeakError", () => {
   it("agrupa por chunk y muestra rutas relativas al root", () => {
     const mensaje = formatLeakError(

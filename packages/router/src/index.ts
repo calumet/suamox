@@ -210,7 +210,9 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     let layoutData: Record<string, unknown> | undefined;
     let redirectTo: URL | null = null;
 
-    if (!resolvedRoute.csr) {
+    // `hasMiddleware` entra en la condicion de csr tambien: una ruta csr se salta
+    // el viaje al servidor, y con el se saltaria su guardia al navegar
+    if (!resolvedRoute.csr || match.route.hasMiddleware) {
       if (useInitialData && initialData !== undefined) {
         // Parse structured initial data
         const raw = initialData;
