@@ -119,23 +119,31 @@ export async function loader({ locals }: LoaderContext) {
 
 ## Short-circuit
 
-Si el middleware no llama a `next()`, la peticion se corta y se devuelve la respuesta directamente. Esto permite bloquear rutas sin que los loaders se ejecuten:
+Si el middleware no llama a `next()`, la peticion se corta y se devuelve la respuesta directamente, sin que los loaders se ejecuten:
 
 ```ts
-import { redirect } from "@calumet/suamox";
-
 export async function onRequest(context, next) {
-  if (context.pathname.startsWith("/admin")) {
-    const session = await getSession(context.request);
-    if (!session) {
-      redirect("/login");
-    }
+  if (process.env.MANTENIMIENTO === "1" && !context.pathname.startsWith("/estado")) {
+    return new Response("En mantenimiento", { status: 503 });
   }
   return next();
 }
 ```
 
 Para redirigir usa `redirect()`. El framework la traduce a un 302 en SSR y al sobre `{ __redirect }` que el router entiende en `/__data`. Una `Response` 302 devuelta a mano solo funciona en SSR: el `fetch` del router la sigue y recibe HTML.
+
+### Para autorizar, el de directorio
+
+Un guardia escrito en el global sobre `context.pathname` **no corre en toda navegacion dentro de la aplicacion**. El viaje a `/__data` lo decide si hay datos que pedir, no si hay un guardia que correr, asi que una pagina sin loaders en su cadena —o con `csr = true`— se sirve sin pasar por el global. Que corra o no acaba dependiendo de un detalle sin relacion: si algun layout de esa pagina tiene loader.
+
+Por eso los guardias van en un [`middleware.ts` de carpeta](#middleware-por-directorio), que si corre siempre: el router pide `/__data` cuando la ruta tiene middleware de directorio, aunque no tenga loader.
+
+Es el mismo reparto que hace React Router, y por la misma razon declarada: _"server middleware ... prioritizes SPA behavior and does not create new network activity by default"_. Que el global forzara el viaje en cada navegacion se lo cobraria a todas las aplicaciones que lo usan para lo transversal, tengan guardia o no.
+
+Si aun asi necesitas que algo del global corra en cada navegacion, hay dos formas:
+
+- **Muevelo a `src/pages/middleware.ts`.** Un middleware en la raiz de `pages/` entra en la cadena de todas las paginas, asi que fuerza el viaje para todas. No cubre `src/api/` ni las URLs que no casan ninguna ruta; para eso sigue estando el global.
+- **Pon un `loader` en la pagina**, aunque devuelva `null`. Es el escape que documenta React Router para este mismo caso. Preciso, pero hay que repetirlo pagina por pagina.
 
 ## Flujo de ejecucion
 
@@ -156,7 +164,7 @@ Una pagina con `prerender = true` se sirve desde `dist/static` sin ejecutar el m
 
 Es lo mismo que hacen React Router, SvelteKit y Astro: en los tres, los loaders y hooks de una ruta prerenderizada corren en el build y no en cada peticion.
 
-Combinar las dos cosas **rompe el build**, en vez de escribir el secreto en disco:
+Combinar `prerender = true` con un **middleware de directorio** rompe el build, en vez de escribir el secreto en disco:
 
 ```txt
 Route /privado has "prerender = true" and a middleware chain.
@@ -166,6 +174,8 @@ directory.
 ```
 
 Sin ese corte el fallo solo se veria en produccion: en desarrollo no hay `dist/static`, asi que el guardia si corre y la pagina redirige.
+
+El corte solo mira las cadenas de directorio. Un guardia que viva unicamente en el global no lo dispara, porque de todas formas tampoco corre en toda navegacion: ver [Para autorizar, el de directorio](#para-autorizar-el-de-directorio).
 
 El `onRequest` del adaptador si corre, porque es infraestructura y aplica a toda respuesta.
 

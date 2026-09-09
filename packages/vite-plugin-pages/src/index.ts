@@ -105,6 +105,32 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     }
   }
 
+  /**
+   * Sin esto, un escaneo fallido dejaba servida la tabla anterior: anades un
+   * `middleware.ts`, el rescan revienta, y el dev sigue sirviendo sin guardia
+   * mientras en consola ya salio el "Page added". Se tiran las caches para que el
+   * siguiente `load()` reescanee, y si vuelve a fallar el error sale por el overlay.
+   */
+  function onScanFailure(error: unknown): void {
+    console.error(pc.red(`[suamox:pages] Route scan failed: ${String(error)}`));
+    routesCache = null;
+    clientModuleCode = null;
+    serverModuleCode = null;
+
+    if (!server) {
+      return;
+    }
+    for (const environment of Object.values(server.environments)) {
+      for (const id of [RESOLVED_VIRTUAL_MODULE_ID, RESOLVED_VIRTUAL_SERVER_MODULE_ID]) {
+        const mod = environment.moduleGraph.getModuleById(id);
+        if (mod) {
+          environment.moduleGraph.invalidateModule(mod);
+        }
+      }
+    }
+    server.environments.client.hot.send({ type: "full-reload", path: "*" });
+  }
+
   return {
     name: "suamox:pages",
 
@@ -130,11 +156,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
         if (isWatchedFile(file)) {
           const type = file.startsWith(absoluteApiDir) ? "API route" : "Page";
           console.log(pc.green(`[suamox:pages] ${type} added: ${file}`));
-          // Sin el catch, un archivo que desaparece a mitad del escaneo tumba el
-          // dev server con un rechazo no capturado
-          void updateRoutes().catch((error: unknown) => {
-            console.error(pc.red(`[suamox:pages] Route scan failed: ${String(error)}`));
-          });
+          void updateRoutes().catch(onScanFailure);
         }
       });
 
@@ -142,11 +164,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
         if (isWatchedFile(file)) {
           const type = file.startsWith(absoluteApiDir) ? "API route" : "Page";
           console.log(pc.yellow(`[suamox:pages] ${type} removed: ${file}`));
-          // Sin el catch, un archivo que desaparece a mitad del escaneo tumba el
-          // dev server con un rechazo no capturado
-          void updateRoutes().catch((error: unknown) => {
-            console.error(pc.red(`[suamox:pages] Route scan failed: ${String(error)}`));
-          });
+          void updateRoutes().catch(onScanFailure);
         }
       });
     },

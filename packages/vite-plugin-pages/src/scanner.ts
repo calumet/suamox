@@ -505,6 +505,11 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     }
   }
 
+  // El global se comprueba igual que los de directorio: es la tercera procedencia
+  if (middlewarePath) {
+    await checkMiddlewareExports([middlewarePath], errors);
+  }
+
   // Detectar reroute global (src/reroute.ts)
   let reroutePath: string | undefined;
   for (const ext of extensions) {

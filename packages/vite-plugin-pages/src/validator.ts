@@ -33,14 +33,18 @@ function classify(
   id: string,
   apiDir: string,
   middlewareDirs: readonly string[],
+  globalMiddleware?: string,
 ): LeakReason | null {
   // Vite no deja `node:fs` en el bundle: lo sustituye por su stub vacio, asi que
   // el marcador de un builtin filtrado es el stub, no el nombre del modulo
   if (id.includes(BROWSER_EXTERNAL) || id.startsWith("node:")) return "node-builtin";
   if (SERVER_FILE_RE.test(id)) return "server-file";
-  // `startsWith` cubre a la vez los directorios (terminados en `/`) y la ruta
-  // exacta del middleware global
-  if (MIDDLEWARE_FILE_RE.test(id) && middlewareDirs.some((entry) => id.startsWith(entry))) {
+  // El global va por igualdad y antes del regex: en su forma `src/middleware/index.ts`
+  // el basename es `index`, asi que el regex lo descartaria sin llegar a compararlo
+  if (globalMiddleware && id === globalMiddleware) {
+    return "middleware";
+  }
+  if (MIDDLEWARE_FILE_RE.test(id) && middlewareDirs.some((dir) => id.startsWith(dir))) {
     return "middleware";
   }
   if (id.startsWith(apiDir)) return "api-route";
@@ -63,19 +67,16 @@ export function findServerLeaks(
 ): ServerLeak[] {
   const asDir = (path: string): string => normalize(path).replace(/\/+$/, "") + "/";
   const normalizedApiDir = asDir(apiDir);
-  // El global vive en `src/`, fuera de los dos directorios, asi que va por su
-  // ruta exacta: acotar a `src/` entero volveria a marcar cualquier src/lib/middleware.ts
-  const middlewareDirs = [
-    ...(pagesDir ? [asDir(pagesDir)] : []),
-    normalizedApiDir,
-    ...(globalMiddleware ? [normalize(globalMiddleware)] : []),
-  ];
+  // El global vive en `src/`, fuera de los dos directorios, asi que va aparte y por
+  // igualdad: acotar a `src/` entero volveria a marcar cualquier src/lib/middleware.ts
+  const middlewareDirs = [...(pagesDir ? [asDir(pagesDir)] : []), normalizedApiDir];
+  const normalizedGlobal = globalMiddleware ? normalize(globalMiddleware) : undefined;
   const leaks: ServerLeak[] = [];
 
   for (const chunk of chunks) {
     for (const id of chunk.ids) {
       const clean = normalize(id);
-      const reason = classify(clean, normalizedApiDir, middlewareDirs);
+      const reason = classify(clean, normalizedApiDir, middlewareDirs, normalizedGlobal);
       if (reason) {
         leaks.push({ fileName: chunk.fileName, moduleId: clean, reason });
       }

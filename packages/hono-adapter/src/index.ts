@@ -370,7 +370,22 @@ const runMiddleware = async (
   params: Record<string, string>,
   pipeline: (locals: Record<string, unknown>) => Promise<Response>,
 ): Promise<Response> => {
-  const chain = middlewares.filter((fn): fn is MiddlewareFunction => typeof fn === "function");
+  // `undefined` es "no hay middleware global", legitimo. Cualquier otra cosa que no
+  // sea funcion es un `middleware.ts` mal escrito, y descartarla dejaria la ruta sin
+  // guardia en silencio: es el fallo que todo esto existe para evitar
+  const chain = middlewares.filter((fn): fn is MiddlewareFunction => {
+    if (fn === undefined) {
+      return false;
+    }
+    if (typeof fn !== "function") {
+      throw new TypeError(
+        '[suamox] A middleware file must export "onRequest" as a function, and one of ' +
+          "them does not. The request was refused instead of served without it.",
+      );
+    }
+    return true;
+  });
+
   if (chain.length === 0) {
     return pipeline({});
   }
@@ -379,11 +394,13 @@ const runMiddleware = async (
   const context = { request, url, pathname, params, locals };
 
   let reached = -1;
+  let calledNextTwice = false;
 
   const dispatch = async (index: number): Promise<Response> => {
     // Llamar a `next()` dos veces correria los loaders y el render otra vez, en
     // silencio. Es lo que hacen Koa y Hono en este caso
     if (index <= reached) {
+      calledNextTwice = true;
       throw new Error("[suamox] middleware called next() more than once");
     }
     reached = index;
@@ -393,7 +410,15 @@ const runMiddleware = async (
       return pipeline(locals);
     }
 
-    const result = await fn(context, () => dispatch(index + 1));
+    // El rechazo se marca como manejado: si el middleware no espera su segundo
+    // `next()`, un rechazo huerfano tumbaria el proceso despues de responder
+    const next = (): Promise<Response> => {
+      const pending = dispatch(index + 1);
+      pending.catch(() => {});
+      return pending;
+    };
+
+    const result = await fn(context, next);
     // `instanceof` es por realm: una Response de undici o de un polyfill no lo
     // pasaria, y devolverla era valido antes
     if (!isResponseLike(result)) {
@@ -404,7 +429,13 @@ const runMiddleware = async (
     return result;
   };
 
-  return dispatch(0);
+  const response = await dispatch(0);
+  // Si alguien llamo a `next()` dos veces y se trago el rechazo, la peticion falla
+  // igual: responder con normalidad esconderia que el pipeline corrio de mas
+  if (calledNextTwice) {
+    throw new Error("[suamox] middleware called next() more than once");
+  }
+  return response;
 };
 
 /**

@@ -477,6 +477,22 @@ describe("scanRoutes middleware por directorio", () => {
 
   // Con un `export *` el nombre puede venir de otro modulo: romper el build aqui
   // tumbaria una app correcta, y el adaptador lo comprueba al montar la cadena
+  it("tambien comprueba el global de src/middleware.ts", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    await writeFileWithDirs(
+      join(root, "src", "pages", "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+    await writeFileWithDirs(
+      join(root, "src", "middleware.ts"),
+      "export default function onRequest(ctx, next) { return next(); }",
+    );
+
+    const result = await scanRoutes({ pagesDir: "src/pages", extensions: [".tsx", ".ts"], root });
+
+    expect(result.errors.some((err) => err.includes('must export "onRequest"'))).toBe(true);
+  });
+
   it("no rompe por un export * que puede traer onRequest", async () => {
     const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
     const pagesDir = join(root, "src", "pages");
