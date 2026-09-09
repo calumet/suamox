@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.17.0 (2026-09-08)
+
+### Features
+
+- **Middleware por directorio: un `middleware.ts` dentro de `src/pages/` protege esa carpeta y todo lo que cuelga de ella.** Exporta el mismo `onRequest` que el global.
+
+  ```txt
+  src/
+    middleware.ts                 corre para todo
+    pages/
+      (privado)/
+        middleware.ts             corre solo para lo de esta carpeta
+        protegido.tsx             -> /protegido
+  ```
+
+  Es la forma preferida de autorizar, y sustituye al guardia por `pathname` en el global. **Los grupos de rutas quedan cubiertos**: `/protegido` no tiene nada en su URL que diga que esta en `(privado)`, y aun asi el guardia se aplica; con un guardia por `pathname` habria que mantener a mano la lista de rutas del grupo. Ese era el argumento de #34.
+
+  La cadena va **por directorio y no por la de layouts** a proposito: una pagina con `layout = false` se salta los layouts, y un guardia no se puede desactivar cambiando la presentacion.
+
+  Orden: primero el global, despues los de directorio de la raiz de `pages/` hacia la carpeta de la pagina. Todos comparten el mismo `locals`. El que no llama a `next()` corta. Funciona igual en `src/api/`.
+
+  **El router pide `/__data` cuando la ruta tiene middleware, aunque no tenga loader.** Sin eso el guardia solo correria en la carga directa y no al navegar dentro de la SPA. React Router tiene ese mismo agujero y su solucion documentada es anadir un `loader` vacio a mano; aca no hace falta porque el plugin ya sabe en build que rutas tienen middleware. Hasta ahora la garantia dependia de que hubiera algun loader en la cadena de la pagina —en el ejemplo lo hay, el de `root.tsx`—, asi que era correcta por accidente.
+
+  El guardia es codigo de servidor y no viaja al bundle del cliente: el stripping ya funciona por allowlist, asi que al navegador solo llega la bandera `hasMiddleware`.
+
+  Ver [middleware](./docs/guias/middleware.md#middleware-por-directorio). Cierra #34.
+
 ## 0.16.0 (2026-09-08)
 
 ### Deprecaciones

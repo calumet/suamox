@@ -400,6 +400,55 @@ describe("scanRoutes middleware detection", () => {
   });
 });
 
+describe("scanRoutes middleware por directorio", () => {
+  const crearArbol = async (root: string): Promise<void> => {
+    const pagesDir = join(root, "src", "pages");
+    const pagina = "export default function Page() { return null; }";
+    const mw = "export function onRequest(ctx, next) { return next(); }";
+
+    await writeFileWithDirs(join(pagesDir, "index.tsx"), pagina);
+    await writeFileWithDirs(join(pagesDir, "middleware.ts"), mw);
+    await writeFileWithDirs(join(pagesDir, "(admin)", "middleware.ts"), mw);
+    await writeFileWithDirs(join(pagesDir, "(admin)", "dashboard.tsx"), pagina);
+  };
+
+  it("un middleware.ts no genera ruta", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    await crearArbol(root);
+
+    const result = await scanRoutes({ pagesDir: "src/pages", extensions: [".tsx", ".ts"], root });
+
+    expect(result.routes.map((route) => route.path).sort()).toEqual(["/", "/dashboard"]);
+  });
+
+  it("encadena de la raiz de pages hacia la carpeta de la pagina", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    await crearArbol(root);
+
+    const result = await scanRoutes({ pagesDir: "src/pages", extensions: [".tsx", ".ts"], root });
+    const dashboard = result.routes.find((route) => route.path === "/dashboard");
+    const home = result.routes.find((route) => route.path === "/");
+
+    expect(dashboard?.middlewares).toHaveLength(2);
+    expect(dashboard?.middlewares?.[0]).toContain("pages/middleware.ts");
+    expect(dashboard?.middlewares?.[1]).toContain("(admin)/middleware.ts");
+    expect(home?.middlewares).toHaveLength(1);
+  });
+
+  it("una pagina sin middleware en su cadena no lleva ninguno", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    const pagesDir = join(root, "src", "pages");
+    await writeFileWithDirs(
+      join(pagesDir, "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+
+    const result = await scanRoutes({ pagesDir: "src/pages", extensions: [".tsx", ".ts"], root });
+
+    expect(result.routes[0]?.middlewares).toEqual([]);
+  });
+});
+
 describe("scanRoutes reroute detection", () => {
   it("detects src/reroute.ts when present", async () => {
     const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));

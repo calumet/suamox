@@ -34,6 +34,54 @@ El objeto `context` contiene:
 
 Para cortar rutas usa `context.pathname`, no `context.url.pathname`: en las peticiones al endpoint `/__data` la URL es `/__data` y la ruta pedida viaja en el parametro `path`, asi que un guardia que lea `url` no se dispara en ninguna navegacion del cliente.
 
+## Middleware por directorio
+
+Un `middleware.ts` dentro de `src/pages/` protege esa carpeta y todo lo que cuelga de ella. Exporta el mismo `onRequest` que el global:
+
+```txt
+src/
+  middleware.ts                 corre para todo
+  pages/
+    (privado)/
+      middleware.ts             corre solo para lo de esta carpeta
+      protegido.tsx             -> /protegido
+```
+
+```ts
+// src/pages/(privado)/middleware.ts
+import { redirect } from "@calumet/suamox";
+import type { MiddlewareContext, MiddlewareNext } from "@calumet/suamox";
+
+export async function onRequest(context: MiddlewareContext, next: MiddlewareNext) {
+  if (!context.locals.user) {
+    redirect("/ingresar");
+  }
+  return next();
+}
+```
+
+Es la forma preferida de autorizar. Frente a un guardia por `pathname` en el global:
+
+- **Los grupos de rutas quedan cubiertos.** `/protegido` no tiene nada en su URL que diga que está en `(privado)`, y aun así el guardia se aplica. Con un guardia por `pathname` habría que mantener a mano la lista de rutas del grupo.
+- **`layout = false` no lo desactiva.** La cadena va por directorio, no por la de layouts.
+- Mover una página de carpeta cambia sus guardias, que es lo que uno espera al mover un archivo.
+
+### Orden
+
+Primero el global de `src/middleware.ts`, después los `middleware.ts` de directorio, de la raíz de `pages/` hacia la carpeta de la página. Todos comparten el mismo `locals`, así que el de una carpeta ve lo que puso el global.
+
+El que no llama a `next()` corta la cadena: ni los de abajo ni los loaders llegan a correr.
+
+### Navegación SPA
+
+El router pide `/__data` cuando la ruta tiene middleware, aunque no tenga loader. Sin eso el guardia solo correría en la carga directa y no al navegar dentro de la aplicación — y un guardia que corre a veces es peor que no tenerlo.
+
+React Router tiene ese mismo agujero y su solución documentada es añadir un `loader` vacío a mano. Aquí no hace falta: el plugin ya sabe en build qué rutas tienen middleware.
+
+### En `src/api/`
+
+Funciona igual: un `middleware.ts` en una carpeta de `src/api/` cubre los endpoints que cuelgan de ella.
+
 ## locals
 
 `locals` es un objeto vacio que el middleware puede popular con datos. Los loaders lo reciben como parte de su contexto:

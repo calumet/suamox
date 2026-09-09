@@ -34,6 +34,10 @@ export interface RouteRecord {
   hasLayoutLoaders?: boolean;
   layoutRouteIds?: string[];
   layoutFilePaths?: string[];
+  /** Cadena de `middleware.ts` de la ruta, de la raiz de `pages/` hacia su carpeta */
+  middleware?: MiddlewareHandler[];
+  /** El router la mira para pedir `/__data` aunque la ruta no tenga loader */
+  hasMiddleware?: boolean;
 }
 
 export interface LoaderContext {

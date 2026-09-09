@@ -553,6 +553,59 @@ describe("generateRoutesModule", () => {
     expect(clientCode).not.toContain("routeReroute");
   });
 
+  it("la cadena de middleware solo va al servidor, la bandera a los dos", () => {
+    const routes: RouteRecord[] = [
+      {
+        path: "/dashboard",
+        filePath: "/project/src/pages/(admin)/dashboard.tsx",
+        params: [],
+        isCatchAll: false,
+        isIndex: false,
+        priority: 110,
+        segments: [],
+        middlewares: [
+          "/project/src/pages/middleware.ts",
+          "/project/src/pages/(admin)/middleware.ts",
+        ],
+      },
+    ];
+
+    const serverCode = generateRoutesModule(routes, { target: "server" });
+    const clientCode = generateRoutesModule(routes, { target: "client" });
+
+    expect(serverCode).toContain('import * as __mw0 from "/project/src/pages/middleware.ts"');
+    expect(serverCode).toContain(
+      'import * as __mw1 from "/project/src/pages/(admin)/middleware.ts"',
+    );
+    expect(serverCode).toContain("middleware: [__mw0.onRequest, __mw1.onRequest]");
+    expect(serverCode).toContain("hasMiddleware: true");
+
+    // El guardia es codigo de servidor: al cliente solo va la bandera, que el
+    // router necesita para pedir /__data aunque la pagina no tenga loader
+    expect(clientCode).not.toContain("__mw0");
+    expect(clientCode).not.toContain("middleware.ts");
+    expect(clientCode).toContain("hasMiddleware: true");
+  });
+
+  it("importa una sola vez un middleware compartido por varias rutas", () => {
+    const compartido = "/project/src/pages/middleware.ts";
+    const routes: RouteRecord[] = ["/a", "/b"].map((path) => ({
+      path,
+      filePath: `/project/src/pages${path}.tsx`,
+      params: [],
+      isCatchAll: false,
+      isIndex: false,
+      priority: 110,
+      segments: [],
+      middlewares: [compartido],
+    }));
+
+    const code = generateRoutesModule(routes, { target: "server" });
+
+    expect(code.match(/import \* as __mw0 /g)).toHaveLength(1);
+    expect(code).not.toContain("__mw1");
+  });
+
   it("emits nothing when there is no reroute file", () => {
     const code = generateRoutesModule([], { target: "server" });
 

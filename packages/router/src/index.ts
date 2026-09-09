@@ -223,7 +223,14 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
           data = raw;
         }
         initialData = undefined;
-      } else if (resolvedRoute.loader || match.route.hasLoader || match.route.hasLayoutLoaders) {
+        // `hasMiddleware` entra aqui a proposito: sin esto un guardia de una pagina
+        // sin loader no correria al navegar dentro de la SPA, y correr a veces es peor
+      } else if (
+        resolvedRoute.loader ||
+        match.route.hasLoader ||
+        match.route.hasLayoutLoaders ||
+        match.route.hasMiddleware
+      ) {
         try {
           // Determine stable layouts
           const newLayoutRouteIds: string[] =

@@ -17,6 +17,8 @@ export interface RouteRecord {
   prerender?: boolean;
   layouts?: string[];
   layoutMetas?: LayoutMeta[];
+  /** Cadena de `middleware.ts` de la raiz de `pages/` hacia la carpeta de la pagina */
+  middlewares?: string[];
   hasLoader?: boolean;
   hasGetStaticPaths?: boolean;
   hasPrerender?: boolean;
@@ -50,4 +52,5 @@ export interface ApiRouteRecord {
   isCatchAll: boolean;
   isIndex: boolean;
   priority: number;
+  middlewares?: string[];
 }

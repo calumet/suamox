@@ -1,4 +1,3 @@
-import { redirect } from "@calumet/suamox";
 import type { MiddlewareContext, MiddlewareNext } from "@calumet/suamox";
 
 export async function onRequest(
@@ -8,9 +7,6 @@ export async function onRequest(
   context.locals.siteName = "Suamox Basic Example";
   context.locals.requestTime = Date.now();
 
-  if (context.pathname.startsWith("/protegido")) {
-    redirect("/");
-  }
-
+  // El guardia de /protegido vive ahora en src/pages/(privado)/middleware.ts
   return next();
 }

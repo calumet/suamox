@@ -36,6 +36,27 @@ export function generateRoutesModule(
   const declarations: string[] = [];
   const routeObjects: string[] = [];
 
+  // Un import por archivo aunque lo compartan muchas rutas. Estatico y no perezoso:
+  // un guardia tiene que poder cortar antes de que se cargue el modulo de la pagina
+  const middlewareNames = new Map<string, string>();
+  const middlewareDeclarations: string[] = [];
+  const middlewareChain = (paths: readonly string[] | undefined): string => {
+    if (target !== "server" || !paths || paths.length === 0) {
+      return "";
+    }
+    const names = paths.map((path) => {
+      const normalized = path.replace(/\\/g, "/");
+      let name = middlewareNames.get(normalized);
+      if (!name) {
+        name = `__mw${middlewareNames.size}`;
+        middlewareNames.set(normalized, name);
+        middlewareDeclarations.push(`import * as ${name} from ${JSON.stringify(normalized)};`);
+      }
+      return `${name}.onRequest`;
+    });
+    return `,\n    middleware: [${names.join(", ")}]`;
+  };
+
   routes.forEach((route, index) => {
     const loadPageName = `loadPage${index}`;
     const loadLayoutsName = `loadLayouts${index}`;
@@ -119,6 +140,10 @@ export function generateRoutesModule(
       (route.layouts ?? []).length > 0
         ? `,\n    layoutFilePaths: ${JSON.stringify(route.layouts)}`
         : "";
+    // La bandera va en los dos targets: el router la mira para decidir si pide
+    // `/__data`, y sin eso el guardia no correria al navegar dentro de la SPA
+    const hasMiddlewareField =
+      (route.middlewares ?? []).length > 0 ? `,\n    hasMiddleware: true` : "";
     const routeObj = `  {
     path: ${JSON.stringify(route.path)},
     load: ${loadRouteName},
@@ -126,7 +151,7 @@ export function generateRoutesModule(
     params: ${JSON.stringify(route.params)},
     isCatchAll: ${route.isCatchAll},
     isIndex: ${route.isIndex},
-    priority: ${route.priority}${hasLoaderField}${hasLayoutLoadersField}${layoutRouteIdsField}${layoutFilePathsField}
+    priority: ${route.priority}${hasLoaderField}${hasLayoutLoadersField}${layoutRouteIdsField}${layoutFilePathsField}${hasMiddlewareField}${middlewareChain(route.middlewares)}
   }`;
 
     routeObjects.push(routeObj);
@@ -182,7 +207,7 @@ export function generateRoutesModule(
     params: ${JSON.stringify(route.params)},
     isCatchAll: ${route.isCatchAll},
     isIndex: ${route.isIndex},
-    priority: ${route.priority}
+    priority: ${route.priority}${middlewareChain(route.middlewares)}
   }`);
     });
 
@@ -190,6 +215,7 @@ export function generateRoutesModule(
   }
 
   return `${declarations.join("\n")}
+${middlewareDeclarations.join("\n")}
 ${rerouteCode}
 export const routes = [
 ${routeObjects.join(",\n")}

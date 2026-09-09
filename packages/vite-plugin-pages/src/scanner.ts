@@ -116,6 +116,52 @@ function isLayoutFile(filePath: string, extensions: string[]): boolean {
   return basename(filePath, matchedExtension) === "layout";
 }
 
+function isMiddlewareFile(filePath: string, extensions: string[]): boolean {
+  const matchedExtension = extensions.find((extension) => filePath.endsWith(extension));
+  if (!matchedExtension) {
+    return false;
+  }
+
+  return basename(filePath, matchedExtension) === "middleware";
+}
+
+/**
+ * Cadena de middleware de una pagina: de la raiz de `pages/` hacia su carpeta.
+ *
+ * Va por directorio y no por la cadena de layouts a proposito: una pagina con
+ * `layout = false` se salta los layouts, y un guardia no se puede desactivar
+ * cambiando la presentacion. Ademas asi un grupo `(admin)/` se protege sin
+ * necesidad de inventarle un layout.
+ */
+function collectMiddlewareForFile(
+  filePath: string,
+  middlewareMap: Map<string, string>,
+  pagesDir: string,
+): string[] {
+  const chain: string[] = [];
+  let currentDir = dirname(filePath);
+
+  while (true) {
+    const middlewareFile = middlewareMap.get(currentDir);
+    if (middlewareFile) {
+      chain.push(middlewareFile);
+    }
+
+    if (currentDir === pagesDir) {
+      break;
+    }
+
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) {
+      break;
+    }
+
+    currentDir = parentDir;
+  }
+
+  return chain.reverse();
+}
+
 /** Solo cuenta en la raiz de `pages/`; un `root.tsx` anidado es una pagina normal */
 function isRootFile(filePath: string, extensions: string[], pagesDir: string): boolean {
   const matchedExtension = extensions.find((extension) => filePath.endsWith(extension));
@@ -239,12 +285,21 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
 
   const rootFile = files.find((file) => isRootFile(file, extensions, absolutePagesDir));
   const layoutFiles = files.filter((file) => isLayoutFile(file, extensions));
-  const pageFiles = files.filter((file) => !isLayoutFile(file, extensions) && file !== rootFile);
+  const middlewareFiles = files.filter((file) => isMiddlewareFile(file, extensions));
+  const pageFiles = files.filter(
+    (file) =>
+      !isLayoutFile(file, extensions) && !isMiddlewareFile(file, extensions) && file !== rootFile,
+  );
   const layoutMap = new Map<string, string>();
   const layoutLoaderMap = new Map<string, boolean>();
+  const middlewareMap = new Map<string, string>();
 
   for (const layoutFile of layoutFiles) {
     layoutMap.set(dirname(layoutFile), layoutFile);
+  }
+
+  for (const middlewareFile of middlewareFiles) {
+    middlewareMap.set(dirname(middlewareFile), middlewareFile);
   }
 
   // Detectar loaders en layout files y en el root
@@ -294,6 +349,7 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
 
       route.layouts = rootFile ? [rootFile, ...chain] : chain;
       route.layoutMetas = rootMeta ? [rootMeta, ...metas] : metas;
+      route.middlewares = collectMiddlewareForFile(file, middlewareMap, absolutePagesDir);
 
       if (exports) {
         route.hasLoader = exports.names.has("loader");
@@ -324,11 +380,17 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
 
   try {
     await access(apiDir);
-    const apiFiles = await fg(pattern, {
+    const allApiFiles = await fg(pattern, {
       cwd: apiDir,
       absolute: true,
       ignore: ["**/node_modules/**", "**/.git/**"],
     });
+
+    const apiMiddlewareMap = new Map<string, string>();
+    for (const file of allApiFiles.filter((f) => isMiddlewareFile(f, extensions))) {
+      apiMiddlewareMap.set(dirname(file), file);
+    }
+    const apiFiles = allApiFiles.filter((file) => !isMiddlewareFile(file, extensions));
 
     for (const file of apiFiles) {
       const {
@@ -365,6 +427,7 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
           isCatchAll: route.isCatchAll,
           isIndex: route.isIndex,
           priority: route.priority,
+          middlewares: collectMiddlewareForFile(route.filePath, apiMiddlewareMap, apiDir),
         });
       }
     }

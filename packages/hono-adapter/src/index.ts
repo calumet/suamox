@@ -317,21 +317,44 @@ type MiddlewareFunction = (
   next: () => Promise<Response>,
 ) => Response | Promise<Response>;
 
+/**
+ * Corre la cadena de middleware alrededor del pipeline: primero el global de
+ * `src/middleware.ts` y despues los `middleware.ts` de la ruta, de la raiz de
+ * `pages/` hacia su carpeta. Todos comparten el mismo `locals`.
+ *
+ * El que no llama a `next()` corta: el pipeline no llega a correr.
+ */
+/** La cadena que el plugin dejo en la ruta. Paginas y rutas de API la traen igual */
+const routeMiddleware = (route: unknown): MiddlewareFunction[] => {
+  const chain = (route as { middleware?: MiddlewareFunction[] } | undefined)?.middleware;
+  return Array.isArray(chain) ? chain : [];
+};
+
 const runMiddleware = async (
-  middlewareFn: MiddlewareFunction | undefined,
+  middlewares: ReadonlyArray<MiddlewareFunction | undefined>,
   request: Request,
   url: URL,
   pathname: string,
   params: Record<string, string>,
   pipeline: (locals: Record<string, unknown>) => Promise<Response>,
 ): Promise<Response> => {
-  if (!middlewareFn) {
+  const chain = middlewares.filter((fn): fn is MiddlewareFunction => typeof fn === "function");
+  if (chain.length === 0) {
     return pipeline({});
   }
 
   const locals: Record<string, unknown> = {};
   const context = { request, url, pathname, params, locals };
-  return middlewareFn(context, () => pipeline(locals));
+
+  const dispatch = (index: number): Promise<Response> => {
+    const fn = chain[index];
+    if (!fn) {
+      return pipeline(locals);
+    }
+    return Promise.resolve(fn(context, () => dispatch(index + 1)));
+  };
+
+  return dispatch(0);
 };
 
 /**
@@ -515,7 +538,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
 
       const middlewareFn = await loadMiddleware();
       return await runMiddleware(
-        middlewareFn,
+        [middlewareFn, ...routeMiddleware(match?.route)],
         c.req.raw,
         url,
         resolveRoutePathname(strippedPathname),
@@ -586,7 +609,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       const middlewareFn = await loadMiddleware();
       const reqUrl = new URL(c.req.url);
       return await runMiddleware(
-        middlewareFn,
+        [middlewareFn, ...routeMiddleware(match?.route)],
         c.req.raw,
         reqUrl,
         resolveRoutePathname(strippedPathname),
@@ -684,7 +707,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       // Ejecutar middleware de usuario y pipeline SSR
       const middlewareFn = await loadMiddleware();
       return await runMiddleware(
-        middlewareFn,
+        [middlewareFn, ...routeMiddleware(match?.route)],
         c.req.raw,
         url,
         resolveRoutePathname(strippedPathname),
@@ -1047,6 +1070,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     isCatchAll: boolean;
     isIndex: boolean;
     priority: number;
+    middleware?: MiddlewareFunction[];
   };
 
   type ServerEntryRuntime = {
@@ -1097,7 +1121,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       if (!match) return c.notFound();
 
       return await runMiddleware(
-        entry.onRequest,
+        [entry.onRequest, ...routeMiddleware(match?.route)],
         safeRequest,
         safeUrl,
         resolveRoutePathname(strippedPathname),
@@ -1162,7 +1186,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 
       // Ejecutar middleware y pipeline de datos
       return await runMiddleware(
-        entry.onRequest,
+        [entry.onRequest, ...routeMiddleware(match?.route)],
         safeRequest,
         safeUrl,
         resolveRoutePathname(strippedPathname),
@@ -1271,7 +1295,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       const safeRequest = new Request(safeUrl, { headers: c.req.raw.headers });
 
       return await runMiddleware(
-        entry.onRequest,
+        [entry.onRequest, ...routeMiddleware(match?.route)],
         safeRequest,
         safeUrl,
         resolveRoutePathname(strippedPathname),
