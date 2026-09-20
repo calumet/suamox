@@ -25,7 +25,17 @@ TS 7 tampoco incluye ya en automatico todo lo que hay en `node_modules/@types`: 
 
 En la primera pasada oxlint encontro cosas que el config viejo no miraba, porque ignoraba `tests/**` y no tenia `jsx-a11y` ni las reglas nuevas de React. Ver **Correcciones**.
 
-**Se pierde el lint con tipos.** El config anterior usaba `tseslint.configs.recommendedTypeChecked` y oxlint todavia no lintea con el checker. `tsc` cubre buena parte, pero no `no-floating-promises` ni `no-misused-promises`. Quedan en el codigo 42 comentarios `eslint-disable`; los que nombran reglas de `@typescript-eslint` ya no suprimen nada y marcan justo los puntos que pierden cobertura.
+**Se pierde el lint con tipos.** El config anterior usaba `tseslint.configs.recommendedTypeChecked` y oxlint todavia no lintea con el checker. `tsc` cubre buena parte, pero no `no-floating-promises` ni `no-misused-promises`.
+
+### Supresiones de lint
+
+Las 42 que habia se revisaron una por una, con `oxlint --report-unused-disable-directives` decidiendo cuales estaban muertas en vez de a ojo. Quedan 21, todas vivas:
+
+- **Se borran 25** que no suprimian nada: las de `@typescript-eslint/require-await` en los tests de render, y las de `no-unsafe-*` en `hono-adapter`. Estas ultimas apuntaban a llamadas cuyo tipo ya esta declarado en el sitio —`assetHandler` con su `as`, `onRequest` con `MiddlewareFunction`—, o sea conservadurismo de typescript-eslint con los genericos de Hono, no agujeros. La unica que si marcaba un `any` de verdad es el `await import(serverEntryURL)` de `loadServerEntry`, y ahi la supresion se cambia por una linea que dice que nada comprueba la forma de ese modulo salvo el guardia de abajo.
+- **Se acotan 8** de los e2e que estaban pelonas —`// eslint-disable-next-line` a secas apaga _todas_ las reglas de la linea siguiente— a `typescript/no-explicit-any`, que es lo unico que suprimian.
+- Las demas se renombran de `eslint-disable-next-line @typescript-eslint/x` a `oxlint-disable-next-line typescript/x`.
+
+`pnpm lint` corre con `--report-unused-disable-directives-severity=error`: **una supresion que deja de suprimir rompe el build**. Es lo que evita que vuelva a pasar. Va en el script y no en `oxlint.config.ts` porque el parser de oxlint 1.83 todavia no acepta el campo, aunque sus tipos ya lo declaren.
 
 ### Dependencias eliminadas
 
@@ -49,11 +59,11 @@ En la primera pasada oxlint encontro cosas que el config viejo no miraba, porque
 
 | Paquete                             | Version anterior | Nueva version |
 | ----------------------------------- | ---------------- | ------------- |
-| `@calumet/suamox`                   | 0.8.0            | 0.8.2         |
+| `@calumet/suamox`                   | 0.8.0            | 0.8.3         |
 | `@calumet/suamox-cli`               | 0.1.3            | 0.1.4         |
 | `@calumet/suamox-create-app`        | 0.3.1            | 0.3.3         |
 | `@calumet/suamox-head`              | 0.1.1            | 0.1.3         |
-| `@calumet/suamox-hono-adapter`      | 0.9.0            | 0.9.1         |
+| `@calumet/suamox-hono-adapter`      | 0.9.0            | 0.9.2         |
 | `@calumet/suamox-router`            | 0.8.0            | 0.8.1         |
 | `@calumet/suamox-vite-plugin-pages` | 0.12.0           | 0.12.2        |
 

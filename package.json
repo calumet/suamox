@@ -9,7 +9,7 @@
     "dev": "pnpm --parallel --filter \"@calumet/suamox*\" dev",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
-    "lint": "oxlint",
+    "lint": "oxlint --report-unused-disable-directives-severity=error",
     "format": "oxfmt",
     "test:e2e": "playwright test"
   },

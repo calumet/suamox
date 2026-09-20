@@ -56,7 +56,7 @@ test.describe("/__data endpoint", () => {
     await page.goto("/dashboard");
     await expect(page.locator("h1")).toContainText("Dashboard");
     await page.evaluate(() => {
-      // eslint-disable-next-line
+      // oxlint-disable-next-line typescript/no-explicit-any
       (window as any).__SPA_MARKER__ = true;
     });
 
@@ -66,7 +66,7 @@ test.describe("/__data endpoint", () => {
     expect(new URL(page.url()).pathname).toBe("/time");
 
     const marker = await page.evaluate(() => {
-      // eslint-disable-next-line
+      // oxlint-disable-next-line typescript/no-explicit-any
       return (window as any).__SPA_MARKER__;
     });
     expect(marker).toBe(true);

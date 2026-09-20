@@ -777,7 +777,6 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
     try {
       // Ejecutar hook onRequest
       if (onRequest) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         await onRequest(c);
       }
 
@@ -1085,7 +1084,6 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     next: () => Promise<void>,
   ) => Promise<Response | void>;
   app.use("/assets/*", async (c, next) => {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     const response = await assetHandler(c, next);
     const headers = response?.headers;
     if (
@@ -1112,7 +1110,6 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     if (c.req.path.endsWith("/")) {
       return next();
     }
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     return publicHandler(c, next);
   });
 
@@ -1171,9 +1168,8 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   };
 
   const loadServerEntry = async (): Promise<ServerEntryRuntime> => {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    // El entry construido es un `any`: nada comprueba su forma, solo el guardia de abajo
     const serverModule = await import(serverEntryURL);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const routes = serverModule.routes as RouteRecord[];
     if (!routes) {
       throw new Error("Server entry must export routes");
@@ -1367,7 +1363,6 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     try {
       // Ejecutar hook onRequest
       if (onRequest) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         await onRequest(c);
       }
 

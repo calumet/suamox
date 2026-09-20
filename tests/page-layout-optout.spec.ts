@@ -34,7 +34,7 @@ test.describe("export const layout = false", () => {
     await page.goto("/time");
     await expect(page.locator("header")).toContainText("Suamox");
     await page.evaluate(() => {
-      // eslint-disable-next-line
+      // oxlint-disable-next-line typescript/no-explicit-any
       (window as any).__SPA_MARKER__ = true;
     });
 
@@ -47,7 +47,7 @@ test.describe("export const layout = false", () => {
     await expect(page.locator("header")).toContainText("Suamox");
 
     const marker = await page.evaluate(() => {
-      // eslint-disable-next-line
+      // oxlint-disable-next-line typescript/no-explicit-any
       return (window as any).__SPA_MARKER__;
     });
     expect(marker).toBe(true);

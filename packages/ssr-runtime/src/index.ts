@@ -91,7 +91,7 @@ export type LoaderData<L> = L extends (...args: never[]) => infer R
     : Awaited<R>
   : L;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// oxlint-disable-next-line typescript/no-explicit-any -- el default del generico deja usar PageProps sin argumento de tipo
 export interface PageProps<L = any> {
   data: LoaderData<L>;
 }
@@ -119,7 +119,7 @@ const LoaderDataContext = createContext<unknown>(null);
 const StaticPropsContext = createContext<Record<string, unknown>>({});
 const AllRouteDataContext = createContext<Record<string, unknown>>({});
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// oxlint-disable-next-line typescript/no-explicit-any -- el default del generico deja llamar useLoaderData() sin argumento de tipo
 export function useLoaderData<L = any>(): LoaderData<L> {
   return useContext(LoaderDataContext) as LoaderData<L>;
 }
