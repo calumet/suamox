@@ -5,25 +5,25 @@ test.describe("el manifest no sale por HTTP", () => {
     test.skip(testInfo.project.name !== "prod", "prod only");
   });
 
-  // Dentro del directorio servido, el manifest publica el mapa de cada fuente a
-  // su archivo: el inventario de rutas, incluidas las que nadie enlaza.
-  for (const path of [
-    "/.vite/manifest.json",
-    "/assets/../.vite/manifest.json",
-    "/.env",
-    "/.git/config",
-  ]) {
-    test(`${path} responde 404`, async ({ request }) => {
-      const response = await request.get(path, { maxRedirects: 0 });
+  // Lo que importa es el contenido, no el codigo: el ejemplo tiene una ruta
+  // catch-all, asi que un path inexistente responde 200 con su HTML igual.
+  for (const path of ["/.vite/manifest.json", "/assets/../.vite/manifest.json"]) {
+    test(`${path} no devuelve el manifest`, async ({ request }) => {
+      const body = await (await request.get(path)).text();
 
-      expect(response.status()).toBe(404);
+      expect(body).not.toContain('"isEntry"');
+      expect(body).not.toContain("src/pages/");
     });
   }
 
-  test("una ruta normal sigue sirviendose", async ({ request }) => {
-    const response = await request.get("/");
+  // Empieza por punto y es legitimo: security.txt, los desafios ACME de Let's
+  // Encrypt, apple-app-site-association. Filtrar dotfiles a ciegas lo rompe, y
+  // Vite copia `public/` entero al output.
+  test("lo que la app publica en .well-known si se sirve", async ({ request }) => {
+    const response = await request.get("/.well-known/security.txt");
 
     expect(response.status()).toBe(200);
+    expect(await response.text()).toContain("Contact:");
   });
 
   test("los assets del cliente siguen sirviendose", async ({ page, request }) => {

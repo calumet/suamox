@@ -10,7 +10,7 @@
 
   SvelteKit lo resuelve de otra forma —construye a un directorio de staging y su adapter copia después sólo lo necesario—, pero eso pide un paso de copia que aquí no existe: `dist/client` **es** lo desplegado.
 
-  Además **nada que empiece por punto sale por HTTP**. El manifest ya no vive ahí, pero un `.env` o un `.git` que acaben en ese directorio tampoco tienen por qué.
+  **No se filtran los dotfiles.** Se probó y se descartó: `public/` significa «sirve esto», Vite lo copia entero al output, y bloquear lo que empieza por punto rompe `/.well-known/` —`security.txt`, los desafíos ACME de Let's Encrypt, `apple-app-site-association`—. Express llegó antes al mismo sitio: su default ignora dotfiles pero [no los de dentro de un directorio con punto](https://github.com/expressjs/serve-static/issues/54). Sacar el manifest del directorio servido ya cierra el agujero; filtrar encima costaba en cada petición y rompía un estándar.
 
 ### Correcciones
 

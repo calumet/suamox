@@ -1035,15 +1035,6 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     };
   };
 
-  // Nada que empiece por punto sale por HTTP. El manifest ya no vive ahi, pero
-  // un `.env` o un `.git` que acaben en ese directorio tampoco tienen por que
-  app.use("*", async (c, next) => {
-    if (c.req.path.split("/").some((segment) => segment.startsWith("."))) {
-      return c.notFound();
-    }
-    return next();
-  });
-
   // Servir assets estáticos desde el directorio de build del cliente
   const assetHandler = serveStatic({ root: clientDir }) as (
     c: Context,
