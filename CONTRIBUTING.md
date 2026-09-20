@@ -104,7 +104,7 @@ Usa mensajes claros y descriptivos:
 3. Valida lockfile con `pnpm install --frozen-lockfile` antes de abrir el PR.
 4. Actualiza documentación si aplica.
 5. Agrega tests para funcionalidades nuevas.
-6. Referencia issues relacionados.
+6. Referencia issues relacionados. Para que GitHub la cierre al mergear, **la palabra clave va en inglés** aunque el resto esté en español: `Closes #42`, no «Cierra #42». GitHub solo reconoce `close`, `closes`, `closed`, `fix`, `fixes`, `fixed`, `resolve`, `resolves` y `resolved`.
 
 ## Versionado y Publicación
 

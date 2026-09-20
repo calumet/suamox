@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.22.0 (2026-09-19)
+
+### Features
+
+- **`export const revalidate = true` en un layout: su loader corre en cada navegación.** 0.21.0 cerró el caso de la query, pero dejó fuera lo que el navegador no puede comparar: `locals`, una cabecera, la sesión. Un layout cuyo loader lea eso servía los datos de la primera página que se cargó de esa sección.
+
+  ```tsx
+  // src/pages/(admin)/layout.tsx
+  export const revalidate = true;
+
+  export function loader({ locals }: LoaderContext) {
+    return { usuario: locals.usuario };
+  }
+  ```
+
+  Lo declara el layout y no lo adivina el framework. Se evaluó detectarlo analizando el loader —el plugin ya parsea estos archivos con Oxc— y se descartó: casi todos destructuran `locals` o `request`, así que marcaría casi todos y la optimización no sobreviviría. React Router llegó al mismo reparto con `shouldRevalidate`: la decisión vive en la definición de la ruta.
+
+  El resto de la cadena se sigue aprovechando; solo el layout que lo declara queda fuera de `stableLayouts`.
+
+### Correcciones
+
+- **Dos layouts distintos podían compartir el id `layout:root`.** El del raíz y el de una carpeta de ruta llamada `root` generaban la misma clave, y como `layoutData` se indexa por ahí, uno recibía los datos del loader del otro. En silencio. El id del raíz pasa a ser `layout:`, que ninguna carpeta puede producir.
+
+- **Dos e2e clicaban antes de que la página hidratara.** El clic salía entonces como navegación nativa: uno se llevaba por delante el marcador que comprueba que no hubo recarga, y el otro veía el cache de layouts todavía vacío. En la suite pasaban porque el servidor de desarrollo ya tenía todo compilado; en solitario, no. Ahora esperan, como ya hacía el resto de tests de navegación.
+
+### Interno
+
+- `CONTRIBUTING.md` deja escrito que la palabra que cierra una issue va en inglés aunque el resto del texto esté en español. «Cierra #42» no la cierra; `Closes #42` sí.
+
+### Packages
+
+| Paquete                             | Version anterior | Nueva version |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox-router`            | 0.10.0           | 0.11.0        |
+| `@calumet/suamox-vite-plugin-pages` | 0.14.0           | 0.15.0        |
+
 ## 0.21.0 (2026-09-20)
 
 ### Seguridad

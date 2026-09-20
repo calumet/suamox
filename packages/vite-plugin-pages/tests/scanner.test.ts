@@ -96,7 +96,7 @@ export default function Layout({ children }) { return children; }`,
     const route = result.routes.find((r) => r.path === "/:lang");
     expect(route).toBeDefined();
     expect(route?.layoutMetas).toHaveLength(2);
-    expect(route?.layoutMetas?.[0]?.routeId).toBe("layout:root");
+    expect(route?.layoutMetas?.[0]?.routeId).toBe("layout:");
     expect(route?.layoutMetas?.[0]?.hasLoader).toBe(false);
     expect(route?.layoutMetas?.[1]?.routeId).toBe("layout:[lang]");
     expect(route?.layoutMetas?.[1]?.hasLoader).toBe(true);
@@ -204,7 +204,7 @@ export default function P() {}`,
 
     expect(normalizeList(ingresar?.layouts)).toEqual([appRoot].map(normalizePath));
     expect(ingresar?.layoutMetas).toEqual([
-      { filePath: appRoot, routeId: "root", hasLoader: true },
+      { filePath: appRoot, routeId: "root", hasLoader: true, alwaysRevalidate: false },
     ]);
   });
 

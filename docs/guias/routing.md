@@ -105,6 +105,25 @@ La página `blog/[slug].tsx` se renderiza envuelta por:
 2. `src/pages/blog/layout.tsx`
 3. `src/pages/blog/[slug].tsx`
 
+### Recargar siempre el loader de un layout
+
+Al navegar dentro de la SPA, un layout que sigue en la cadena no vuelve a pedir su loader si sus parámetros de ruta y la query no cambiaron. Eso evita refetches, pero solo mira lo que el navegador puede comparar.
+
+Si el loader depende de otra cosa —`locals`, una cabecera, la sesión—, el layout lo declara:
+
+```tsx
+// src/pages/(admin)/layout.tsx
+export const revalidate = true;
+
+export function loader({ locals }: LoaderContext) {
+  return { usuario: locals.usuario };
+}
+```
+
+Sin eso, dos páginas de esa sección comparten los datos de la primera que se cargó. Con eso, su loader corre en cada navegación; el resto de la cadena se sigue aprovechando.
+
+No hace falta si el loader solo usa `params`: ese caso ya está cubierto.
+
 ### Salirse del layout
 
 Una página puede exportar `layout = false` para renderizarse sin la cadena de layouts de su carpeta:

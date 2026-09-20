@@ -265,12 +265,22 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
           const newLayoutRouteIds: string[] =
             (match.route as ResolvedMatch["route"] & { layoutRouteIds?: string[] })
               .layoutRouteIds ?? [];
+          // Los que declaran `export const revalidate = true`: su loader depende
+          // de algo que desde el navegador no se puede comparar, como `locals`
+          const alwaysRevalidate = new Set(
+            (match.route as ResolvedMatch["route"] & { alwaysRevalidateLayouts?: string[] })
+              .alwaysRevalidateLayouts ?? [],
+          );
           const stableLayouts: string[] = [];
           // Un loader de layout recibe la query entera, y nada declara cual la lee
           const sameSearch = currentSearch === url.search;
           if (!revalidate && sameSearch) {
             for (const id of newLayoutRouteIds) {
-              if (!currentLayoutRouteIds.includes(id) || !(id in currentLayoutData)) {
+              if (
+                alwaysRevalidate.has(id) ||
+                !currentLayoutRouteIds.includes(id) ||
+                !(id in currentLayoutData)
+              ) {
                 continue;
               }
               // Un layout bajo un segmento dinamico comparte routeId entre
