@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.19.0 (2026-09-20)
+
+### Features
+
+- **`<Head lang>`: el documento declara el idioma de la página, no el de la plantilla.** `<html lang>` estaba escrito en duro como `en`, así que una app que sirve español lo declaraba mal en todas sus rutas. Es el atributo del que un lector de pantalla saca la fonética con la que pronuncia la página entera.
+
+  ```tsx
+  export function loader({ url }: LoaderContext) {
+    return { idioma: url.pathname.startsWith("/en") ? "en" : "es" };
+  }
+
+  export default function Layout({ children }: { children: ReactNode }) {
+    const { idioma } = useLoaderData<typeof loader>();
+    return (
+      <>
+        <Head lang={idioma} />
+        {children}
+      </>
+    );
+  }
+  ```
+
+  Va por el head manager y no por una opción del adaptador **porque es el único camino que comparten los tres modos de render**. Desarrollo, producción y SSG pasan todos por `renderPage`, así que el idioma viaja con la página renderizada. Una opción del servidor habría dejado fuera a SSG, que no tiene petición que consultar: `suamox ssg` a secas funciona sin configurar nada, porque una variante se prerenderiza con su propio pathname y el loader la ve entera.
+
+  Al navegar dentro de la SPA el atributo se mueve solo: el documento no se vuelve a pedir, y sin eso un lector de pantalla seguiría leyendo la página nueva con la fonética de la anterior. Una página que no declara ninguno vuelve al que sirvió el servidor.
+
+  Va declarado **una sola vez**, en el layout más externo que conoce el idioma. Si dos componentes lo declaran a la vez gana el último en registrarse, y ese orden no es el mismo en servidor que en cliente. Sin declarar nada, sigue saliendo `en`: ninguna app existente cambia.
+
+  El `lang` se escapa antes de entrar al atributo. Sale de la app, y aunque el parser trate `<` y `>` como texto dentro de un atributo entre comillas, la comilla sin escapar sí permitiría salir a contexto de etiqueta. Cierra #42.
+
+### Correcciones
+
+- **Desarrollo y producción servían plantillas distintas.** El adaptador tenía su propia copia inline del documento, lo que hacía que el defecto del idioma hubiera que arreglarlo dos veces —y que un arreglo en una sola dejara el otro modo roto—. Ahora desarrollo arma el documento con `generateHTML`, la misma de producción y SSG, y después lo pasa por `transformIndexHtml`. De paso se alinea el orden del `<head>`: desarrollo ponía los estilos antes del contenido de `<Head>` y producción al revés.
+
+### Packages
+
+| Paquete                        | Version anterior | Nueva version |
+| ------------------------------ | ---------------- | ------------- |
+| `@calumet/suamox`              | 0.8.3            | 0.9.0         |
+| `@calumet/suamox-head`         | 0.1.3            | 0.2.0         |
+| `@calumet/suamox-hono-adapter` | 0.9.2            | 0.9.3         |
+
 ## 0.18.0 (2026-09-19)
 
 Actualizacion del toolchain. Se cierran las dos entradas de **Sin actualizar (deliberado)** de 0.4.0: TypeScript 7 y el linter. Sin cambios en la API publica del framework.

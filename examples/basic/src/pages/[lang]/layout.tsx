@@ -1,5 +1,6 @@
 import { useLoaderData } from "@calumet/suamox";
 import type { LoaderContext } from "@calumet/suamox";
+import { Head } from "@calumet/suamox-head";
 import type { ReactNode } from "react";
 
 export function loader({ params, locals, request }: LoaderContext) {
@@ -24,10 +25,15 @@ function Footer() {
 }
 
 export default function LangLayout({ children }: { children: ReactNode }) {
+  const { lang } = useLoaderData<typeof loader>();
   return (
     <>
+      <Head lang={lang} />
       <Header />
       <nav data-testid="lang-nav">
+        <a href="/en/correos" data-testid="lang-en">
+          Correos (en)
+        </a>
         <a href="/es/noticias">Noticias</a>
         <a href="/es/noticias/noticia?id=1">Noticia 1</a>
         <a href="/es/noticias/noticia?id=2">Noticia 2</a>

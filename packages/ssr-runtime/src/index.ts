@@ -250,6 +250,8 @@ export interface RenderResult {
   status: number;
   html: string;
   head?: string;
+  /** `<html lang>` que pidio la pagina con `<Head lang>`, si lo pidio */
+  lang?: string;
   initialData?: unknown;
   layoutData?: Record<string, unknown>;
   redirectTo?: string;
@@ -653,6 +655,12 @@ export function generateHTML(options: {
    * importar `node:crypto`.
    */
   csp?: { hash: (code: string) => string; directives?: string };
+  /**
+   * Valor de `<html lang>`. De el saca un lector de pantalla la fonetica con la
+   * que pronuncia la pagina entera, asi que una app que sirve varios idiomas lo
+   * resuelve por peticion.
+   */
+  lang?: string;
 }): string {
   const {
     html,
@@ -666,6 +674,7 @@ export function generateHTML(options: {
     prehydrateScripts = [],
     nonce,
     csp,
+    lang = "en",
   } = options;
 
   const escapeAttr = (value: string): string =>
@@ -729,7 +738,7 @@ export function generateHTML(options: {
     .join("\n    ");
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${escapeAttr(lang)}">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

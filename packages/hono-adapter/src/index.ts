@@ -842,38 +842,29 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
             return c.redirect(result.redirectTo, result.status as 301 | 302 | 303 | 307 | 308);
           }
 
-          const escapeAttr = (v: string): string =>
-            v.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
           const entryCssLinks = await collectCssImportsFromEntryClient(root, vite);
           // CSS que importa la pagina renderizada (no visible desde entry-client)
           const pageCssLinks = match ? collectPageCssFromSsrGraph(vite, match.route.filePath) : [];
           const devCssLinks = Array.from(new Set([...entryCssLinks, ...pageCssLinks]));
-          const devCssTags = devCssLinks
-            .map((href) => `<link rel="stylesheet" href="${escapeAttr(href)}">`)
-            .join("\n    ");
 
           // Scripts de cliente: solo para rutas que no son prerender
-          const clientScripts = isPrerender
-            ? ""
-            : `<link rel="modulepreload" href="/src/entry-client.tsx">
-    <script type="module" src="/src/entry-client.tsx"></script>`;
+          const clientEntry = isPrerender ? [] : ["/src/entry-client.tsx"];
 
-          // Leer y transformar index.html
+          // La misma plantilla que produccion. Los scripts inline no entran aca:
+          // van despues de `transformIndexHtml`, porque el pase del nonce tiene
+          // que alcanzar antes al preambulo que inyecta Vite
           const template = await vite.transformIndexHtml(
             url.pathname,
-            `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    ${devCssTags}
-    ${result.head || ""}
-    ${clientScripts}
-  </head>
-  <body>
-    <div id="root">${result.html}</div>
-  </body>
-</html>`,
+            generateHTML({
+              html: `<div id="root">${result.html}</div>`,
+              head: result.head,
+              styles: devCssLinks,
+              scripts: clientEntry,
+              preloadScripts: clientEntry,
+              scriptPlacement: "head",
+              includeInitialDataScript: false,
+              lang: result.lang,
+            }),
           );
 
           // Los scripts de useClientValue van antes que los datos: parchean el DOM
@@ -1437,6 +1428,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
             includeInitialDataScript: !isPrerender,
             prehydrateScripts: result.prehydrateScripts,
             nonce,
+            lang: result.lang,
           });
 
           if (nonce) {

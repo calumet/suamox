@@ -26,6 +26,32 @@ export default function HomePage() {
 - En cliente: sincroniza cambios de `<Head>` durante navegación.
 - Evita duplicación de inserciones con marcadores internos `data-suamox-head`.
 
+## Idioma del documento
+
+`<html lang>` vale `en` por defecto. Una página que habla otro idioma lo declara con la prop `lang`:
+
+```tsx
+export function loader({ url }: LoaderContext) {
+  return { idioma: url.pathname.startsWith("/en") ? "en" : "es" };
+}
+
+export default function Layout({ children }: { children: ReactNode }) {
+  const { idioma } = useLoaderData<typeof loader>();
+  return (
+    <>
+      <Head lang={idioma} />
+      {children}
+    </>
+  );
+}
+```
+
+Va **una sola vez, en el layout más externo que conoce el idioma**. Un documento tiene un solo `lang`, y si dos componentes lo declaran a la vez gana el último en registrarse, que no es el mismo en servidor que en cliente: el registro va de padre a hijo al renderizar y al revés en los efectos.
+
+La `url` del loader llega con el prefijo intacto aunque [`reroute`](./reroute.md) lo quite para resolver la ruta, así que es de donde se saca el idioma.
+
+Funciona igual en desarrollo, en producción y en SSG, porque los tres arman el documento con la misma plantilla. Al navegar dentro de la SPA el atributo se mueve solo; una página que no declara ninguno vuelve al que sirvió el servidor.
+
 ## Integración con router
 
 `@calumet/suamox-router` envuelve el árbol en `HeadProvider`, por eso en apps normales solo usas `<Head>` en páginas/layouts.

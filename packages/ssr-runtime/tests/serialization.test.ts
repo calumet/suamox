@@ -316,4 +316,21 @@ describe("generateHTML", () => {
     expect(html).toMatch(/<\/body>/);
     expect(html).toMatch(/<\/html>/);
   });
+
+  it("usa el lang que le pasan", () => {
+    expect(generateHTML({ html: "", lang: "es" })).toMatch(/<html lang="es">/);
+  });
+
+  it("sin lang cae en en, que es lo que servia antes", () => {
+    expect(generateHTML({ html: "" })).toMatch(/<html lang="en">/);
+  });
+
+  it("escapa el lang: sale de la app y acaba dentro de un atributo", () => {
+    const html = generateHTML({ html: "", lang: '"><script>alert(1)</script>' });
+
+    // La comilla escapada es lo unico que hace falta: dentro de un atributo
+    // entre comillas dobles el parser trata `<` y `>` como texto, asi que sin
+    // poder cerrar el atributo no se llega a contexto de etiqueta
+    expect(html).toContain('<html lang="&quot;><script>alert(1)</script>">');
+  });
 });

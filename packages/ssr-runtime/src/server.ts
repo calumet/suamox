@@ -131,6 +131,7 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
       status,
       html,
       head,
+      lang: headManager.getLang(),
       initialData: data,
       layoutData,
       prehydrateScripts: clientValueManager.getSnapshot(),
