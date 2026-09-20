@@ -134,6 +134,21 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
   return {
     name: "suamox:pages",
 
+    // Las entradas las declara el plugin, no la aplicacion: son las mismas en
+    // todos los proyectos y su contenido lo genera este mismo plugin. La CLI de
+    // Vite no sirve para esto porque resuelve `--ssr <entrada>` como ruta de
+    // archivo y un id virtual no lo es.
+    config(_config, env) {
+      if (env.isSsrBuild) {
+        // El nombre de la clave decide el del archivo emitido, y `entry-server.js`
+        // es el que ya buscan el adaptador y SSG por defecto
+        return {
+          build: { rollupOptions: { input: { "entry-server": VIRTUAL_SERVER_MODULE_ID } } },
+        };
+      }
+      return {};
+    },
+
     configResolved(config) {
       root = config.root;
       basePath = config.base.replace(/\/+$/, "") || "/";

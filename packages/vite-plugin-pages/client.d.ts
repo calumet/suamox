@@ -1,5 +1,17 @@
 /// <reference types="vite/client" />
 
+/**
+ * Tipos de los modulos virtuales que genera el plugin. Los envia el paquete en
+ * vez de copiarse a cada proyecto: son iguales en todos y una copia a mano se
+ * queda vieja en cuanto el modulo virtual gana un export.
+ *
+ * Se enganchan desde el `tsconfig.json` de la aplicacion:
+ *
+ * ```json
+ * { "compilerOptions": { "types": ["@calumet/suamox-vite-plugin-pages/client"] } }
+ * ```
+ */
+
 declare module "virtual:pages" {
   export const routes: import("@calumet/suamox").RouteRecord[];
   export default routes;
