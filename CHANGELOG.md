@@ -36,7 +36,7 @@
 
   Ahora se comparan también los parámetros que salen de la ruta del propio layout, que el `routeId` ya nombra. Un layout cuyos params no cambiaron sigue siendo estable, así que la optimización se mantiene: navegar entre dos páginas hermanas del mismo idioma no vuelve a pedir el loader del layout.
 
-  **Límite conocido:** los params se comparan contra la ruta del layout, no contra lo que su loader lee de verdad. Un layout raíz cuyo loader lea un parámetro de un segmento más profundo no revalida solo; para ese caso está `revalidate()`.
+  **Límite conocido, y es más ancho de lo que suena:** lo que se compara son los params de la ruta del layout, no lo que su loader lee de verdad. Un loader de layout recibe la `url` y la `query` enteras, además de `locals`, así que **nada de eso dispara una revalidación**. El caso extremo es el layout raíz, que no cuelga de ningún segmento dinámico y por tanto es estable en todas las navegaciones: si su loader lee el query string, navegar de `?id=1` a `?id=2` le sirve los datos del primero. Para eso está `revalidate()`.
 
   De paso, el cache de layouts pasa a fijarse junto a los params y después del corte por navegación superada. Una navegación abandonada guardaba sus datos sin sus params, y la siguiente comparaba unos contra los otros.
 

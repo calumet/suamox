@@ -11,6 +11,46 @@ import {
 
 export type HeadManagerMode = "server" | "client";
 
+/**
+ * Una etiqueta de idioma es BCP 47, no texto libre. Se valida en vez de
+ * escaparse porque el documento generado **se reescribe con expresiones
+ * regulares antes de llegar al navegador**: el `transformIndexHtml` de
+ * desarrollo inyecta en la primera coincidencia de `<head`, y el pase del nonce
+ * busca `<script`. Dentro de un atributo entre comillas dobles un `<` es texto
+ * inerte para el parser, pero no para esos pases.
+ */
+const ETIQUETA_IDIOMA = /^[A-Za-z][A-Za-z0-9-]{0,34}$/;
+
+let idiomaInvalidoReportado = false;
+
+/**
+ * Filtra el `lang` que declara una pagina. Vive aqui, y no donde se genera el
+ * HTML, porque hay dos consumidores —el documento del servidor y el atributo
+ * que escribe el cliente al navegar— y validar en uno solo deja que el otro
+ * aplique lo que el primero rechazo.
+ *
+ * `undefined` es no declararlo; cualquier otra cosa que no sea una etiqueta es
+ * un bug de la app y se sirve `"en"`.
+ */
+export function idiomaSeguro(lang: unknown): string {
+  if (lang === undefined) {
+    return "en";
+  }
+  if (typeof lang === "string" && ETIQUETA_IDIOMA.test(lang)) {
+    return lang;
+  }
+  // Una sola vez, y serializado: el valor puede venir de la URL, asi que avisar
+  // por peticion deja llenar el log, y en crudo deja forjar una linea entera
+  if (!idiomaInvalidoReportado) {
+    idiomaInvalidoReportado = true;
+    console.warn(
+      `[suamox] lang no es una etiqueta de idioma, se sirve "en":`,
+      JSON.stringify(lang),
+    );
+  }
+  return "en";
+}
+
 export interface HeadManager {
   mode: HeadManagerMode;
   register: (id: symbol, node: React.ReactNode, lang?: string) => void;
@@ -48,8 +88,10 @@ export const createHeadManager = (mode: HeadManagerMode): HeadManager => {
     mode,
     register(id, node, lang) {
       entries.set(id, node);
+      // Se filtra al entrar, no al salir: asi `getLang()` no puede devolver algo
+      // que el documento del servidor haya descartado
       if (lang === undefined) langs.delete(id);
-      else langs.set(id, lang);
+      else langs.set(id, idiomaSeguro(lang));
       notify();
     },
     unregister(id) {

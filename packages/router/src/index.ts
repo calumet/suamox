@@ -45,12 +45,14 @@ const MAX_REDIRECTS = 5;
  * segmentos dinamicos que lleva encima se leen de ahi.
  */
 const layoutParamNames = (routeId: string): string[] => {
-  const dir = routeId.slice("layout:".length);
-  if (dir === "root") {
+  // El layout raiz no lleva prefijo: su id es `root` a secas. Sin esto el
+  // `slice` devolvia `""` y salia `[]` por accidente, que es lo que toca pero
+  // por el camino equivocado
+  if (!routeId.startsWith("layout:")) {
     return [];
   }
   const names: string[] = [];
-  for (const segment of dir.split("/")) {
+  for (const segment of routeId.slice("layout:".length).split("/")) {
     // `[lang]`, `[...slug]` y `[[lang]]` por igual
     const name = /^\[{1,2}(?:\.{3})?([^\]]+)\]{1,2}$/.exec(segment)?.[1];
     if (name) {
