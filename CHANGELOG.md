@@ -28,7 +28,7 @@
 
   Va declarado **una sola vez**, en el layout más externo que conoce el idioma. Si dos componentes lo declaran a la vez gana el último en registrarse, y ese orden no es el mismo en servidor que en cliente. Sin declarar nada, sigue saliendo `en`: ninguna app existente cambia.
 
-  El `lang` se escapa antes de entrar al atributo. Sale de la app, y aunque el parser trate `<` y `>` como texto dentro de un atributo entre comillas, la comilla sin escapar sí permitiría salir a contexto de etiqueta. Cierra #42.
+  **Solo se acepta una etiqueta de idioma**, y cualquier otra cosa se descarta sirviendo `en` con un aviso. El valor puede venir de la URL —el ejemplo hace `lang: params.lang`— y no basta con escapar comillas: el documento generado **se reescribe con expresiones regulares antes de llegar al navegador**. El `transformIndexHtml` de desarrollo inyecta en la primera coincidencia de `<head`, y el pase del nonce busca `<script`. Dentro de un atributo entre comillas dobles un `<` es texto inerte para el parser, pero no para esos pases: un `lang` con `<head>` desviaba la inyección de Vite al interior del atributo, y las comillas que ella trae lo cerraban. Validar en vez de escapar cierra también el caso de un loader sin tipos que devuelva `null`, que si no reventaba la ruta con un 500. Cierra #42.
 
 ### Correcciones
 
@@ -37,6 +37,8 @@
   Ahora se comparan también los parámetros que salen de la ruta del propio layout, que el `routeId` ya nombra. Un layout cuyos params no cambiaron sigue siendo estable, así que la optimización se mantiene: navegar entre dos páginas hermanas del mismo idioma no vuelve a pedir el loader del layout.
 
   **Límite conocido:** los params se comparan contra la ruta del layout, no contra lo que su loader lee de verdad. Un layout raíz cuyo loader lea un parámetro de un segmento más profundo no revalida solo; para ese caso está `revalidate()`.
+
+  De paso, el cache de layouts pasa a fijarse junto a los params y después del corte por navegación superada. Una navegación abandonada guardaba sus datos sin sus params, y la siguiente comparaba unos contra los otros.
 
 - **Desarrollo y producción servían plantillas distintas.** El adaptador tenía su propia copia inline del documento, lo que hacía que el defecto del idioma hubiera que arreglarlo dos veces —y que un arreglo en una sola dejara el otro modo roto—. Ahora desarrollo arma el documento con `generateHTML`, la misma de producción y SSG, y después lo pasa por `transformIndexHtml`. De paso se alinea el orden del `<head>`: desarrollo ponía los estilos antes del contenido de `<Head>` y producción al revés.
 

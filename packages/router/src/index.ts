@@ -233,6 +233,8 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     let data: unknown = null;
     let layoutData: Record<string, unknown> | undefined;
     let redirectTo: URL | null = null;
+    // El cache de layouts no se toca hasta pasado el corte por navegacion superada
+    let siguienteLayoutData: Record<string, unknown> | null = null;
 
     // `hasMiddleware` entra en la condicion de csr tambien: una ruta csr se salta
     // el viaje al servidor, y con el se saltaria su guardia al navegar
@@ -317,10 +319,10 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
             for (const [id, val] of Object.entries(structured.layouts)) {
               layoutData[id] = val === null ? currentLayoutData[id] : val;
             }
-            currentLayoutData = { ...layoutData };
+            siguienteLayoutData = { ...layoutData };
           } else {
             data = json;
-            currentLayoutData = {};
+            siguienteLayoutData = {};
           }
         } catch (err) {
           if (activeId !== navigationId) {
@@ -348,7 +350,13 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
       return;
     }
 
-    // Update current layout chain
+    // Update current layout chain. Los tres se fijan juntos y despues del corte
+    // de arriba: si una navegacion superada guardara sus datos sin sus params,
+    // la siguiente compararia unos contra los otros y daria por estable un
+    // layout cargado con otro valor del parametro
+    if (siguienteLayoutData) {
+      currentLayoutData = siguienteLayoutData;
+    }
     currentLayoutRouteIds =
       (match.route as ResolvedMatch["route"] & { layoutRouteIds?: string[] }).layoutRouteIds ?? [];
     currentParams = match.params;
