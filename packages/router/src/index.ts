@@ -45,9 +45,7 @@ const MAX_REDIRECTS = 5;
  * segmentos dinamicos que lleva encima se leen de ahi.
  */
 const layoutParamNames = (routeId: string): string[] => {
-  // El layout raiz no lleva prefijo: su id es `root` a secas. Sin esto el
-  // `slice` devolvia `""` y salia `[]` por accidente, que es lo que toca pero
-  // por el camino equivocado
+  // El layout raiz no lleva prefijo: su id es `root` a secas
   if (!routeId.startsWith("layout:")) {
     return [];
   }
@@ -272,9 +270,9 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
               if (!currentLayoutRouteIds.includes(id) || !(id in currentLayoutData)) {
                 continue;
               }
-              // Un layout bajo un segmento dinamico tiene el mismo routeId para
-              // todos los valores del parametro, asi que el id por si solo no
-              // dice si sus datos siguen valiendo: hay que mirar los params
+              // Un layout bajo un segmento dinamico comparte routeId entre
+              // todos los valores del parametro, asi que el id solo no dice si
+              // sus datos siguen valiendo
               const sameParams = layoutParamNames(id).every(
                 (name) => currentParams[name] === match.params[name],
               );
@@ -352,10 +350,8 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
       return;
     }
 
-    // Update current layout chain. Los tres se fijan juntos y despues del corte
-    // de arriba: si una navegacion superada guardara sus datos sin sus params,
-    // la siguiente compararia unos contra los otros y daria por estable un
-    // layout cargado con otro valor del parametro
+    // Update current layout chain. Los tres van juntos: unos datos guardados
+    // sin sus params dejan al guardia de arriba comparando pares descuadrados
     if (nextLayoutData) {
       currentLayoutData = nextLayoutData;
     }

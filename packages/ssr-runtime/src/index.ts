@@ -656,10 +656,8 @@ export function generateHTML(options: {
    */
   csp?: { hash: (code: string) => string; directives?: string };
   /**
-   * Valor de `<html lang>`. De el saca un lector de pantalla la fonetica con la
-   * que pronuncia la pagina entera, asi que una app que sirve varios idiomas lo
-   * resuelve por peticion. Lo que no sea una etiqueta de idioma se descarta y
-   * se sirve `"en"`: el valor puede venir de la URL.
+   * Valor de `<html lang>`, `"en"` por defecto. Pasa por `safeLang`, que
+   * descarta lo que no sea una etiqueta de idioma.
    */
   lang?: string;
 }): string {

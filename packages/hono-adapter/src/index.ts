@@ -850,9 +850,9 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
           // Scripts de cliente: solo para rutas que no son prerender
           const clientEntry = isPrerender ? [] : ["/src/entry-client.tsx"];
 
-          // La misma plantilla que produccion. Los scripts inline no entran aca:
-          // van despues de `transformIndexHtml`, porque el pase del nonce tiene
-          // que alcanzar antes al preambulo que inyecta Vite
+          // Los scripts inline no entran aca: van despues de
+          // `transformIndexHtml`, porque el pase del nonce tiene que alcanzar
+          // antes al preambulo que inyecta Vite
           const template = await vite.transformIndexHtml(
             url.pathname,
             generateHTML({

@@ -838,8 +838,6 @@ describe("createProdHandler /__data endpoint", () => {
 describe("createDevHandler middleware", () => {
   beforeEach(async () => {
     mocks.renderPage.mockReset();
-    // El describe de produccion resetea el mock entre medias, asi que aqui hay
-    // que volver a poner la plantilla real
     mocks.generateHTML.mockReset();
     const actual = await vi.importActual<typeof import("@calumet/suamox")>("@calumet/suamox");
     mocks.generateHTML.mockImplementation(actual.generateHTML);
