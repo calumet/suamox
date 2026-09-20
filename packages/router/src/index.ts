@@ -39,6 +39,27 @@ type ResolvedMatch = { route: RouteRecord; params: Record<string, string> };
 
 const MAX_REDIRECTS = 5;
 
+/**
+ * Los parametros que salen de la ruta del propio layout. El `routeId` es su
+ * directorio bajo `pages/` —`layout:[lang]`, `layout:root`—, asi que los
+ * segmentos dinamicos que lleva encima se leen de ahi.
+ */
+const layoutParamNames = (routeId: string): string[] => {
+  const dir = routeId.slice("layout:".length);
+  if (dir === "root") {
+    return [];
+  }
+  const names: string[] = [];
+  for (const segment of dir.split("/")) {
+    // `[lang]`, `[...slug]` y `[[lang]]` por igual
+    const name = /^\[{1,2}(?:\.{3})?([^\]]+)\]{1,2}$/.exec(segment)?.[1];
+    if (name) {
+      names.push(name);
+    }
+  }
+  return names;
+};
+
 const canUseDOM = (): boolean => typeof window !== "undefined" && typeof document !== "undefined";
 
 const isModifiedEvent = (event: MouseEvent): boolean =>
@@ -171,6 +192,9 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
   // Track current layout chain and cached layout data
   let currentLayoutRouteIds: string[] = [];
   let currentLayoutData: Record<string, unknown> = {};
+  // Los params con los que se cargaron esos datos: el routeId solo no distingue
+  // `/es/correos` de `/en/correos`, que comparten layout
+  let currentParams: Record<string, string> = {};
 
   const isClientNavigable = (target: URL): boolean => {
     if (target.origin !== window.location.origin) {
@@ -241,7 +265,16 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
           const stableLayouts: string[] = [];
           if (!revalidate) {
             for (const id of newLayoutRouteIds) {
-              if (currentLayoutRouteIds.includes(id) && id in currentLayoutData) {
+              if (!currentLayoutRouteIds.includes(id) || !(id in currentLayoutData)) {
+                continue;
+              }
+              // Un layout bajo un segmento dinamico tiene el mismo routeId para
+              // todos los valores del parametro, asi que el id por si solo no
+              // dice si sus datos siguen valiendo: hay que mirar los params
+              const mismosParams = layoutParamNames(id).every(
+                (name) => currentParams[name] === match.params[name],
+              );
+              if (mismosParams) {
                 stableLayouts.push(id);
               }
             }
@@ -318,6 +351,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     // Update current layout chain
     currentLayoutRouteIds =
       (match.route as ResolvedMatch["route"] & { layoutRouteIds?: string[] }).layoutRouteIds ?? [];
+    currentParams = match.params;
 
     // El arbol tiene que tener los mismos niveles que en SSR: useId numera por
     // posicion, y un Provider de menos desalinea las claves de useClientValue

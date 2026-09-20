@@ -42,4 +42,15 @@ test.describe("html lang", () => {
     );
     expect(sinRecarga).toBe(true);
   });
+
+  test("cambia al saltar de un idioma a otro, con el layout compartido", async ({ page }) => {
+    await page.goto("/es/noticias");
+    await expect(page.locator("html")).toHaveAttribute("lang", "es");
+
+    // Las dos rutas comparten `[lang]/layout.tsx`: el idioma sale de su loader,
+    // asi que si el router lo da por estable el documento se queda en espanol
+    await page.click('[data-testid="lang-en"]');
+
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  });
 });

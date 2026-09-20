@@ -32,6 +32,12 @@
 
 ### Correcciones
 
+- **Un layout bajo un segmento dinámico servía datos de la ruta anterior.** El router daba un layout por estable —y le decía al servidor que se saltara su loader— comparando solo su `routeId`, que es su directorio bajo `pages/`. Un layout en `[lang]/` tiene el mismo id para `/es/correos` y `/en/correos`, así que al saltar de un idioma a otro el layout seguía mostrando el anterior. Afectaba a cualquier layout cuyo loader lea `params`, no solo al idioma.
+
+  Ahora se comparan también los parámetros que salen de la ruta del propio layout, que el `routeId` ya nombra. Un layout cuyos params no cambiaron sigue siendo estable, así que la optimización se mantiene: navegar entre dos páginas hermanas del mismo idioma no vuelve a pedir el loader del layout.
+
+  **Límite conocido:** los params se comparan contra la ruta del layout, no contra lo que su loader lee de verdad. Un layout raíz cuyo loader lea un parámetro de un segmento más profundo no revalida solo; para ese caso está `revalidate()`.
+
 - **Desarrollo y producción servían plantillas distintas.** El adaptador tenía su propia copia inline del documento, lo que hacía que el defecto del idioma hubiera que arreglarlo dos veces —y que un arreglo en una sola dejara el otro modo roto—. Ahora desarrollo arma el documento con `generateHTML`, la misma de producción y SSG, y después lo pasa por `transformIndexHtml`. De paso se alinea el orden del `<head>`: desarrollo ponía los estilos antes del contenido de `<Head>` y producción al revés.
 
 ### Packages
@@ -41,6 +47,7 @@
 | `@calumet/suamox`              | 0.8.3            | 0.9.0         |
 | `@calumet/suamox-head`         | 0.1.3            | 0.2.0         |
 | `@calumet/suamox-hono-adapter` | 0.9.2            | 0.9.3         |
+| `@calumet/suamox-router`       | 0.8.1            | 0.8.2         |
 
 ## 0.18.0 (2026-09-19)
 

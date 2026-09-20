@@ -20,8 +20,13 @@ function Header() {
 }
 
 function Footer() {
-  const { footer } = useLoaderData<{ footer: string }>();
-  return <footer data-testid="lang-footer">Footer: {footer}</footer>;
+  const { footer, lang } = useLoaderData<{ footer: string; lang: string }>();
+  return (
+    <footer data-testid="lang-footer">
+      Footer: {footer}
+      <span data-testid="layout-lang">{lang}</span>
+    </footer>
+  );
 }
 
 export default function LangLayout({ children }: { children: ReactNode }) {
