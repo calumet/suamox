@@ -2,6 +2,8 @@ export interface LayoutMeta {
   filePath: string;
   routeId: string;
   hasLoader: boolean;
+  /** `export const revalidate = true`: nunca se da por estable */
+  alwaysRevalidate: boolean;
 }
 
 export interface RouteRecord {

@@ -95,7 +95,11 @@ export function generateRoutesModule(
     getStaticPaths: _module.getStaticPaths,`
         : "";
 
-    const layoutMetas = (route.layoutMetas ?? []) as Array<{ routeId: string; hasLoader: boolean }>;
+    const layoutMetas = (route.layoutMetas ?? []) as Array<{
+      routeId: string;
+      hasLoader: boolean;
+      alwaysRevalidate?: boolean;
+    }>;
     const layoutRouteIds: string[] = layoutMetas.map((m) => m.routeId);
 
     const layoutInfosField =
@@ -136,6 +140,11 @@ export function generateRoutesModule(
     const hasLayoutLoadersField = hasLayoutLoaders ? `,\n    hasLayoutLoaders: true` : "";
     const layoutRouteIdsField =
       layoutRouteIds.length > 0 ? `,\n    layoutRouteIds: ${JSON.stringify(layoutRouteIds)}` : "";
+    const alwaysRevalidate = layoutMetas.filter((m) => m.alwaysRevalidate).map((m) => m.routeId);
+    const alwaysRevalidateField =
+      alwaysRevalidate.length > 0
+        ? `,\n    alwaysRevalidateLayouts: ${JSON.stringify(alwaysRevalidate)}`
+        : "";
     const layoutFilePathsField =
       (route.layouts ?? []).length > 0
         ? `,\n    layoutFilePaths: ${JSON.stringify(route.layouts)}`
@@ -151,7 +160,7 @@ export function generateRoutesModule(
     params: ${JSON.stringify(route.params)},
     isCatchAll: ${route.isCatchAll},
     isIndex: ${route.isIndex},
-    priority: ${route.priority}${hasLoaderField}${hasLayoutLoadersField}${layoutRouteIdsField}${layoutFilePathsField}${hasMiddlewareField}${middlewareChain(route.middlewares)}
+    priority: ${route.priority}${hasLoaderField}${hasLayoutLoadersField}${layoutRouteIdsField}${alwaysRevalidateField}${layoutFilePathsField}${hasMiddlewareField}${middlewareChain(route.middlewares)}
   }`;
 
     routeObjects.push(routeObj);
