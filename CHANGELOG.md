@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.20.0 (2026-09-20)
+
+### Breaking Changes
+
+- **`/__data` omite los layouts que no volvió a cargar, en vez de mandarlos como `null`.**
+
+  **Qué cambió.** La respuesta de `/__data` llevaba `null` para los layouts que el cliente declaró estables. Ese `null` era indistinguible del de un loader que sí corrió y devolvió `null`, así que el cliente rellenaba los dos con lo que tenía cacheado. Un layout cuyo loader devuelve `null` legítimamente terminaba mostrando los datos de la ruta anterior — y la misma URL rendía distinto según se llegara por carga completa o por navegación SPA. Ahora el servidor sólo incluye los layouts que ejecutó, y lo que falta es lo que el cliente ya tiene.
+
+  **Impacto.** `@calumet/suamox-hono-adapter` y `@calumet/suamox-router` **tienen que subir juntos**. Las dos mezclas rompen: un router viejo contra un adaptador nuevo deja sin datos a los layouts estables, y un router nuevo contra un adaptador viejo interpreta el `null` de un layout estable como dato real. No hay negociación de versión entre los dos, así que la incompatibilidad se manifiesta en tiempo de ejecución y sin aviso.
+
+  **Migración.** Subir los dos paquetes en el mismo commit. No hay cambios en el código de la aplicación: ni los loaders, ni los layouts, ni la configuración del adaptador cambian de forma.
+
+### Correcciones
+
+- **El ejemplo publicaba la cabecera `Cookie` entera.** El loader de `[lang]/layout.tsx` devolvía `request.headers.get("cookie")` y lo pintaba en el DOM, así que el valor de cada cookie —`HttpOnly` incluida— viajaba en el HTML servido y en `window.__INITIAL_DATA__`. Lo que un loader devuelve llega al navegador, y ese es justo el patrón que no hay que copiar. Ahora sólo salen los nombres, que es lo que los e2e necesitaban para comprobar que la cabecera llegó al loader. Hay un test nuevo que afirma que el valor no aparece ni en el HTML ni en los datos iniciales.
+
+### Interno
+
+- `crearNonce` y `cabeceraCsp` pasan a `createNonce` y `cspHeader`. Eran los dos únicos identificadores en español que quedaban en `packages/*/src`; los comentarios y el CHANGELOG siguen en español.
+
+### Packages
+
+| Paquete                        | Version anterior | Nueva version |
+| ------------------------------ | ---------------- | ------------- |
+| `@calumet/suamox-hono-adapter` | 0.9.3            | 0.10.0        |
+| `@calumet/suamox-router`       | 0.8.2            | 0.9.0         |
+
 ## 0.19.0 (2026-09-20)
 
 ### Features

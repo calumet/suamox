@@ -52,12 +52,12 @@ function dataResponse(c: Context, value: unknown): Response {
  */
 export type CspOption = boolean | { directives?: string };
 
-function crearNonce(): string {
+function createNonce(): string {
   return randomBytes(16).toString("base64");
 }
 
 /** `script-src` con el nonce de la peticion, mas las directivas que añada la app */
-function cabeceraCsp(nonce: string, csp: CspOption | undefined): string {
+function cspHeader(nonce: string, csp: CspOption | undefined): string {
   const extra = typeof csp === "object" ? csp.directives : undefined;
   return [`script-src 'self' 'nonce-${nonce}'`, extra].filter(Boolean).join("; ");
 }
@@ -729,11 +729,17 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
               ? new Set(stableParam.split(",").filter((id) => validIds.has(id)))
               : new Set<string>();
 
+            // Un layout estable no sale en la respuesta. Mandarlo como `null`
+            // lo haria indistinguible de un loader que corrio y devolvio `null`,
+            // y el cliente rellenaria ese con datos de la ruta anterior
             const layoutPromises = layoutInfos!
-              .filter((info: { loader?: unknown }) => !!info.loader)
+              .filter(
+                (info: { loader?: unknown; routeId: string }) =>
+                  !!info.loader && !stableSet.has(info.routeId),
+              )
               .map(async (info) => ({
                 routeId: info.routeId,
-                data: stableSet.has(info.routeId) ? null : await info.loader!(loaderContext),
+                data: await info.loader!(loaderContext),
               }));
 
             const pagePromise = resolved.loader
@@ -870,7 +876,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
           // Los scripts de useClientValue van antes que los datos: parchean el DOM
           // en cuanto el parser los alcanza, sin esperar a la hidratacion
           let finalHtml = template;
-          const nonceDev = options.csp ? crearNonce() : undefined;
+          const nonceDev = options.csp ? createNonce() : undefined;
           const nonceAttr = nonceDev ? ` nonce="${nonceDev}"` : "";
 
           // Vite inyecta su preambulo inline (el de @vitejs/plugin-react) sin nonce, y
@@ -883,7 +889,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
             );
           }
           if (nonceDev) {
-            c.header("Content-Security-Policy", cabeceraCsp(nonceDev, options.csp));
+            c.header("Content-Security-Policy", cspHeader(nonceDev, options.csp));
           }
 
           // Los scripts de useClientValue van antes que los datos: parchean el DOM en
@@ -1302,11 +1308,14 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
               ? new Set(stableParam.split(",").filter((id) => validIds.has(id)))
               : new Set<string>();
 
+            // Un layout estable no sale en la respuesta. Mandarlo como `null`
+            // lo haria indistinguible de un loader que corrio y devolvio `null`,
+            // y el cliente rellenaria ese con datos de la ruta anterior
             const layoutPromises = layoutInfos!
-              .filter((info) => info.loader)
+              .filter((info) => info.loader && !stableSet.has(info.routeId))
               .map(async (info) => ({
                 routeId: info.routeId,
-                data: stableSet.has(info.routeId) ? null : await info.loader!(loaderContext),
+                data: await info.loader!(loaderContext),
               }));
 
             const pagePromise = resolved.loader
@@ -1408,7 +1417,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
           // Detectar si la ruta es prerender
           const resolvedMatch = match ? await entry.resolveRouteModule(match.route) : null;
           const isPrerender = resolvedMatch?.prerender === true;
-          const nonce = options.csp ? crearNonce() : undefined;
+          const nonce = options.csp ? createNonce() : undefined;
 
           // Generar HTML completo (sin hidratación para rutas prerender)
           const { preloadScripts, styles } = collectManifestAssets(match?.route);
@@ -1432,7 +1441,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
           });
 
           if (nonce) {
-            c.header("Content-Security-Policy", cabeceraCsp(nonce, options.csp));
+            c.header("Content-Security-Policy", cspHeader(nonce, options.csp));
           }
 
           return c.html(html, result.status as 200 | 404 | 500);
