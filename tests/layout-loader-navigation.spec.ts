@@ -80,15 +80,29 @@ test.describe("useLoaderData in layout during client-side navigation", () => {
     // Wait for hydration to complete before intercepting navigation
     await page.waitForLoadState("networkidle");
 
-    // SPA navigate to sibling — should send stableLayouts for [lang] layout
+    // Mismo idioma y sin query en ninguna de las dos: el layout sigue valiendo
+    const [request] = await Promise.all([
+      page.waitForRequest((req) => req.url().includes("/__data")),
+      page.click('[data-testid="lang-en"]'),
+    ]);
+    await expect(page.getByTestId("layout-lang")).toHaveText("en");
+    const url = decodeURIComponent(request.url());
+    expect(url).toContain("stableLayouts=");
+    expect(url).toContain("root");
+  });
+
+  test("un cambio de query invalida los layouts, no solo la pagina", async ({ page }) => {
+    await page.goto("/es/noticias");
+    await expect(page.locator("h1")).toHaveText("Noticias");
+    await page.waitForLoadState("networkidle");
+
     const [request] = await Promise.all([
       page.waitForRequest((req) => req.url().includes("/__data")),
       page.click('a[href="/es/noticias/noticia?id=1"]'),
     ]);
     await expect(page.getByTestId("noticia-title")).toHaveText("Noticia 1");
-    const url = decodeURIComponent(request.url());
-    expect(url).toContain("stableLayouts=");
-    expect(url).toContain("layout:[lang]");
+
+    expect(decodeURIComponent(request.url())).not.toContain("stableLayouts=");
   });
 
   test("layout useLoaderData works with browser back button", async ({ page }) => {
