@@ -55,6 +55,10 @@ test.describe("/__data endpoint", () => {
   test("the router follows an internal redirect without a full reload", async ({ page }) => {
     await page.goto("/dashboard");
     await expect(page.locator("h1")).toContainText("Dashboard");
+    // Sin esperar a que hidrate, el clic sale como navegacion nativa y se lleva
+    // el marcador por delante: el test fallaba corrido en solitario, cuando el
+    // servidor de desarrollo aun no tiene nada compilado
+    await page.waitForLoadState("networkidle");
     await page.evaluate(() => {
       // oxlint-disable-next-line typescript/no-explicit-any
       (window as any).__SPA_MARKER__ = true;

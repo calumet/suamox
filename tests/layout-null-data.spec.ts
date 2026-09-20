@@ -33,6 +33,9 @@ test.describe("un loader de layout que devuelve null", () => {
 
   test("un layout estable sigue sin volver a pedir su loader", async ({ page }) => {
     await page.goto("/es/noticias");
+    // El cache de layouts se llena al final de la hidratacion, y el listener de
+    // clicks se registra antes: sin esperar, la navegacion sale sin nada estable
+    await page.waitForLoadState("networkidle");
 
     // El root no cuelga de ningun segmento dinamico y la query no cambia, asi
     // que viaja como estable aunque el idioma si cambie
