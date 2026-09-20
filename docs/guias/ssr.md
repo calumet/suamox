@@ -193,7 +193,7 @@ página —los compone el runtime—, así que se recorren por separado.
 No hay que declarar nada: importa el CSS donde lo uses.
 
 ```tsx
-// src/pages/layout.tsx, para el global
+// src/pages/root.tsx, para el global: es el unico que envuelve siempre
 import "../styles/global.css";
 ```
 

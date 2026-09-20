@@ -38,4 +38,13 @@ test.describe("CSS en desarrollo", () => {
 
     expect(html).toContain("/src/styles/global.css");
   });
+
+  test("una pagina con layout = false tambien conserva el global", async ({ page }) => {
+    // El root envuelve siempre, asi que el CSS global vive ahi y no en
+    // `layout.tsx`: salirse de los layouts no es salirse de la aplicacion
+    const response = await page.goto("/sin-layout");
+    const html = await response!.text();
+
+    expect(html).toContain("/src/styles/global.css");
+  });
 });

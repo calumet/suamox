@@ -10,12 +10,12 @@
 
   - Las dos entradas las declara el plugin como módulos virtuales. La CLI de Vite no servía: resuelve `--ssr <entrada>` como ruta de archivo y un id virtual no lo es. Los nombres de los archivos emitidos no cambian: `dist/client/assets/entry-client-<hash>.js` y `dist/server/entry-server.js`.
   - Los tipos de `virtual:pages` los envía el paquete en `@calumet/suamox-vite-plugin-pages/client`.
-  - El **CSS global se importa desde el layout raíz**, como cualquier otro CSS. No hay un sitio especial: un layout aplica a todo lo que cuelga de él.
+  - El **CSS global se importa desde `src/pages/root.tsx`**, como cualquier otro CSS. En el root y no en `layout.tsx`: los dos envuelven la aplicación, pero sólo el root envuelve _siempre_, y una página con `export const layout = false` se sale de la cadena de layouts. El template trae un `root.tsx` por eso.
   - El adaptador y SSG encuentran la entrada del cliente por `isEntry`, que es lo que [Vite documenta](https://vite.dev/guide/backend-integration), en vez de por la clave `"index.html"`. Es compatible con un build viejo, porque una entrada HTML también lleva `isEntry`.
 
   **Impacto.** `@calumet/suamox-cli` y `@calumet/suamox-vite-plugin-pages` **tienen que subir juntos**: la CLI ya no manda la entrada de servidor, así que contra un plugin viejo no habría ninguna. `DevHandlerOptions.root` desaparece: existía sólo para buscar el CSS en `entry-client.tsx` y ya no lo lee nadie.
 
-  **Migración.** Borrar los cuatro archivos, mover el import del CSS global de `entry-client.tsx` al layout raíz, y cambiar `types` en el `tsconfig.json`:
+  **Migración.** Borrar los cuatro archivos, mover el import del CSS global de `entry-client.tsx` a `src/pages/root.tsx` —creándolo si no existe—, y cambiar `types` en el `tsconfig.json`:
 
   ```diff
   -    "types": ["vite/client"]

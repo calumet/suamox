@@ -45,6 +45,7 @@ my-suamox-app/
     styles/
       global.css
     pages/
+      root.tsx
       layout.tsx
       index.tsx
   server.ts

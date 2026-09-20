@@ -66,6 +66,24 @@ test.describe("CSS de pagina y layout en el HTML prerenderizado", () => {
     expect(allCss).toContain(LAYOUT_MARKER.selector);
   });
 
+  test("una pagina con layout = false conserva el CSS global", async ({ page, request }) => {
+    // El root envuelve siempre, asi que el global vive ahi y no en `layout.tsx`
+    const response = await page.goto("/sin-layout");
+    const html = await response!.text();
+
+    const hrefs = [...html.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)].map((m) => m[1]!);
+    expect(hrefs.length).toBeGreaterThan(0);
+
+    const sheets = await Promise.all(
+      hrefs.map(async (href) => {
+        const css = await request.get(href);
+        expect(css.status()).toBe(200);
+        return css.text();
+      }),
+    );
+    expect(sheets.join("\n")).toContain("--suamox-global");
+  });
+
   // Sin JS no hay hidratacion: si el estilo aplica, viene del HTML prerenderizado.
   test.describe("sin JavaScript", () => {
     test.use({ javaScriptEnabled: false });
