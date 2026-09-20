@@ -26,6 +26,8 @@ interface ModuleExports {
   names: Set<string>;
   /** `export const layout = false`: la pagina se sale de la cadena de layouts */
   layoutDisabled: boolean;
+  /** `export const revalidate = true`: el layout nunca se da por estable */
+  alwaysRevalidate: boolean;
 }
 
 function parseExports(file: string, content: string): ModuleExports | null {
@@ -39,18 +41,25 @@ function parseExports(file: string, content: string): ModuleExports | null {
         }
       }
     }
-    return { names, layoutDisabled: hasLayoutFalse(result.program.body) };
+    return {
+      names,
+      layoutDisabled: hasBooleanExport(result.program.body, "layout", false),
+      alwaysRevalidate: hasBooleanExport(result.program.body, "revalidate", true),
+    };
   } catch {
     return null;
   }
 }
 
 /**
- * Busca `export const layout = false`. El valor se lee aqui y no en tiempo de
- * ejecucion como `prerender` o `csr`, porque la cadena de layouts se resuelve
- * al generar el modulo de rutas.
+ * Estos valores se leen aqui y no en tiempo de ejecucion como `prerender` o
+ * `csr`, porque la cadena de layouts se resuelve al generar el modulo de rutas.
  */
-function hasLayoutFalse(body: ReturnType<typeof parseSync>["program"]["body"]): boolean {
+function hasBooleanExport(
+  body: ReturnType<typeof parseSync>["program"]["body"],
+  name: string,
+  expected: boolean,
+): boolean {
   for (const node of body) {
     if (
       node.type !== "ExportNamedDeclaration" ||
@@ -62,9 +71,9 @@ function hasLayoutFalse(body: ReturnType<typeof parseSync>["program"]["body"]): 
     for (const declarator of node.declaration.declarations) {
       if (
         declarator.id.type === "Identifier" &&
-        declarator.id.name === "layout" &&
+        declarator.id.name === name &&
         declarator.init?.type === "Literal" &&
-        declarator.init.value === false
+        declarator.init.value === expected
       ) {
         return true;
       }
@@ -105,6 +114,10 @@ function fallbackHasPrerender(content: string): boolean {
 
 function fallbackLayoutDisabled(content: string): boolean {
   return /\bexport\s+const\s+layout\s*(?::[^=]+)?=\s*false\b/.test(content);
+}
+
+function fallbackAlwaysRevalidate(content: string): boolean {
+  return /\bexport\s+const\s+revalidate\s*(?::[^=]+)?=\s*true\b/.test(content);
 }
 
 function isLayoutFile(filePath: string, extensions: string[]): boolean {
@@ -207,18 +220,20 @@ function isRootFile(filePath: string, extensions: string[], pagesDir: string): b
   return basename(filePath, matchedExtension) === "root" && dirname(filePath) === pagesDir;
 }
 
-/** No es `layout:root`: ese lo ocupa `src/pages/layout.tsx` */
+/** Sin prefijo `layout:`, que es el de los layouts. Este es `src/pages/root.tsx` */
 export const ROOT_ROUTE_ID = "root";
 
 /**
  * Genera un route ID para un layout basado en su ruta relativa al pages dir.
- * Ej: src/pages/[lang]/layout.tsx → "layout:[lang]"
- *     src/pages/layout.tsx → "layout:root"
+ * Ej: src/pages/layout.tsx → "layout:"
+ *     src/pages/[lang]/layout.tsx → "layout:[lang]"
  *     src/pages/(admin)/layout.tsx → "layout:(admin)"
  */
 function layoutRouteId(layoutFile: string, pagesDir: string): string {
   const rel = relative(pagesDir, dirname(layoutFile)).replace(/\\/g, "/");
-  return rel === "" ? "layout:root" : `layout:${rel}`;
+  // `layout:` a secas para el raiz: con `layout:root`, una carpeta de ruta
+  // llamada `root` daba la misma clave y los dos layouts se pisaban los datos
+  return `layout:${rel}`;
 }
 
 function collectLayoutsForFile(
@@ -254,6 +269,7 @@ function collectLayoutMetasForFile(
   filePath: string,
   layoutMap: Map<string, string>,
   layoutLoaderMap: Map<string, boolean>,
+  layoutRevalidateMap: Map<string, boolean>,
   pagesDir: string,
 ): LayoutMeta[] {
   const metas: LayoutMeta[] = [];
@@ -266,6 +282,7 @@ function collectLayoutMetasForFile(
         filePath: layoutFile,
         routeId: layoutRouteId(layoutFile, pagesDir),
         hasLoader: layoutLoaderMap.get(layoutFile) ?? false,
+        alwaysRevalidate: layoutRevalidateMap.get(layoutFile) ?? false,
       });
     }
 
@@ -327,6 +344,7 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
   );
   const layoutMap = new Map<string, string>();
   const layoutLoaderMap = new Map<string, boolean>();
+  const layoutRevalidateMap = new Map<string, boolean>();
   const middlewareMap = new Map<string, string>();
 
   for (const layoutFile of layoutFiles) {
@@ -342,6 +360,10 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     [...layoutFiles, ...(rootFile ? [rootFile] : [])].map(async (file) => {
       const content = await readFile(file, "utf-8");
       const exports = parseExports(file, content);
+      layoutRevalidateMap.set(
+        file,
+        exports ? exports.alwaysRevalidate : fallbackAlwaysRevalidate(content),
+      );
       layoutLoaderMap.set(file, exports ? exports.names.has("loader") : fallbackHasLoader(content));
     }),
   );
@@ -351,6 +373,7 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
         filePath: rootFile,
         routeId: ROOT_ROUTE_ID,
         hasLoader: layoutLoaderMap.get(rootFile) ?? false,
+        alwaysRevalidate: layoutRevalidateMap.get(rootFile) ?? false,
       }
     : null;
 
@@ -383,7 +406,13 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
       const chain = layoutDisabled ? [] : collectLayoutsForFile(file, layoutMap, absolutePagesDir);
       const metas = layoutDisabled
         ? []
-        : collectLayoutMetasForFile(file, layoutMap, layoutLoaderMap, absolutePagesDir);
+        : collectLayoutMetasForFile(
+            file,
+            layoutMap,
+            layoutLoaderMap,
+            layoutRevalidateMap,
+            absolutePagesDir,
+          );
 
       route.layouts = rootFile ? [rootFile, ...chain] : chain;
       route.layoutMetas = rootMeta ? [rootMeta, ...metas] : metas;
