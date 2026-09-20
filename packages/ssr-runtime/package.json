@@ -1,6 +1,6 @@
 {
   "name": "@calumet/suamox",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "SSR and SSG runtime for Suamox framework",
   "type": "module",
   "main": "./dist/index.js",
@@ -46,14 +46,15 @@
     "access": "public"
   },
   "dependencies": {
-    "@calumet/suamox-head": "workspace:^",
     "devalue": "^6.0.0"
   },
   "peerDependencies": {
+    "@calumet/suamox-head": "workspace:^",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
+    "@calumet/suamox-head": "workspace:^",
     "@types/node": "^26.6.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
