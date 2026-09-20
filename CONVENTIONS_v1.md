@@ -1,7 +1,9 @@
 # Suamox Framework — Conventions v1
 
 **Status:** ✅ Frozen (Fase 0 completada)
-**Last Updated:** 2026-01-18
+**Last Updated:** 2026-09-20
+
+Las decisiones de diseño siguen congeladas. Lo que se ha actualizado son las secciones que describían la hidratación y la estructura de salida, que dejaron de ser ciertas en 0.20.0: la aplicación ya no escribe sus entradas ni su `index.html`. El detalle y la migración están en el [CHANGELOG](./CHANGELOG.md).
 
 Este documento define las convenciones y contratos del framework Suamox que **no deben cambiar** durante el desarrollo del MVP. Cambios a estas convenciones requieren crear una nueva versión del documento.
 
@@ -201,10 +203,12 @@ Build → Get all routes → For each route: Execute loader() → Render HTML �
 <script>
   window.__INITIAL_DATA__ = {"/blog/hola": {...}}
 </script>
-<script type="module" src="/client/entry-client.js"></script>
+<script type="module" src="/assets/entry-client-[hash].js"></script>
 ```
 
-El `entry-client.js`:
+La entrada la genera el plugin; la aplicación no la escribe. El servidor la localiza en el manifest por `isEntry`, no por su nombre.
+
+La entrada del cliente:
 
 1. Lee `window.__INITIAL_DATA__[currentPath]`
 2. Pasa data al componente de página
@@ -218,14 +222,18 @@ El `entry-client.js`:
 
 ```
 dist/
-├── client/              # Assets del cliente (JS, CSS, imágenes)
-│   ├── entry-client.js
-│   ├── entry-client.css
+├── .vite/               # Manifest del cliente, fuera de lo que se sirve
+│   └── manifest.json
+├── client/              # Lo que se sirve por HTTP
 │   └── assets/
+│       ├── entry-client-[hash].js
+│       ├── entry-client-[hash].css
 │       └── [hash].js
 └── server/              # Bundle SSR
     └── entry-server.js
 ```
+
+El manifest vive fuera de `client/` a propósito: dentro quedaría accesible por HTTP, y con él los paths de todas las fuentes, o sea el inventario de rutas incluidas las que nadie enlaza.
 
 ### 5.2 `dist/` después de `build:ssg` (SSG)
 

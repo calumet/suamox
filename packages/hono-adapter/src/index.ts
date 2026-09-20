@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import type { IncomingHttpHeaders, IncomingMessage } from "node:http";
 import { isAbsolute, relative, resolve } from "node:path";
@@ -919,7 +919,13 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   const staticFallbackEnabled = staticRoot.length > 0;
 
   // Leer el manifest de Vite para obtener nombres de assets con hash
-  const manifestPath = resolve(root, clientDir, ".vite/manifest.json");
+  // Fuera del directorio que se sirve. El sitio de Vite queda de respaldo, para
+  // un build hecho con un plugin anterior
+  const resolvedClientDir = resolve(root, clientDir);
+  const manifestPath = [
+    resolve(resolvedClientDir, "..", ".vite", "manifest.json"),
+    resolve(resolvedClientDir, ".vite", "manifest.json"),
+  ].find((candidate) => existsSync(candidate));
   type ManifestEntry = {
     file: string;
     css?: string[];
@@ -930,7 +936,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   type Manifest = Record<string, ManifestEntry>;
   let manifest: Manifest = {};
   try {
-    manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as Manifest;
+    manifest = manifestPath ? (JSON.parse(readFileSync(manifestPath, "utf-8")) as Manifest) : {};
   } catch {
     console.warn("[Hono Adapter] Could not read Vite manifest, client assets may not load");
   }
@@ -1028,6 +1034,15 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       styles: Array.from(styles),
     };
   };
+
+  // Nada que empiece por punto sale por HTTP. El manifest ya no vive ahi, pero
+  // un `.env` o un `.git` que acaben en ese directorio tampoco tienen por que
+  app.use("*", async (c, next) => {
+    if (c.req.path.split("/").some((segment) => segment.startsWith("."))) {
+      return c.notFound();
+    }
+    return next();
+  });
 
   // Servir assets estáticos desde el directorio de build del cliente
   const assetHandler = serveStatic({ root: clientDir }) as (

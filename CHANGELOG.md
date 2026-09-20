@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.21.0 (2026-09-20)
+
+### Seguridad
+
+- **El manifest de Vite se servía público.** `GET /.vite/manifest.json` devolvía el manifest entero en producción: el mapa de cada fuente a su archivo construido, o sea los paths de todos los archivos de ruta bajo `src/pages/` —el inventario completo de páginas, incluidas las que no están enlazadas desde ningún sitio, como las de `(admin)` o `(privado)`— y las versiones exactas de las dependencias, que en pnpm vienen incrustadas en el path. Es el mismo bug que tuvo [Remix](https://github.com/remix-run/remix/issues/8589).
+
+  Ahora el plugin lo mueve a `dist/.vite/manifest.json`, fuera del directorio que se sirve, y el adaptador y SSG lo buscan ahí con el sitio de Vite como respaldo, para un build hecho con un plugin anterior.
+
+  SvelteKit lo resuelve de otra forma —construye a un directorio de staging y su adapter copia después sólo lo necesario—, pero eso pide un paso de copia que aquí no existe: `dist/client` **es** lo desplegado.
+
+  Además **nada que empiece por punto sale por HTTP**. El manifest ya no vive ahí, pero un `.env` o un `.git` que acaben en ese directorio tampoco tienen por qué.
+
+### Correcciones
+
+- **Un cambio de query ya no deja los layouts con datos viejos.** Un loader de layout recibe la `query` entera y nada declara cuál la lee, así que darlo por estable era adivinar. Es lo que hace [React Router](https://v2.remix.run/docs/route/should-revalidate/), que recarga todo ante un cambio de search params por no poder saberlo, y deja `shouldRevalidate` como opt-out explícito.
+
+  La optimización se conserva donde importa: navegar entre hermanas sin cambio de query, ir atrás y adelante, o cambiar sólo un segmento del path siguen mandando `stableLayouts`. Lo que ya no pasa es servir el layout cacheado cuando la query cambió.
+
+  Con esto se cierra parte del límite que documentaba 0.20.0. Lo que queda fuera son `locals` y el `url.pathname` leído por un layout que no cuelga de ese segmento; para eso sigue estando `revalidate()`.
+
+### Interno
+
+- `pnpm/action-setup` v4 → v6 en los dos workflows. La v4 apunta a Node 20 y GitHub la forzaba a 24 con un aviso en cada run.
+- `CONVENTIONS_v1.md` pone al día las secciones de hidratación y estructura de salida, que dejaron de ser ciertas al salir del contrato los cuatro archivos. Las decisiones de diseño no se tocan.
+
+### Packages
+
+| Paquete                             | Version anterior | Nueva version |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox`                   | 0.9.1            | 0.10.0        |
+| `@calumet/suamox-hono-adapter`      | 0.10.0           | 0.11.0        |
+| `@calumet/suamox-router`            | 0.9.0            | 0.10.0        |
+| `@calumet/suamox-vite-plugin-pages` | 0.13.0           | 0.14.0        |
+
 ## 0.20.0 (2026-09-20)
 
 ### Breaking Changes
