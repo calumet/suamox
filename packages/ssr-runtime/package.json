@@ -1,6 +1,6 @@
 {
   "name": "@calumet/suamox",
-  "version": "0.8.0",
+  "version": "0.8.3",
   "description": "SSR and SSG runtime for Suamox framework",
   "type": "module",
   "main": "./dist/index.js",
@@ -27,8 +27,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -47,21 +47,21 @@
   },
   "dependencies": {
     "@calumet/suamox-head": "workspace:^",
-    "devalue": "^5.9.2"
+    "devalue": "^6.0.0"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
-    "@types/node": "^24.10.1",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitest/coverage-v8": "^4.1.10",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.10"
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitest/coverage-v8": "^5.0.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tsdown": "^0.23.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
   }
 }

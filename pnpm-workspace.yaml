@@ -1,3 +1,9 @@
 packages:
   - "packages/*"
   - "examples/*"
+
+# elise-linter lo declara peer opcional para sus reglas de design system, que
+# viven en su preset de Tailwind. Aca no hay Tailwind ni shadcn
+peerDependencyRules:
+  ignoreMissing:
+    - "@shadcn/lint"

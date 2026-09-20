@@ -1,5 +1,72 @@
 # Changelog
 
+## 0.18.0 (2026-09-19)
+
+Actualizacion del toolchain. Se cierran las dos entradas de **Sin actualizar (deliberado)** de 0.4.0: TypeScript 7 y el linter. Sin cambios en la API publica del framework.
+
+### Dependencias
+
+- **TypeScript 5.9.3 -> 7.0.2** (el port a Go). No hay 6.x estable, el salto es directo.
+- **tsup 8.5 -> tsdown 0.23** en los siete paquetes.
+- **ESLint + Prettier -> Oxlint + Oxfmt**, via `@calumet/elise-linter` 0.1.2 -> 0.9.0.
+- **Vitest 4 -> 5**, **@types/node 24 -> 26**, **devalue 5 -> 6**, **magic-string 0.30 -> 1.4**, Vite 8.3, React 19.3, Hono 4.13, Playwright 1.63.
+
+### TypeScript 7
+
+Lo que 0.4.0 anoto como bloqueo sigue siendo cierto: TS 7 no lleva API programatica —no vuelve hasta 7.1— y `tsup --dts` muere en `rollup-plugin-dts` con `Cannot read properties of undefined (reading 'useCaseSensitiveFileNames')`. Lo que cambio es que ya hay salida: **tsdown**, de la gente de Rolldown, genera los `.d.ts` con `rolldown-plugin-dts`, que tiene un generador `tsgo` y habla con TypeScript 7 sin pasar por esa API. El otro bloqueo, `typescript-eslint`, desaparece al migrar el linter.
+
+TS 7 tampoco incluye ya en automatico todo lo que hay en `node_modules/@types`: cada proyecto declara los suyos. `suamox-cli`, `suamox-create-app` y `@calumet/suamox` necesitan `"types": ["node"]` en su `tsconfig.json`; los demas resuelven los tipos de Node a traves de los de Vite.
+
+`tsdown` emite `.mjs` cuando `platform` es `node`, que es su default, y los `exports` de los paquetes apuntan a `.js`. Va con `fixedExtension: false`: los paquetes ya son `type: module`, asi que `.js` de por si es ESM y el mapa de `exports` no se toca. El shebang de los dos CLI pasa del `banner` de tsup a la primera linea del fuente, que tsdown conserva y marca ejecutable.
+
+### Linter
+
+`@calumet/elise-linter` dejo de ser un preset de ESLint: 0.9.0 exporta `/oxlint` y `/oxfmt`, y el `/prettier` que consumia `prettier.config.js` ya no existe. `eslint.config.js` y `prettier.config.js` se van; entran `oxlint.config.ts` y `oxfmt.config.ts`.
+
+En la primera pasada oxlint encontro cosas que el config viejo no miraba, porque ignoraba `tests/**` y no tenia `jsx-a11y` ni las reglas nuevas de React. Ver **Correcciones**.
+
+**Se pierde el lint con tipos.** El config anterior usaba `tseslint.configs.recommendedTypeChecked` y oxlint todavia no lintea con el checker. `tsc` cubre buena parte, pero no `no-floating-promises` ni `no-misused-promises`.
+
+### Supresiones de lint
+
+Las 42 que habia se revisaron una por una, con `oxlint --report-unused-disable-directives` decidiendo cuales estaban muertas en vez de a ojo. Quedan 21, todas vivas:
+
+- **Se borran 25** que no suprimian nada: las de `@typescript-eslint/require-await` en los tests de render, y las de `no-unsafe-*` en `hono-adapter`. Estas ultimas apuntaban a llamadas cuyo tipo ya esta declarado en el sitio —`assetHandler` con su `as`, `onRequest` con `MiddlewareFunction`—, o sea conservadurismo de typescript-eslint con los genericos de Hono, no agujeros. La unica que si marcaba un `any` de verdad es el `await import(serverEntryURL)` de `loadServerEntry`, y ahi la supresion se cambia por una linea que dice que nada comprueba la forma de ese modulo salvo el guardia de abajo.
+- **Se acotan 8** de los e2e que estaban pelonas —`// eslint-disable-next-line` a secas apaga _todas_ las reglas de la linea siguiente— a `typescript/no-explicit-any`, que es lo unico que suprimian.
+- Las demas se renombran de `eslint-disable-next-line @typescript-eslint/x` a `oxlint-disable-next-line typescript/x`.
+
+`pnpm lint` corre con `--report-unused-disable-directives-severity=error`: **una supresion que deja de suprimir rompe el build**. Es lo que evita que vuelva a pasar. Va en el script y no en `oxlint.config.ts` porque el parser de oxlint 1.83 todavia no acepta el campo, aunque sus tipos ya lo declaren.
+
+### Dependencias eliminadas
+
+- **`@swc/wasm-typescript`** de `vite-plugin-pages`: estaba declarado y no lo importaba ningun archivo.
+- **`acorn`** de sus tests, que era un segundo parser para revalidar la salida mientras la entrada ya se parseaba con `parseSync` —o sea, con Oxc—. Las dos puntas usan el mismo ahora.
+- **`eslint`**, **`@eslint/js`**, **`typescript-eslint`** y **`prettier`** de la raiz, y **`@types/node`** de `suamox-router`, que no toca Node. El lockfile pierde unas 2000 lineas.
+
+### Correcciones
+
+- **`Head` violaba las reglas de hooks.** Con un manager en modo servidor salia por un `return` temprano antes de su `useEffect`, asi que el orden de los hooks dependia del modo. Nunca rompio porque el modo es fijo por arbol: era correcto por accidente. El efecto sube antes de cualquier salida y decide adentro.
+- **El e2e `provides fresh data on back navigation` no comprobaba lo que decia.** Guardaba el timestamp del loader y no lo volvia a mirar: pasaba igual si la vuelta servia datos cacheados, que es justo lo que verifica. Ahora compara.
+- Dos `<a href="#">` del ejemplo pasan a `/ingresar`.
+
+### Sin actualizar (deliberado)
+
+- **Vite+** (`vite-plus`) va por 0.3.3, en beta. Envuelve runtime, gestor de paquetes y toolchain detras de un solo `vp`: demasiado para un repo que publica librerias. Sus piezas —Oxlint, Oxfmt, Rolldown, tsdown— se adoptan sueltas, que es lo que hace esta version.
+- **pnpm 10.14 -> 12.5**: cambia el formato del lockfile. Va en su propio PR, no mezclado con el toolchain.
+- **ESLint 10** queda sin objeto: ya no hay ESLint.
+
+### Packages
+
+| Paquete                             | Version anterior | Nueva version |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox`                   | 0.8.0            | 0.8.3         |
+| `@calumet/suamox-cli`               | 0.1.3            | 0.1.4         |
+| `@calumet/suamox-create-app`        | 0.3.1            | 0.3.3         |
+| `@calumet/suamox-head`              | 0.1.1            | 0.1.3         |
+| `@calumet/suamox-hono-adapter`      | 0.9.0            | 0.9.2         |
+| `@calumet/suamox-router`            | 0.8.0            | 0.8.1         |
+| `@calumet/suamox-vite-plugin-pages` | 0.12.0           | 0.12.2        |
+
 ## 0.17.0 (2026-09-08)
 
 ### Features

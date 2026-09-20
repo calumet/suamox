@@ -19,7 +19,7 @@ function createMockRoute(overrides: Partial<RouteRecord>): RouteRecord {
   return {
     path: "/",
     filePath: "/pages/index.tsx",
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     component: (() => createElement("div", { id: "root" })) as any,
     layouts: [],
     params: [],
@@ -79,7 +79,6 @@ describe("renderPage", () => {
   });
 
   it("should execute loader and include data", async () => {
-    // eslint-disable-next-line @typescript-eslint/require-await
     const loader = vi.fn(async () => ({ title: "Test Page", count: 42 }));
 
     const routes: RouteRecord[] = [
@@ -102,7 +101,6 @@ describe("renderPage", () => {
   });
 
   it("should pass correct context to loader", async () => {
-    // eslint-disable-next-line @typescript-eslint/require-await
     const loader = vi.fn(async (ctx: LoaderContext) => ctx);
 
     const routes: RouteRecord[] = [
@@ -131,7 +129,6 @@ describe("renderPage", () => {
 
   it("should return 500 if loader throws error", async () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    // eslint-disable-next-line @typescript-eslint/require-await
     const loader = vi.fn(async () => {
       throw new Error("Loader failed");
     });
@@ -236,7 +233,6 @@ describe("renderPage", () => {
   });
 
   it("should handle dynamic routes with params", async () => {
-    // eslint-disable-next-line @typescript-eslint/require-await
     const loader = vi.fn(async ({ params }: LoaderContext) => ({
       userId: params.userId,
       postId: params.postId,
@@ -265,7 +261,6 @@ describe("renderPage", () => {
   });
 
   it("should handle query parameters", async () => {
-    // eslint-disable-next-line @typescript-eslint/require-await
     const loader = vi.fn(async ({ query }: LoaderContext) => ({
       search: query.get("q"),
       page: query.get("page"),
@@ -293,7 +288,6 @@ describe("renderPage", () => {
   });
 
   it("should handle catch-all routes", async () => {
-    // eslint-disable-next-line @typescript-eslint/require-await
     const loader = vi.fn(async ({ params }: LoaderContext) => ({
       path: params.path,
     }));
@@ -377,7 +371,6 @@ describe("useLoaderData", () => {
       createMockRoute({
         path: "/context",
         component: Page,
-        // eslint-disable-next-line @typescript-eslint/require-await
         loader: async () => ({ title: "From Context" }),
       }),
     ];
@@ -409,7 +402,6 @@ describe("useLoaderData", () => {
         path: "/with-layout",
         component: Page,
         layouts: [Layout],
-        // eslint-disable-next-line @typescript-eslint/require-await
         loader: async () => ({ message: "Through Layout" }),
       }),
     ];
@@ -466,7 +458,6 @@ describe("useLoaderData", () => {
       createMockRoute({
         path: "/deep",
         component: Page,
-        // eslint-disable-next-line @typescript-eslint/require-await
         loader: async () => ({ items: ["alpha", "beta", "gamma"] }),
       }),
     ];
@@ -498,7 +489,6 @@ describe("useLoaderData", () => {
         params: ["slug"],
         isCatchAll: true,
         component: Page,
-        // eslint-disable-next-line @typescript-eslint/require-await
         loader: async ({ params }: LoaderContext) => ({
           slug: params.slug,
           content: `Content for ${params.slug}`,
@@ -538,7 +528,6 @@ describe("useLoaderData", () => {
         params: ["lang", "slug"],
         isCatchAll: true,
         component: Page,
-        // eslint-disable-next-line @typescript-eslint/require-await
         loader: async ({ params }: LoaderContext) => ({
           lang: params.lang,
           slug: params.slug,
@@ -572,7 +561,6 @@ describe("useLoaderData", () => {
         params: ["lang", "slug"],
         isCatchAll: true,
         component: Page,
-        // eslint-disable-next-line @typescript-eslint/require-await
         loader: async ({ params }: LoaderContext) => ({
           lang: params.lang,
         }),
@@ -594,7 +582,7 @@ describe("useLoaderData", () => {
   it("should throw error when useStaticProps is called on the client", () => {
     const originalWindow = globalThis.window;
     // Simular entorno de cliente
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+    // oxlint-disable-next-line typescript/no-explicit-any
     globalThis.window = {} as any;
 
     try {
@@ -612,7 +600,6 @@ describe("redirect", () => {
     const routes: RouteRecord[] = [
       createMockRoute({
         path: "/old",
-        // eslint-disable-next-line @typescript-eslint/require-await
         loader: async () => {
           redirect("/new");
         },
@@ -631,7 +618,6 @@ describe("redirect", () => {
     const routes: RouteRecord[] = [
       createMockRoute({
         path: "/moved",
-        // eslint-disable-next-line @typescript-eslint/require-await
         loader: async () => {
           redirect("/permanent", 301);
         },
@@ -650,7 +636,6 @@ describe("redirect", () => {
       createMockRoute({
         path: "/:lang",
         params: ["lang"],
-        // eslint-disable-next-line @typescript-eslint/require-await
         loader: async ({ params }: LoaderContext) => {
           if (params.lang === "old") {
             redirect("/es", 301);
@@ -681,7 +666,6 @@ describe("redirect", () => {
     const routes: RouteRecord[] = [
       createMockRoute({
         path: "/external",
-        // eslint-disable-next-line @typescript-eslint/require-await
         loader: async () => {
           redirect("https://example.com");
         },
@@ -712,7 +696,7 @@ describe("useRouteLoaderData", () => {
 
     const route: RouteRecord = {
       ...createMockRoute({ path: "/test" }),
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+      // oxlint-disable-next-line typescript/no-explicit-any
       component: PageComponent as any,
       layoutInfos: [layoutInfo],
     };
@@ -741,7 +725,7 @@ describe("useRouteLoaderData", () => {
     }
 
     const layoutInfo: LayoutInfo = {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+      // oxlint-disable-next-line typescript/no-explicit-any
       component: LayoutComponent as any,
       routeId: "layout:[lang]",
       hasLoader: true,
@@ -749,7 +733,7 @@ describe("useRouteLoaderData", () => {
 
     const route: RouteRecord = {
       ...createMockRoute({ path: "/:lang/noticias" }),
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+      // oxlint-disable-next-line typescript/no-explicit-any
       component: PageComponent as any,
       layoutInfos: [layoutInfo],
     };
@@ -770,7 +754,7 @@ describe("useRouteLoaderData", () => {
 
     const route: RouteRecord = {
       ...createMockRoute({ path: "/test" }),
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+      // oxlint-disable-next-line typescript/no-explicit-any
       component: PageComponent as any,
     };
 
@@ -796,7 +780,6 @@ describe("transporte de los datos del loader", () => {
       createMockRoute({
         path: "/nota",
         component: PageComponent,
-        // eslint-disable-next-line @typescript-eslint/require-await
         loader: async () => ({
           publicado: new Date("2026-09-04T10:00:00Z"),
           etiquetas: ["a", "b"],
@@ -824,10 +807,9 @@ describe("transporte de los datos del loader", () => {
       createElement("div", { id: "layout" }, children);
 
     const layoutInfo: LayoutInfo = {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+      // oxlint-disable-next-line typescript/no-explicit-any
       component: Layout as any,
       routeId: "layout:root",
-      // eslint-disable-next-line @typescript-eslint/require-await
       loader: async () => ({ desde: new Date("2026-09-04T10:00:00Z"), vistas: new Set([1]) }),
       hasLoader: true,
     };

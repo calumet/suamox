@@ -39,6 +39,11 @@ test.describe("useLoaderData hook", () => {
     await page.goBack();
     await expect(page.locator("h1")).toContainText("Loader Hook Test");
     await expect(page.getByTestId("message")).toHaveText("loaded from server");
+
+    // El timestamp del loader es lo unico que distingue datos frescos de los
+    // cacheados: sin esta comparacion el test pasaba igual sirviendo los viejos
+    expect(firstTimestamp).not.toBeNull();
+    await expect(page.getByTestId("timestamp")).not.toHaveText(firstTimestamp!);
   });
 });
 

@@ -19,7 +19,7 @@ function SinScriptInline() {
       <button id="sin-logout" hidden={!isLoggedIn} data-testid="sin-logout">
         Salir
       </button>
-      <a id="sin-login" href="#" hidden={isLoggedIn} data-testid="sin-login">
+      <a id="sin-login" href="/ingresar" hidden={isLoggedIn} data-testid="sin-login">
         Ingresar
       </a>
     </section>
@@ -47,7 +47,7 @@ function ConScriptInline() {
       </button>
       <a
         id="con-login"
-        href="#"
+        href="/ingresar"
         hidden={isLoggedIn}
         data-testid="con-login"
         suppressHydrationWarning

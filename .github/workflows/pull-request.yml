@@ -10,6 +10,14 @@ concurrency:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    # GitHub Packages pide token hasta para leer un paquete publico, y las deps
+    # `@calumet` salen de ahi. Sin esto el install solo funciona mientras la
+    # version pedida siga en el cache del store
+    permissions:
+      contents: read
+      packages: read
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v5
 
@@ -18,6 +26,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+          registry-url: https://npm.pkg.github.com
+          scope: "@calumet"
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
@@ -27,11 +37,16 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm lint
-      - run: pnpm exec prettier --check .
+      - run: pnpm exec oxfmt --check
       - run: pnpm test
 
   e2e:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v5
 
@@ -40,6 +55,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+          registry-url: https://npm.pkg.github.com
+          scope: "@calumet"
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile

@@ -3,8 +3,6 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { hashInlineScript } from "./csp";
-import { renderPage } from "./server";
-
 import {
   generateHTML,
   matchRoute,
@@ -13,6 +11,7 @@ import {
   resolveRouteModule,
 } from "./index";
 import type { RerouteFn, RouteRecord } from "./index";
+import { renderPage } from "./server";
 
 interface PrerenderAssets {
   scripts?: string[];

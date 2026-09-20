@@ -7,7 +7,7 @@ function createMockRoute(overrides: Partial<RouteRecord>): RouteRecord {
   return {
     path: "/",
     filePath: "/pages/index.tsx",
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+    // oxlint-disable-next-line typescript/no-explicit-any
     component: (() => null) as any,
     layouts: [],
     params: [],

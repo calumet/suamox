@@ -7,7 +7,7 @@ test.describe("revalidate()", () => {
 
     const before = await page.getByTestId("ticks").textContent();
     await page.evaluate(() => {
-      // eslint-disable-next-line
+      // oxlint-disable-next-line typescript/no-explicit-any
       (window as any).__SPA_MARKER__ = true;
     });
 
@@ -23,7 +23,7 @@ test.describe("revalidate()", () => {
     await expect(page.getByTestId("lang-header")).toContainText("Info: Suamox Basic Example");
 
     const marker = await page.evaluate(() => {
-      // eslint-disable-next-line
+      // oxlint-disable-next-line typescript/no-explicit-any
       return (window as any).__SPA_MARKER__;
     });
     expect(marker).toBe(true);

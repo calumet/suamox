@@ -1,6 +1,6 @@
 {
   "name": "@calumet/suamox-vite-plugin-pages",
-  "version": "0.12.0",
+  "version": "0.12.2",
   "description": "Vite plugin for filesystem-based routing",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,8 +15,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -37,18 +37,16 @@
     "vite": "^6.0.0 || ^7.0.0 || ^8.0.0"
   },
   "dependencies": {
-    "@swc/wasm-typescript": "^1.15.46",
     "fast-glob": "^3.3.3",
-    "magic-string": "^0.30.21",
+    "magic-string": "^1.4.1",
     "picocolors": "^1.1.1"
   },
   "devDependencies": {
-    "@types/node": "^24.10.1",
-    "@vitest/coverage-v8": "^4.1.10",
-    "acorn": "^8.17.0",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3",
-    "vite": "^8.1.5",
-    "vitest": "^4.1.10"
+    "@types/node": "^26.6.2",
+    "@vitest/coverage-v8": "^5.0.1",
+    "tsdown": "^0.23.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
   }
 }

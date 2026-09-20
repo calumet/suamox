@@ -1,6 +1,6 @@
 {
   "name": "@calumet/suamox-hono-adapter",
-  "version": "0.9.0",
+  "version": "0.9.2",
   "description": "Hono server adapter for Suamox framework",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,8 +15,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -43,13 +43,13 @@
   },
   "devDependencies": {
     "@calumet/suamox": "workspace:^",
-    "@hono/node-server": "^2.0.10",
-    "@types/node": "^24.10.1",
-    "@vitest/coverage-v8": "^4.1.10",
-    "hono": "^4.12.31",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3",
-    "vite": "^8.1.5",
-    "vitest": "^4.1.10"
+    "@hono/node-server": "^2.1.1",
+    "@types/node": "^26.6.2",
+    "@vitest/coverage-v8": "^5.0.1",
+    "hono": "^4.13.8",
+    "tsdown": "^0.23.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
   }
 }
