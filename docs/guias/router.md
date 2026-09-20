@@ -4,19 +4,15 @@ Suamox usa `@calumet/suamox-router` como router del cliente para navegación SPA
 
 ## Arranque
 
-En `src/entry-client.tsx`, importa las rutas del módulo cliente (sin loaders):
+No hay que escribir nada: las entradas de cliente y de servidor las genera el plugin, y arrancan el router solas.
 
-```tsx
-import { startRouter } from "@calumet/suamox-router";
-import { routes } from "virtual:pages";
+Si necesitas correr algo **antes** de que el router arranque —analítica, un polyfill, leer una bandera— crea `src/client.ts`. Es opcional y el framework lo importa primero si existe:
 
-void startRouter({ routes });
-```
-
-En `src/entry-server.tsx`, importa las rutas del módulo servidor (con loaders y getStaticPaths):
-
-```tsx
-export { routes } from "virtual:pages/server";
+```ts
+// src/client.ts
+if (localStorage.getItem("tema") === "oscuro") {
+  document.documentElement.classList.add("oscuro");
+}
 ```
 
 ## Qué hace

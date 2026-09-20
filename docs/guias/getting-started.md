@@ -42,16 +42,17 @@ La plantilla genera esto:
 ```txt
 my-suamox-app/
   src/
-    entry-client.tsx
-    entry-server.tsx
     styles/
       global.css
     pages/
+      root.tsx
       layout.tsx
       index.tsx
   server.ts
   vite.config.ts
 ```
+
+Las entradas de cliente y de servidor no están porque no las escribe la aplicación: las genera el plugin. Los tipos de los módulos virtuales tampoco, los envía el paquete y se enganchan desde `types` en el `tsconfig.json`.
 
 ## 4) Scripts disponibles
 

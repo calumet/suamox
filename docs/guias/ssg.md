@@ -75,7 +75,7 @@ Esto evita páginas estáticas sin estilos al servir `dist/static`.
 
 Las páginas SSG generan HTML puro, sin JavaScript de cliente. A diferencia de las páginas SSR:
 
-- No incluyen `entry-client.tsx` ni scripts de hidratación de React.
+- No incluyen la entrada del cliente ni scripts de hidratación de React.
 - No inyectan `window.__INITIAL_DATA__`.
 - Los estilos CSS sí se incluyen normalmente.
 

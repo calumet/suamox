@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 import pc from "picocolors";
@@ -22,6 +23,12 @@ const RESOLVED_VIRTUAL_MODULE_ID = "\0" + VIRTUAL_MODULE_ID;
 
 const VIRTUAL_SERVER_MODULE_ID = "virtual:pages/server";
 const RESOLVED_VIRTUAL_SERVER_MODULE_ID = "\0" + VIRTUAL_SERVER_MODULE_ID;
+
+const VIRTUAL_CLIENT_ENTRY_ID = "virtual:pages/client-entry";
+const RESOLVED_VIRTUAL_CLIENT_ENTRY_ID = "\0" + VIRTUAL_CLIENT_ENTRY_ID;
+
+/** Gancho opcional de la aplicacion, para lo que tenga que correr antes de hidratar */
+const CLIENT_HOOK_FILE = "src/client.ts";
 
 export { CLIENT_ROUTE_QUERY } from "./codegen.js";
 
@@ -134,6 +141,19 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
   return {
     name: "suamox:pages",
 
+    // Las entradas las declara el plugin, no la aplicacion: son las mismas en
+    // todos los proyectos y su contenido lo genera este mismo plugin. La CLI de
+    // Vite no sirve para esto porque resuelve `--ssr <entrada>` como ruta de
+    // archivo y un id virtual no lo es.
+    config(_config, env) {
+      // El nombre de la clave decide el del archivo emitido, y `entry-server.js`
+      // es el que ya buscan el adaptador y SSG por defecto
+      const input: Record<string, string> = env.isSsrBuild
+        ? { "entry-server": VIRTUAL_SERVER_MODULE_ID }
+        : { "entry-client": VIRTUAL_CLIENT_ENTRY_ID };
+      return { build: { rollupOptions: { input } } };
+    },
+
     configResolved(config) {
       root = config.root;
       basePath = config.base.replace(/\/+$/, "") || "/";
@@ -205,6 +225,9 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       if (id === VIRTUAL_SERVER_MODULE_ID) {
         return RESOLVED_VIRTUAL_SERVER_MODULE_ID;
       }
+      if (id === VIRTUAL_CLIENT_ENTRY_ID) {
+        return RESOLVED_VIRTUAL_CLIENT_ENTRY_ID;
+      }
 
       // El stripping de server code solo aplica al bundle del cliente. Se
       // consulta el entorno actual (`this.environment.config.consumer`) en vez
@@ -258,6 +281,18 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
           await updateRoutes(false);
         }
         return serverModuleCode;
+      }
+      if (id === RESOLVED_VIRTUAL_CLIENT_ENTRY_ID) {
+        // El gancho va primero: los efectos de un import corren en orden, y lo
+        // que ponga la aplicacion ahi tiene que verse antes de que hidrate
+        const hook = existsSync(resolve(root, CLIENT_HOOK_FILE))
+          ? `import ${JSON.stringify("/" + CLIENT_HOOK_FILE)};\n`
+          : "";
+        return (
+          `${hook}import { startRouter } from "@calumet/suamox-router";\n` +
+          `import { routes } from ${JSON.stringify(VIRTUAL_MODULE_ID)};\n` +
+          `void startRouter({ routes });\n`
+        );
       }
     },
 

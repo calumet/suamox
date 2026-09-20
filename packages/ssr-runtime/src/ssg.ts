@@ -129,6 +129,7 @@ type ManifestEntry = {
   css?: string[];
   imports?: string[];
   dynamicImports?: string[];
+  isEntry?: boolean;
 };
 
 type Manifest = Record<string, ManifestEntry>;
@@ -405,7 +406,10 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
     }
 
     const routeKey = route.filePath ? toManifestKey(rootDir, route.filePath) : null;
-    const keys = ["index.html"];
+    // La entrada del cliente arrastra el CSS global. Se busca por `isEntry`
+    // porque su clave depende de que modulo sea la entrada
+    const entryKey = Object.keys(manifest).find((key) => manifest[key]?.isEntry);
+    const keys = entryKey ? [entryKey] : [];
     if (routeKey) {
       keys.push(routeKey);
     }

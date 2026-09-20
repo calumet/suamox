@@ -185,17 +185,17 @@ Vite no deja `node:fs` tal cual en el bundle del navegador: lo sustituye por un 
 En `dev`, Vite inyecta CSS mediante HMR y puede haber un flash inicial sin estilos
 (FOUC) porque los estilos se cargan vía JavaScript.
 
-Para mitigarlo, Suamox detecta imports `.css` en `src/entry-client.tsx` e inyecta
-`<link rel="stylesheet">` en el HTML SSR inicial.
+Para mitigarlo, Suamox recorre el grafo de módulos del entorno SSR tras renderizar
+y enlaza con `<link rel="stylesheet">` todo el CSS que importa la página y el de
+cada uno de sus layouts, el raíz incluido. Un layout no cuelga del grafo de su
+página —los compone el runtime—, así que se recorren por separado.
 
-Ejemplo recomendado:
+No hay que declarar nada: importa el CSS donde lo uses.
 
-```ts
-// src/entry-client.tsx
-import "./styles/global.css";
+```tsx
+// src/pages/root.tsx, para el global: es el unico que envuelve siempre
+import "../styles/global.css";
 ```
-
-Si ese archivo existe y Vite lo resuelve, se enlaza automáticamente durante SSR dev.
 
 La referencia final de comportamiento visual sigue siendo
 `pnpm run build` + `pnpm run preview`.

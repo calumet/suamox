@@ -315,9 +315,13 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
           ) {
             const structured = json as { page: unknown; layouts: Record<string, unknown> };
             data = structured.page;
-            layoutData = {};
-            for (const [id, val] of Object.entries(structured.layouts)) {
-              layoutData[id] = val === null ? currentLayoutData[id] : val;
+            // Lo que viene es lo que corrio, `null` incluido. Lo que falta son
+            // los que se declararon estables, y esos salen del cache
+            layoutData = { ...structured.layouts };
+            for (const id of stableLayouts) {
+              if (!(id in layoutData)) {
+                layoutData[id] = currentLayoutData[id];
+              }
             }
             nextLayoutData = { ...layoutData };
           } else {

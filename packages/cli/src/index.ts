@@ -92,7 +92,8 @@ const main = async () => {
     }
     case "build": {
       await runVite(["build", "--outDir", "dist/client", "--manifest"]);
-      await runVite(["build", "--ssr", "src/entry-server.tsx", "--outDir", "dist/server"]);
+      // Sin entrada: la declara el plugin, que es quien resuelve el modulo virtual
+      await runVite(["build", "--ssr", "--outDir", "dist/server"]);
       await runSsg();
       return;
     }
