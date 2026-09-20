@@ -1,11 +1,11 @@
-import { parse } from "acorn";
+import { parseSync } from "vite";
 import { describe, it, expect } from "vitest";
 
 import { generateRoutesModule } from "../src/codegen";
 import type { ApiRouteRecord, RouteRecord } from "../src/types";
 
 function assertValidModule(code: string): void {
-  parse(code, { ecmaVersion: "latest", sourceType: "module" });
+  expect(parseSync("/routes.js", code).errors).toEqual([]);
 }
 
 describe("generateRoutesModule", () => {

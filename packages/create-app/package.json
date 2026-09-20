@@ -1,6 +1,6 @@
 {
   "name": "@calumet/suamox-create-app",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Scaffold a new Suamox project",
   "type": "module",
   "bin": {
@@ -33,7 +33,7 @@
     "access": "public"
   },
   "devDependencies": {
-    "@types/node": "^24.10.1",
+    "@types/node": "^26.6.2",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"
   }

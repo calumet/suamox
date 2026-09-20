@@ -1,4 +1,3 @@
-import { parse } from "acorn";
 import { parseSync } from "vite";
 import { describe, it, expect } from "vitest";
 
@@ -9,7 +8,7 @@ function strip(source: string): string | null {
   expect(parsed.errors).toEqual([]);
   const result = stripServerExports(source, parsed.program, "/pages/page.tsx");
   if (!result) return null;
-  parse(result.code, { ecmaVersion: "latest", sourceType: "module" });
+  expect(parseSync("/pages/page.js", result.code).errors).toEqual([]);
   return result.code;
 }
 
