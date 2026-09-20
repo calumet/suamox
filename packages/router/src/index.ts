@@ -195,6 +195,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
   // Los params con los que se cargaron esos datos: el routeId solo no distingue
   // `/es/correos` de `/en/correos`, que comparten layout
   let currentParams: Record<string, string> = {};
+  let currentSearch = "";
 
   const isClientNavigable = (target: URL): boolean => {
     if (target.origin !== window.location.origin) {
@@ -265,7 +266,9 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
             (match.route as ResolvedMatch["route"] & { layoutRouteIds?: string[] })
               .layoutRouteIds ?? [];
           const stableLayouts: string[] = [];
-          if (!revalidate) {
+          // Un loader de layout recibe la query entera, y nada declara cual la lee
+          const sameSearch = currentSearch === url.search;
+          if (!revalidate && sameSearch) {
             for (const id of newLayoutRouteIds) {
               if (!currentLayoutRouteIds.includes(id) || !(id in currentLayoutData)) {
                 continue;
@@ -362,6 +365,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     currentLayoutRouteIds =
       (match.route as ResolvedMatch["route"] & { layoutRouteIds?: string[] }).layoutRouteIds ?? [];
     currentParams = match.params;
+    currentSearch = url.search;
 
     // El arbol tiene que tener los mismos niveles que en SSR: useId numera por
     // posicion, y un Provider de menos desalinea las claves de useClientValue

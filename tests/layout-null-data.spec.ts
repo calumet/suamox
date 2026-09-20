@@ -34,14 +34,14 @@ test.describe("un loader de layout que devuelve null", () => {
   test("un layout estable sigue sin volver a pedir su loader", async ({ page }) => {
     await page.goto("/es/noticias");
 
-    // Mismo idioma: el param no cambia, asi que el layout viaja como estable y
-    // su dato tiene que seguir llegando entero
+    // El root no cuelga de ningun segmento dinamico y la query no cambia, asi
+    // que viaja como estable aunque el idioma si cambie
     const [request] = await Promise.all([
       page.waitForRequest((req) => req.url().includes("/__data")),
-      page.click('a[href="/es/noticias/noticia?id=1"]'),
+      page.click('[data-testid="lang-en"]'),
     ]);
 
-    expect(decodeURIComponent(request.url())).toContain("layout:[lang]");
-    await expect(page.getByTestId("lang-header")).toContainText("Info: Suamox Basic Example");
+    expect(decodeURIComponent(request.url())).toContain("stableLayouts=root");
+    await expect(page.getByTestId("layout-lang")).toHaveText("en");
   });
 });

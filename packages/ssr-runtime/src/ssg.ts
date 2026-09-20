@@ -387,7 +387,11 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
 
   const resolvedBase = base ?? serverModule.base ?? "/";
 
-  const manifestPath = resolve(clientBuildDir, ".vite", "manifest.json");
+  // Fuera del directorio que se sirve; el sitio de Vite queda de respaldo
+  const outsideServedDir = resolve(clientBuildDir, "..", ".vite", "manifest.json");
+  const manifestPath = (await pathExists(outsideServedDir))
+    ? outsideServedDir
+    : resolve(clientBuildDir, ".vite", "manifest.json");
   let manifest: Manifest = {};
   if (await pathExists(manifestPath)) {
     try {

@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 
 import pc from "picocolors";
 import { parseSync, type Plugin, type ViteDevServer } from "vite";
@@ -38,6 +38,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
   let server: ViteDevServer | undefined;
   let root: string;
   let basePath = "/";
+  let clientOutDir = "";
   let routesCache: RouteRecord[] | null = null;
   let fatalErrors: string[] = [];
   let globalMiddlewarePath: string | undefined;
@@ -157,6 +158,22 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     configResolved(config) {
       root = config.root;
       basePath = config.base.replace(/\/+$/, "") || "/";
+      clientOutDir = resolve(root, config.build.outDir);
+    },
+
+    // El manifest sale del directorio que se sirve. Dentro queda expuesto por
+    // HTTP, y con el los paths de todas las fuentes: el inventario de rutas,
+    // incluidas las que nadie enlaza
+    writeBundle() {
+      if (this.environment.config.consumer !== "client") return;
+
+      const origen = resolve(clientOutDir, ".vite", "manifest.json");
+      if (!existsSync(origen)) return;
+
+      const destino = resolve(clientOutDir, "..", ".vite", "manifest.json");
+      mkdirSync(dirname(destino), { recursive: true });
+      renameSync(origen, destino);
+      rmSync(dirname(origen), { recursive: true, force: true });
     },
 
     configureServer(_server) {
