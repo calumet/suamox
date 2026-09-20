@@ -4,6 +4,26 @@
 
 ### Breaking Changes
 
+- **Los cuatro archivos que toda aplicación copiaba salen del contrato.** `index.html`, `src/entry-client.tsx`, `src/entry-server.tsx` y `src/vite-env.d.ts` eran idénticos en todos los proyectos y ninguno se podía cambiar: la CLI hardcodeaba la ruta del entry de servidor y la plantilla de desarrollo la del de cliente, así que la aplicación sólo estaba obligada a proveerlos con el contenido exacto. Los pone el framework.
+
+  **Qué cambió.**
+
+  - Las dos entradas las declara el plugin como módulos virtuales. La CLI de Vite no servía: resuelve `--ssr <entrada>` como ruta de archivo y un id virtual no lo es. Los nombres de los archivos emitidos no cambian: `dist/client/assets/entry-client-<hash>.js` y `dist/server/entry-server.js`.
+  - Los tipos de `virtual:pages` los envía el paquete en `@calumet/suamox-vite-plugin-pages/client`.
+  - El **CSS global se importa desde el layout raíz**, como cualquier otro CSS. No hay un sitio especial: un layout aplica a todo lo que cuelga de él.
+  - El adaptador y SSG encuentran la entrada del cliente por `isEntry`, que es lo que [Vite documenta](https://vite.dev/guide/backend-integration), en vez de por la clave `"index.html"`. Es compatible con un build viejo, porque una entrada HTML también lleva `isEntry`.
+
+  **Impacto.** `@calumet/suamox-cli` y `@calumet/suamox-vite-plugin-pages` **tienen que subir juntos**: la CLI ya no manda la entrada de servidor, así que contra un plugin viejo no habría ninguna. `DevHandlerOptions.root` desaparece: existía sólo para buscar el CSS en `entry-client.tsx` y ya no lo lee nadie.
+
+  **Migración.** Borrar los cuatro archivos, mover el import del CSS global de `entry-client.tsx` al layout raíz, y cambiar `types` en el `tsconfig.json`:
+
+  ```diff
+  -    "types": ["vite/client"]
+  +    "types": ["@calumet/suamox-vite-plugin-pages/client"]
+  ```
+
+  Si la aplicación necesita correr algo antes de que arranque el router, eso ahora vive en `src/client.ts`, que es **opcional**: el framework lo importa primero si existe.
+
 - **`/__data` omite los layouts que no volvió a cargar, en vez de mandarlos como `null`.**
 
   **Qué cambió.** La respuesta de `/__data` llevaba `null` para los layouts que el cliente declaró estables. Ese `null` era indistinguible del de un loader que sí corrió y devolvió `null`, así que el cliente rellenaba los dos con lo que tenía cacheado. Un layout cuyo loader devuelve `null` legítimamente terminaba mostrando los datos de la ruta anterior — y la misma URL rendía distinto según se llegara por carga completa o por navegación SPA. Ahora el servidor sólo incluye los layouts que ejecutó, y lo que falta es lo que el cliente ya tiene.
@@ -14,6 +34,8 @@
 
 ### Correcciones
 
+- **En desarrollo faltaba el CSS de los layouts.** `/blog` enlazaba `blog.css` pero no `blog-layout.css`: el grafo de módulos se recorría sólo desde el archivo de la página, y un layout no cuelga de ahí —son hermanos que compone el runtime—. Producción sí lo incluía, porque resuelve por el manifest con `layoutFilePaths`, así que la diferencia sólo se veía en dev y el test que lo cubría era prod-only. Ahora se recorren los dos y hay un `dev-css.spec.ts` que lo fija.
+
 - **El ejemplo publicaba la cabecera `Cookie` entera.** El loader de `[lang]/layout.tsx` devolvía `request.headers.get("cookie")` y lo pintaba en el DOM, así que el valor de cada cookie —`HttpOnly` incluida— viajaba en el HTML servido y en `window.__INITIAL_DATA__`. Lo que un loader devuelve llega al navegador, y ese es justo el patrón que no hay que copiar. Ahora sólo salen los nombres, que es lo que los e2e necesitaban para comprobar que la cabecera llegó al loader. Hay un test nuevo que afirma que el valor no aparece ni en el HTML ni en los datos iniciales.
 
 ### Interno
@@ -22,10 +44,14 @@
 
 ### Packages
 
-| Paquete                        | Version anterior | Nueva version |
-| ------------------------------ | ---------------- | ------------- |
-| `@calumet/suamox-hono-adapter` | 0.9.3            | 0.10.0        |
-| `@calumet/suamox-router`       | 0.8.2            | 0.9.0         |
+| Paquete                             | Version anterior | Nueva version |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox`                   | 0.9.0            | 0.9.1         |
+| `@calumet/suamox-cli`               | 0.1.4            | 0.2.0         |
+| `@calumet/suamox-create-app`        | 0.3.3            | 0.4.0         |
+| `@calumet/suamox-hono-adapter`      | 0.9.3            | 0.10.0        |
+| `@calumet/suamox-router`            | 0.8.2            | 0.9.0         |
+| `@calumet/suamox-vite-plugin-pages` | 0.12.2           | 0.13.0        |
 
 ## 0.19.0 (2026-09-20)
 

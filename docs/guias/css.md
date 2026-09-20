@@ -4,11 +4,13 @@ Suamox usa el pipeline nativo de Vite para manejar CSS en desarrollo, SSR y SSG.
 
 ## Estilos globales
 
-Importa tu archivo global en `src/entry-client.tsx`:
+Importa tu archivo global en el layout raíz, `src/pages/layout.tsx`:
 
-```ts
-import "./styles/global.css";
+```tsx
+import "../styles/global.css";
 ```
+
+No hay un sitio especial para el CSS global: un layout aplica a todo lo que cuelga de él, así que el del raíz aplica a la aplicación entera. Vale el mismo mecanismo que para el CSS de una página o de una sección.
 
 ## CSS Modules
 

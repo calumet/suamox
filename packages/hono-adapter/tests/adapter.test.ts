@@ -88,15 +88,7 @@ describe("createDevHandler", () => {
     mocks.resolveRouteModule.mockImplementation((route: unknown) => Promise.resolve(route));
   });
 
-  it("runs hooks and injects initial data with css links from entry-client", async () => {
-    const root = await mkdtemp(join(tmpdir(), "suamox-dev-"));
-    await mkdir(join(root, "src", "styles"), { recursive: true });
-    await writeFile(
-      join(root, "src", "entry-client.tsx"),
-      "import './styles/global.css';\nvoid Promise.resolve();\n",
-    );
-    await writeFile(join(root, "src", "styles", "global.css"), "body{color:red}");
-
+  it("runs hooks and injects initial data", async () => {
     mocks.renderPage.mockResolvedValue({
       status: 200,
       html: "<div>Before</div>",
@@ -120,7 +112,7 @@ describe("createDevHandler", () => {
       html: "<div>After</div>",
     }));
 
-    const app = createDevHandler({ vite, onBeforeRender, onAfterRender, root });
+    const app = createDevHandler({ vite, onBeforeRender, onAfterRender });
     const response = await app.request("http://localhost/");
     const body = await response.text();
 
@@ -132,113 +124,6 @@ describe("createDevHandler", () => {
     expect(transformIndexHtml).toHaveBeenCalledTimes(1);
     expect(body).toContain("<div>After</div>");
     expect(body).toContain('window.__INITIAL_DATA__ = {"ok":true}');
-    expect(body).toContain('<link rel="stylesheet" href="/src/styles/global.css">');
-  });
-
-  it("injects multiple css imports from entry-client", async () => {
-    const root = await mkdtemp(join(tmpdir(), "suamox-dev-"));
-    await mkdir(join(root, "src", "styles"), { recursive: true });
-    await writeFile(
-      join(root, "src", "entry-client.tsx"),
-      "import './styles/global.css';\nimport './styles/theme.css';\nvoid Promise.resolve();\n",
-    );
-    await writeFile(join(root, "src", "styles", "global.css"), "body{margin:0}");
-    await writeFile(join(root, "src", "styles", "theme.css"), ":root{color-scheme:light}");
-
-    mocks.renderPage.mockResolvedValue({
-      status: 200,
-      html: "<div>Page</div>",
-      head: "",
-      initialData: null,
-    });
-    const vite = {
-      environments: {
-        ssr: { runner: { import: createSsrImport([]) } },
-        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
-      },
-      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
-    } as unknown as ViteDevServer;
-
-    const app = createDevHandler({ vite, root });
-    const response = await app.request("http://localhost/");
-    const body = await response.text();
-
-    expect(body).toContain('<link rel="stylesheet" href="/src/styles/global.css">');
-    expect(body).toContain('<link rel="stylesheet" href="/src/styles/theme.css">');
-  });
-
-  it("skips missing css imports referenced by entry-client", async () => {
-    const root = await mkdtemp(join(tmpdir(), "suamox-dev-"));
-    await mkdir(join(root, "src"), { recursive: true });
-    await writeFile(
-      join(root, "src", "entry-client.tsx"),
-      "import './styles/missing.css';\nvoid Promise.resolve();\n",
-    );
-
-    mocks.renderPage.mockResolvedValue({
-      status: 200,
-      html: "<div>Page</div>",
-      head: "",
-      initialData: null,
-    });
-
-    const vite = {
-      environments: {
-        ssr: { runner: { import: createSsrImport([]) } },
-        client: { transformRequest: vi.fn((_url: string) => Promise.reject(new Error("missing"))) },
-      },
-      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
-    } as unknown as ViteDevServer;
-
-    const app = createDevHandler({ vite, root });
-    const response = await app.request("http://localhost/");
-    const body = await response.text();
-
-    expect(body).not.toContain('<link rel="stylesheet"');
-    expect(response.status).toBe(200);
-  });
-
-  it("refreshes css links when entry-client imports change", async () => {
-    const root = await mkdtemp(join(tmpdir(), "suamox-dev-"));
-    await mkdir(join(root, "src", "styles"), { recursive: true });
-    await writeFile(
-      join(root, "src", "entry-client.tsx"),
-      "import './styles/first.css';\nvoid Promise.resolve();\n",
-    );
-    await writeFile(join(root, "src", "styles", "first.css"), "body{margin:0}");
-    await writeFile(join(root, "src", "styles", "second.css"), "body{padding:0}");
-
-    mocks.renderPage.mockResolvedValue({
-      status: 200,
-      html: "<div>Page</div>",
-      head: "",
-      initialData: null,
-    });
-
-    const vite = {
-      environments: {
-        ssr: { runner: { import: createSsrImport([]) } },
-        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
-      },
-      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
-    } as unknown as ViteDevServer;
-
-    const app = createDevHandler({ vite, root });
-
-    const firstResponse = await app.request("http://localhost/");
-    const firstBody = await firstResponse.text();
-    expect(firstBody).toContain('<link rel="stylesheet" href="/src/styles/first.css">');
-    expect(firstBody).not.toContain('<link rel="stylesheet" href="/src/styles/second.css">');
-
-    await writeFile(
-      join(root, "src", "entry-client.tsx"),
-      "import './styles/second.css';\nvoid Promise.resolve();\n",
-    );
-
-    const secondResponse = await app.request("http://localhost/");
-    const secondBody = await secondResponse.text();
-    expect(secondBody).toContain('<link rel="stylesheet" href="/src/styles/second.css">');
-    expect(secondBody).not.toContain('<link rel="stylesheet" href="/src/styles/first.css">');
   });
 
   it("resolves getStaticPaths props and passes them to renderPage", async () => {
@@ -611,8 +496,10 @@ describe("createProdHandler", () => {
     await writeFile(
       join(clientDir, "manifest.json"),
       JSON.stringify({
-        "index.html": {
+        // La entrada se busca por `isEntry`, no por su clave
+        "virtual:pages/client-entry": {
           file: "assets/client.js",
+          isEntry: true,
           imports: ["assets/chunk.js"],
           css: ["assets/client.css"],
         },

@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import type { IncomingHttpHeaders, IncomingMessage } from "node:http";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import type {
@@ -37,6 +37,13 @@ import type { ModuleRunner } from "vite/module-runner";
  * `ssr-runtime/src/ssg.ts`, y si cambia alla hay que cambiarla en las tres.
  */
 const CLIENT_ROUTE_QUERY = "__suamox-client-route";
+
+/**
+ * La entrada del cliente es un modulo virtual del plugin. En desarrollo no hay
+ * archivo que pedir, asi que se referencia por la URL con la que Vite sirve un
+ * id virtual: `\0` va codificado como `__x00__`.
+ */
+const DEV_CLIENT_ENTRY_URL = "/@id/__x00__virtual:pages/client-entry";
 
 /** Respuesta de `/__data`, en el mismo formato que `window.__INITIAL_DATA__`. */
 function dataResponse(c: Context, value: unknown): Response {
@@ -82,7 +89,6 @@ export interface CreateServerOptions extends HonoAdapterOptions {
 
 export interface DevHandlerOptions extends HonoAdapterOptions {
   vite: ViteDevServer;
-  root?: string;
 }
 
 export interface ProdHandlerOptions extends HonoAdapterOptions {
@@ -93,10 +99,6 @@ export interface ProdHandlerOptions extends HonoAdapterOptions {
   base?: string;
   proxy?: ProxyConfig;
 }
-
-const cssImportPattern = /import\s+(?:[^'"]+\s+from\s+)?['"]([^'"]+\.css(?:\?[^'"]*)?)['"]/g;
-
-const toPosixPath = (value: string): string => value.replace(/\\/g, "/");
 
 const toFetchHeaders = (headers: IncomingHttpHeaders): Headers => {
   const mappedHeaders = new Headers();
@@ -137,17 +139,6 @@ const toFetchRequest = (req: IncomingMessage, allowedHosts?: string[]): Request 
   }
 
   return new Request(requestUrl, init);
-};
-
-const splitQuery = (value: string): { path: string; query: string } => {
-  const queryIndex = value.indexOf("?");
-  if (queryIndex < 0) {
-    return { path: value, query: "" };
-  }
-  return {
-    path: value.slice(0, queryIndex),
-    query: value.slice(queryIndex),
-  };
 };
 
 const isLocalhost = (hostname: string): boolean =>
@@ -198,68 +189,10 @@ const resolveRequestOrigin = (request: Request, allowedHosts?: string[]): string
   return `${url.protocol}//${validatedHost}`;
 };
 
-const collectCssImportsFromEntryClient = async (
-  root: string,
-  vite?: ViteDevServer,
-): Promise<string[]> => {
-  const entryClientPath = resolve(root, "src", "entry-client.tsx");
-  let entryClientSource = "";
-  try {
-    entryClientSource = await readFile(entryClientPath, "utf-8");
-  } catch {
-    return [];
-  }
-
-  const links = new Set<string>();
-  for (const match of entryClientSource.matchAll(cssImportPattern)) {
-    const rawImport = match[1];
-    if (!rawImport) {
-      continue;
-    }
-
-    const { path, query } = splitQuery(rawImport);
-    let href: string | null = null;
-
-    if (path.startsWith("/")) {
-      href = `${path}${query}`;
-    } else if (path.startsWith(".")) {
-      const absoluteCssPath = resolve(dirname(entryClientPath), path);
-      const relativeCssPath = relative(root, absoluteCssPath);
-      if (!relativeCssPath.startsWith("..") && !isAbsolute(relativeCssPath)) {
-        href = `/${toPosixPath(relativeCssPath)}${query}`;
-      }
-    }
-
-    if (!href) {
-      continue;
-    }
-
-    // El CSS se sirve al navegador, asi que se transforma en el entorno client.
-    // `vite.transformRequest` esta marcado para eliminarse en Vite 9.
-    const clientEnvironment = vite?.environments?.client;
-    if (typeof clientEnvironment?.transformRequest === "function") {
-      try {
-        await clientEnvironment.transformRequest(href);
-      } catch {
-        continue;
-      }
-    }
-
-    links.add(href);
-  }
-
-  return Array.from(links);
-};
-
 /**
- * Recolecta el CSS que importa la pagina renderizada, recorriendo el grafo de
- * modulos del entorno SSR desde su archivo.
- *
- * El regex sobre entry-client.tsx solo ve el CSS global; el CSS que importa una
- * pagina concreta (o sus componentes) no aparece ahi y causaria un flash sin
- * estilos en dev. Tras renderizar, ese CSS ya esta en el grafo SSR de la
- * pagina, asi que se recorre `importedModules` transitivamente y se toman las
- * URLs `.css` (que Vite sirve directamente como `<link>` en dev).
+ * Recolecta el CSS que importa un archivo ya renderizado, recorriendo
+ * `importedModules` del grafo del entorno SSR y tomando las URLs `.css`, que
+ * Vite sirve directamente como `<link>` en desarrollo.
  *
  * Solo aplica a dev; en produccion el CSS lo emite el build del cliente.
  */
@@ -568,7 +501,7 @@ const ssrRunner = (vite: ViteDevServer): ModuleRunner => {
  * Crea el handler de desarrollo con integración de Vite
  */
 export function createDevHandler(options: DevHandlerOptions): Hono {
-  const { vite, onRequest, onBeforeRender, onAfterRender, root = process.cwd() } = options;
+  const { vite, onRequest, onBeforeRender, onAfterRender } = options;
   const app = createHonoApp(options);
 
   // Carga @calumet/suamox a través de Vite para compartir la misma instancia
@@ -848,13 +781,18 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
             return c.redirect(result.redirectTo, result.status as 301 | 302 | 303 | 307 | 308);
           }
 
-          const entryCssLinks = await collectCssImportsFromEntryClient(root, vite);
-          // CSS que importa la pagina renderizada (no visible desde entry-client)
-          const pageCssLinks = match ? collectPageCssFromSsrGraph(vite, match.route.filePath) : [];
-          const devCssLinks = Array.from(new Set([...entryCssLinks, ...pageCssLinks]));
+          // Pagina y layouts por separado: un layout no cuelga del grafo de la
+          // pagina, son hermanos que compone el runtime. El CSS global vive en el
+          // layout raiz, asi que sin recorrerlos no habria estilos en desarrollo
+          const cssFiles = match
+            ? [match.route.filePath, ...(match.route.layoutFilePaths ?? [])]
+            : [];
+          const devCssLinks = Array.from(
+            new Set(cssFiles.flatMap((file) => collectPageCssFromSsrGraph(vite, file))),
+          );
 
           // Scripts de cliente: solo para rutas que no son prerender
-          const clientEntry = isPrerender ? [] : ["/src/entry-client.tsx"];
+          const clientEntry = isPrerender ? [] : [DEV_CLIENT_ENTRY_URL];
 
           // Los scripts inline no entran aca: van despues de
           // `transformIndexHtml`, porque el pase del nonce tiene que alcanzar
@@ -987,6 +925,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     css?: string[];
     imports?: string[];
     dynamicImports?: string[];
+    isEntry?: boolean;
   };
   type Manifest = Record<string, ManifestEntry>;
   let manifest: Manifest = {};
@@ -996,10 +935,24 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     console.warn("[Hono Adapter] Could not read Vite manifest, client assets may not load");
   }
 
-  // Obtener script de entrada del cliente desde el manifest
-  const entryClientScript = manifest["index.html"]?.file
-    ? `/${manifest["index.html"].file}`
-    : "/assets/index.js";
+  // `isEntry` y no la clave: Vite la documenta como el discriminante, y la clave
+  // depende de que modulo sea la entrada. Antes, una entrada que no apareciera
+  // servia un script inventado y la pagina salia sin hidratar, en silencio.
+  //
+  // Se resuelve al servir y no al arrancar: una ruta prerenderizada no lleva
+  // scripts de cliente, asi que un despliegue de solo HTML estatico no tiene por
+  // que fallar por una entrada que nunca va a pedir.
+  const entryKey = Object.keys(manifest).find((key) => manifest[key]?.isEntry);
+  const entryChunk = entryKey ? manifest[entryKey] : undefined;
+  const entryClientScript = (): string => {
+    if (!entryChunk) {
+      throw new Error(
+        "[suamox] El manifest del cliente no declara ninguna entrada, asi que la " +
+          "pagina saldria sin hidratar. Corre el build del cliente antes de arrancar.",
+      );
+    }
+    return `/${entryChunk.file}`;
+  };
 
   const toManifestKey = (filePath: string): string | null => {
     const relativePath = relative(root, filePath).replace(/\\/g, "/");
@@ -1022,7 +975,6 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   ): { preloadScripts: string[]; styles: string[] } => {
     const preloadScripts = new Set<string>();
     const styles = new Set<string>();
-    preloadScripts.add(entryClientScript);
 
     const manifestKeys = Object.keys(manifest);
     if (manifestKeys.length === 0) {
@@ -1055,7 +1007,9 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       }
     };
 
-    visit("index.html");
+    if (entryKey) {
+      visit(entryKey);
+    }
 
     const routeKey = route?.filePath ? toManifestKey(route.filePath) : null;
     if (routeKey) {
@@ -1430,7 +1384,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
             html: `<div id="root">${result.html}</div>`,
             head: result.head,
             initialData: prodInitialData,
-            scripts: isPrerender ? [] : [entryClientScript],
+            scripts: isPrerender ? [] : [entryClientScript()],
             preloadScripts: isPrerender ? [] : preloadScripts,
             styles,
             scriptPlacement: "head",
