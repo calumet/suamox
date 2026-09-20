@@ -3,7 +3,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { deserializeData } from "@calumet/suamox";
-
 import { expect, test } from "@playwright/test";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

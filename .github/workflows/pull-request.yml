@@ -27,7 +27,7 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm lint
-      - run: pnpm exec prettier --check .
+      - run: pnpm exec oxfmt --check
       - run: pnpm test
 
   e2e:

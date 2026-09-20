@@ -13,6 +13,7 @@ export default function RevalidarPage({ data }: { data: { ticks: number } | null
   const [hydrated, setHydrated] = useState(false);
   const [pendiente, setPendiente] = useState(false);
 
+  // oxlint-disable-next-line react/set-state-in-effect -- el boton queda deshabilitado hasta hidratar, y eso solo se sabe cuando corre el efecto
   useEffect(() => setHydrated(true), []);
 
   const onClick = async (): Promise<void> => {

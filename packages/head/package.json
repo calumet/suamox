@@ -1,6 +1,6 @@
 {
   "name": "@calumet/suamox-head",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Head manager for Suamox framework",
   "type": "module",
   "main": "./dist/index.js",

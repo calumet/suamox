@@ -9,8 +9,8 @@
     "dev": "pnpm --parallel --filter \"@calumet/suamox*\" dev",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
-    "lint": "eslint .",
-    "format": "prettier --write .",
+    "lint": "oxlint",
+    "format": "oxfmt",
     "test:e2e": "playwright test"
   },
   "keywords": [
@@ -25,15 +25,13 @@
   "license": "MIT",
   "packageManager": "pnpm@10.14.0",
   "devDependencies": {
-    "@calumet/elise-linter": "^0.1.2",
+    "@calumet/elise-linter": "^0.9.0",
     "@calumet/suamox": "workspace:*",
-    "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.63.0",
     "@types/node": "^26.6.2",
-    "eslint": "^9.39.5",
-    "prettier": "^3.9.5",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.65.0"
+    "oxfmt": "^0.68.0",
+    "oxlint": "^1.83.0",
+    "typescript": "^5.9.3"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"

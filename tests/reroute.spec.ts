@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { expect, test } from "@playwright/test";
 

@@ -1,7 +1,0 @@
-node_modules
-dist
-coverage
-.temp
-.cache
-*.tsbuildinfo
-pnpm-lock.yaml

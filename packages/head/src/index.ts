@@ -228,11 +228,14 @@ export function HeadProvider({
   manager?: HeadManager;
 }): React.ReactElement {
   const managerRef = useRef<HeadManager | null>(null);
+
+  /* oxlint-disable react/refs -- inicializacion perezosa del ref, el patron que documenta React */
   if (!managerRef.current) {
     managerRef.current = manager ?? createHeadManager(canUseDOM() ? "client" : "server");
   }
 
   const activeManager = manager ?? managerRef.current;
+  /* oxlint-enable react/refs */
 
   useEffect(() => {
     if (activeManager.mode !== "client") {
@@ -252,26 +255,32 @@ export function Head({ children }: { children: React.ReactNode }): null {
   const manager = useContext(HeadContext);
   const idRef = useRef<symbol | null>(null);
 
+  /* oxlint-disable react/refs -- inicializacion perezosa del ref, el patron que documenta React */
   if (!idRef.current) {
     idRef.current = Symbol("head");
   }
 
   const id = idRef.current;
+  /* oxlint-enable react/refs */
 
-  if (manager && manager.mode === "server") {
+  const enServidor = manager != null && manager.mode === "server";
+
+  // El registro del servidor va en render porque renderToString no corre efectos
+  if (enServidor) {
     manager.register(id, children);
-    return null;
   }
 
+  // El efecto va antes de cualquier salida: con el `return` temprano que habia
+  // aca, el orden de hooks dependia del modo del manager
   useEffect(() => {
-    if (!manager) {
+    if (!manager || enServidor) {
       return;
     }
     manager.register(id, children);
     return () => {
       manager.unregister(id);
     };
-  }, [manager, id, children]);
+  }, [manager, id, children, enServidor]);
 
   return null;
 }
