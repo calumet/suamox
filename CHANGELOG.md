@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.23.0 (2026-09-20)
+
+Los dos fallos de esta versión salieron de migrar una aplicación real a los paquetes publicados. Ninguno se ve desde dentro del monorepo, donde `workspace:` resuelve siempre a la versión de al lado.
+
+### Breaking Changes
+
+- **Los paquetes `@calumet/*` internos pasan de `dependencies` a `peerDependencies`.** Un paquete que se declara como dependencia normal se instala como **copia aparte** en cuanto los rangos divergen, y entonces corren dos runtimes a la vez.
+
+  Pasó de verdad: `@calumet/suamox-cli@0.2.0` se publicó cuando `@calumet/suamox` estaba en 0.9.1, así que `workspace:^` quedó grabado como `^0.9.1`. En un `0.x` el caret no cruza la minor, de modo que al pasar el runtime a 0.10.0 la CLI se quedó atada a la 0.9.x y pnpm instalaba las dos. La CLI llama a `runSsg()` desde la suya, así que **`suamox build` corría el SSG viejo**, sin el arreglo del manifest de 0.21.0: una aplicación que prerenderizara generaba el HTML estático sin los `<link>` del CSS, avisando con una sola línea perdida entre la salida del build.
+
+  Lo mismo valía para `router` → `suamox` y `suamox-head`, y para `ssr-runtime` → `suamox-head`. Ahí la copia doble ni siquiera avisa: dos `suamox-head` son dos contextos de React distintos, así que un `<Head>` de la aplicación se registra en un manager que nadie lee y el `<title>` desaparece en silencio. `hono-adapter` ya lo declaraba como peer y es el patrón que siguen ahora los demás.
+
+  **Migración.** Con pnpm no hay que hacer nada: instala los peers solo. Con npm o yarn, una aplicación que solo tuviera `@calumet/suamox-router` instalado tiene que añadir `@calumet/suamox` y `@calumet/suamox-head` a su `package.json`. Ya no puede haber dos copias, así que un desajuste de versiones ahora avisa al instalar en vez de resolverse a código viejo.
+
+### Correcciones
+
+- **`create-app` generaba una aplicación que no arrancaba.** `src/pages/root.tsx` entró al template con el cambio de contrato de 0.20.0, pero los rangos de su `package.json` no se tocaban desde 0.18.0. El template quedó en el contrato nuevo —con `root.tsx`, sin `index.html` ni los dos entries— pidiendo `@calumet/suamox-vite-plugin-pages@^0.3.0` y `@calumet/suamox-cli@^0.1.0`, que son de antes del cambio. Una aplicación recién creada se quedaba sin ninguna entrada: ni la que tendría que poner el framework, ni la que el template ya no trae.
+
+### Interno
+
+- **`scripts/check-packages.mjs`**, que corre dentro de `pnpm test`. Comprueba las dos invariantes que fallaron: que ningún `@calumet/*` propio esté en `dependencies`, y que los rangos del template acepten las versiones del repo. Se verificó reintroduciendo los dos fallos: el guardia los marca.
+
+  Es lo que separa estos dos del resto de fallos del repo. A los demás los cubre un test; a estos no los cubría nada, porque solo se ven instalando desde el registro y nada en CI instala desde el registro.
+
+### Packages
+
+| Paquete                        | Version anterior | Nueva version |
+| ------------------------------ | ---------------- | ------------- |
+| `@calumet/suamox`              | 0.10.0           | 0.11.0        |
+| `@calumet/suamox-cli`          | 0.2.0            | 0.3.0         |
+| `@calumet/suamox-create-app`   | 0.4.0            | 0.5.0         |
+| `@calumet/suamox-hono-adapter` | 0.11.0           | 0.11.1        |
+| `@calumet/suamox-router`       | 0.11.0           | 0.12.0        |
+
 ## 0.22.0 (2026-09-19)
 
 ### Features

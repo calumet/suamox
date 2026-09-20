@@ -1,6 +1,6 @@
 {
   "name": "@calumet/suamox-cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Suamox CLI for dev/build/ssg/preview workflows",
   "type": "module",
   "bin": {
@@ -32,10 +32,11 @@
   "publishConfig": {
     "access": "public"
   },
-  "dependencies": {
+  "peerDependencies": {
     "@calumet/suamox": "workspace:^"
   },
   "devDependencies": {
+    "@calumet/suamox": "workspace:^",
     "@types/node": "^26.6.2",
     "tsdown": "^0.23.0",
     "typescript": "^7.0.2"

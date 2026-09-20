@@ -7,7 +7,7 @@
   "scripts": {
     "build": "pnpm --filter \"@calumet/suamox*\" build",
     "dev": "pnpm --parallel --filter \"@calumet/suamox*\" dev",
-    "test": "pnpm -r test",
+    "test": "node scripts/check-packages.mjs && pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "lint": "oxlint --report-unused-disable-directives-severity=error",
     "format": "oxfmt",
