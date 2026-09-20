@@ -1,6 +1,6 @@
 {
   "name": "@calumet/suamox-head",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Head manager for Suamox framework",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,8 +15,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -43,8 +43,8 @@
     "happy-dom": "^20.14.5",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3",
+    "tsdown": "^0.23.0",
+    "typescript": "^7.0.2",
     "vitest": "^5.0.1"
   }
 }
