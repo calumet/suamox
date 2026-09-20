@@ -236,7 +236,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     let layoutData: Record<string, unknown> | undefined;
     let redirectTo: URL | null = null;
     // El cache de layouts no se toca hasta pasado el corte por navegacion superada
-    let siguienteLayoutData: Record<string, unknown> | null = null;
+    let nextLayoutData: Record<string, unknown> | null = null;
 
     // `hasMiddleware` entra en la condicion de csr tambien: una ruta csr se salta
     // el viaje al servidor, y con el se saltaria su guardia al navegar
@@ -275,10 +275,10 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
               // Un layout bajo un segmento dinamico tiene el mismo routeId para
               // todos los valores del parametro, asi que el id por si solo no
               // dice si sus datos siguen valiendo: hay que mirar los params
-              const mismosParams = layoutParamNames(id).every(
+              const sameParams = layoutParamNames(id).every(
                 (name) => currentParams[name] === match.params[name],
               );
-              if (mismosParams) {
+              if (sameParams) {
                 stableLayouts.push(id);
               }
             }
@@ -321,10 +321,10 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
             for (const [id, val] of Object.entries(structured.layouts)) {
               layoutData[id] = val === null ? currentLayoutData[id] : val;
             }
-            siguienteLayoutData = { ...layoutData };
+            nextLayoutData = { ...layoutData };
           } else {
             data = json;
-            siguienteLayoutData = {};
+            nextLayoutData = {};
           }
         } catch (err) {
           if (activeId !== navigationId) {
@@ -356,8 +356,8 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     // de arriba: si una navegacion superada guardara sus datos sin sus params,
     // la siguiente compararia unos contra los otros y daria por estable un
     // layout cargado con otro valor del parametro
-    if (siguienteLayoutData) {
-      currentLayoutData = siguienteLayoutData;
+    if (nextLayoutData) {
+      currentLayoutData = nextLayoutData;
     }
     currentLayoutRouteIds =
       (match.route as ResolvedMatch["route"] & { layoutRouteIds?: string[] }).layoutRouteIds ?? [];

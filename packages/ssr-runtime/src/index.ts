@@ -1,4 +1,4 @@
-import { HeadProvider, idiomaSeguro } from "@calumet/suamox-head";
+import { HeadProvider, safeLang } from "@calumet/suamox-head";
 import { stringify, unflatten } from "devalue";
 import type React from "react";
 import { createContext, createElement, useContext } from "react";
@@ -739,7 +739,7 @@ export function generateHTML(options: {
     .join("\n    ");
 
   return `<!DOCTYPE html>
-<html lang="${escapeAttr(idiomaSeguro(lang))}">
+<html lang="${escapeAttr(safeLang(lang))}">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

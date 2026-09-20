@@ -19,9 +19,9 @@ export type HeadManagerMode = "server" | "client";
  * busca `<script`. Dentro de un atributo entre comillas dobles un `<` es texto
  * inerte para el parser, pero no para esos pases.
  */
-const ETIQUETA_IDIOMA = /^[A-Za-z][A-Za-z0-9-]{0,34}$/;
+const LANG_TAG_RE = /^[A-Za-z][A-Za-z0-9-]{0,34}$/;
 
-let idiomaInvalidoReportado = false;
+let invalidLangReported = false;
 
 /**
  * Filtra el `lang` que declara una pagina. Vive aqui, y no donde se genera el
@@ -32,17 +32,17 @@ let idiomaInvalidoReportado = false;
  * `undefined` es no declararlo; cualquier otra cosa que no sea una etiqueta es
  * un bug de la app y se sirve `"en"`.
  */
-export function idiomaSeguro(lang: unknown): string {
+export function safeLang(lang: unknown): string {
   if (lang === undefined) {
     return "en";
   }
-  if (typeof lang === "string" && ETIQUETA_IDIOMA.test(lang)) {
+  if (typeof lang === "string" && LANG_TAG_RE.test(lang)) {
     return lang;
   }
   // Una sola vez, y serializado: el valor puede venir de la URL, asi que avisar
   // por peticion deja llenar el log, y en crudo deja forjar una linea entera
-  if (!idiomaInvalidoReportado) {
-    idiomaInvalidoReportado = true;
+  if (!invalidLangReported) {
+    invalidLangReported = true;
     console.warn(
       `[suamox] lang no es una etiqueta de idioma, se sirve "en":`,
       JSON.stringify(lang),
@@ -91,7 +91,7 @@ export const createHeadManager = (mode: HeadManagerMode): HeadManager => {
       // Se filtra al entrar, no al salir: asi `getLang()` no puede devolver algo
       // que el documento del servidor haya descartado
       if (lang === undefined) langs.delete(id);
-      else langs.set(id, idiomaSeguro(lang));
+      else langs.set(id, safeLang(lang));
       notify();
     },
     unregister(id) {
@@ -300,13 +300,13 @@ export function HeadProvider({
     }
     // El que sirvio el servidor. Es el respaldo de una pagina que no declara
     // ninguno: sin el se quedaria pegado el de la pagina anterior
-    const langInicial = document.documentElement.lang;
+    const initialLang = document.documentElement.lang;
 
     const apply = () => {
       applyHeadNodes(activeManager.getSnapshot());
       // Al navegar dentro de la SPA el documento no se vuelve a pedir, asi que
       // el atributo hay que moverlo a mano
-      const lang = activeManager.getLang() ?? langInicial;
+      const lang = activeManager.getLang() ?? initialLang;
       if (document.documentElement.lang !== lang) {
         document.documentElement.lang = lang;
       }
@@ -342,24 +342,24 @@ export function Head({
   const id = idRef.current;
   /* oxlint-enable react/refs */
 
-  const enServidor = manager != null && manager.mode === "server";
+  const isServer = manager != null && manager.mode === "server";
 
   // El registro del servidor va en render porque renderToString no corre efectos
-  if (enServidor) {
+  if (isServer) {
     manager.register(id, children, lang);
   }
 
   // El efecto va antes de cualquier salida: con el `return` temprano que habia
   // aca, el orden de hooks dependia del modo del manager
   useEffect(() => {
-    if (!manager || enServidor) {
+    if (!manager || isServer) {
       return;
     }
     manager.register(id, children, lang);
     return () => {
       manager.unregister(id);
     };
-  }, [manager, id, children, enServidor, lang]);
+  }, [manager, id, children, isServer, lang]);
 
   return null;
 }
