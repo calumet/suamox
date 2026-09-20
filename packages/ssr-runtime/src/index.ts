@@ -1,4 +1,4 @@
-import { HeadProvider } from "@calumet/suamox-head";
+import { HeadProvider, safeLang } from "@calumet/suamox-head";
 import { stringify, unflatten } from "devalue";
 import type React from "react";
 import { createContext, createElement, useContext } from "react";
@@ -250,6 +250,8 @@ export interface RenderResult {
   status: number;
   html: string;
   head?: string;
+  /** `<html lang>` que pidio la pagina con `<Head lang>`, si lo pidio */
+  lang?: string;
   initialData?: unknown;
   layoutData?: Record<string, unknown>;
   redirectTo?: string;
@@ -653,6 +655,11 @@ export function generateHTML(options: {
    * importar `node:crypto`.
    */
   csp?: { hash: (code: string) => string; directives?: string };
+  /**
+   * Valor de `<html lang>`, `"en"` por defecto. Pasa por `safeLang`, que
+   * descarta lo que no sea una etiqueta de idioma.
+   */
+  lang?: string;
 }): string {
   const {
     html,
@@ -666,6 +673,7 @@ export function generateHTML(options: {
     prehydrateScripts = [],
     nonce,
     csp,
+    lang,
   } = options;
 
   const escapeAttr = (value: string): string =>
@@ -729,7 +737,7 @@ export function generateHTML(options: {
     .join("\n    ");
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${escapeAttr(safeLang(lang))}">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

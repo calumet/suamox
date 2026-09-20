@@ -39,6 +39,27 @@ type ResolvedMatch = { route: RouteRecord; params: Record<string, string> };
 
 const MAX_REDIRECTS = 5;
 
+/**
+ * Los parametros que salen de la ruta del propio layout. El `routeId` es su
+ * directorio bajo `pages/` —`layout:[lang]`, `layout:root`—, asi que los
+ * segmentos dinamicos que lleva encima se leen de ahi.
+ */
+const layoutParamNames = (routeId: string): string[] => {
+  // El layout raiz no lleva prefijo: su id es `root` a secas
+  if (!routeId.startsWith("layout:")) {
+    return [];
+  }
+  const names: string[] = [];
+  for (const segment of routeId.slice("layout:".length).split("/")) {
+    // `[lang]`, `[...slug]` y `[[lang]]` por igual
+    const name = /^\[{1,2}(?:\.{3})?([^\]]+)\]{1,2}$/.exec(segment)?.[1];
+    if (name) {
+      names.push(name);
+    }
+  }
+  return names;
+};
+
 const canUseDOM = (): boolean => typeof window !== "undefined" && typeof document !== "undefined";
 
 const isModifiedEvent = (event: MouseEvent): boolean =>
@@ -171,6 +192,9 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
   // Track current layout chain and cached layout data
   let currentLayoutRouteIds: string[] = [];
   let currentLayoutData: Record<string, unknown> = {};
+  // Los params con los que se cargaron esos datos: el routeId solo no distingue
+  // `/es/correos` de `/en/correos`, que comparten layout
+  let currentParams: Record<string, string> = {};
 
   const isClientNavigable = (target: URL): boolean => {
     if (target.origin !== window.location.origin) {
@@ -209,6 +233,8 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     let data: unknown = null;
     let layoutData: Record<string, unknown> | undefined;
     let redirectTo: URL | null = null;
+    // El cache de layouts no se toca hasta pasado el corte por navegacion superada
+    let nextLayoutData: Record<string, unknown> | null = null;
 
     // `hasMiddleware` entra en la condicion de csr tambien: una ruta csr se salta
     // el viaje al servidor, y con el se saltaria su guardia al navegar
@@ -241,7 +267,16 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
           const stableLayouts: string[] = [];
           if (!revalidate) {
             for (const id of newLayoutRouteIds) {
-              if (currentLayoutRouteIds.includes(id) && id in currentLayoutData) {
+              if (!currentLayoutRouteIds.includes(id) || !(id in currentLayoutData)) {
+                continue;
+              }
+              // Un layout bajo un segmento dinamico comparte routeId entre
+              // todos los valores del parametro, asi que el id solo no dice si
+              // sus datos siguen valiendo
+              const sameParams = layoutParamNames(id).every(
+                (name) => currentParams[name] === match.params[name],
+              );
+              if (sameParams) {
                 stableLayouts.push(id);
               }
             }
@@ -284,10 +319,10 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
             for (const [id, val] of Object.entries(structured.layouts)) {
               layoutData[id] = val === null ? currentLayoutData[id] : val;
             }
-            currentLayoutData = { ...layoutData };
+            nextLayoutData = { ...layoutData };
           } else {
             data = json;
-            currentLayoutData = {};
+            nextLayoutData = {};
           }
         } catch (err) {
           if (activeId !== navigationId) {
@@ -315,9 +350,14 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
       return;
     }
 
-    // Update current layout chain
+    // Update current layout chain. Los tres van juntos: unos datos guardados
+    // sin sus params dejan al guardia de arriba comparando pares descuadrados
+    if (nextLayoutData) {
+      currentLayoutData = nextLayoutData;
+    }
     currentLayoutRouteIds =
       (match.route as ResolvedMatch["route"] & { layoutRouteIds?: string[] }).layoutRouteIds ?? [];
+    currentParams = match.params;
 
     // El arbol tiene que tener los mismos niveles que en SSR: useId numera por
     // posicion, y un Provider de menos desalinea las claves de useClientValue

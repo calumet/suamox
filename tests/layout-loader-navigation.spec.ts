@@ -103,4 +103,19 @@ test.describe("useLoaderData in layout during client-side navigation", () => {
     await expect(page.getByTestId("lang-header")).toContainText("Info: Suamox Basic Example");
     await expect(page.getByTestId("lang-footer")).toContainText("Footer: Site Footer");
   });
+
+  test("un layout deja de ser estable cuando cambia el param del que lee", async ({ page }) => {
+    await page.goto("/es/noticias");
+    await expect(page.getByTestId("layout-lang")).toHaveText("es");
+
+    // Las dos rutas comparten `[lang]/layout.tsx`, o sea el mismo routeId, pero
+    // su loader devuelve `params.lang`: darlo por estable sirve datos de la otra
+    const [request] = await Promise.all([
+      page.waitForRequest((req) => req.url().includes("/__data")),
+      page.click('[data-testid="lang-en"]'),
+    ]);
+
+    await expect(page.getByTestId("layout-lang")).toHaveText("en");
+    expect(decodeURIComponent(request.url())).not.toContain("layout:[lang]");
+  });
 });

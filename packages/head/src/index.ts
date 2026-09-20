@@ -11,11 +11,46 @@ import {
 
 export type HeadManagerMode = "server" | "client";
 
+const LANG_TAG_RE = /^[A-Za-z][A-Za-z0-9-]{0,34}$/;
+
+let invalidLangReported = false;
+
+/**
+ * Unico filtro del `lang` que declara una pagina: lo llaman tanto el documento
+ * del servidor como el atributo que escribe el cliente al navegar.
+ *
+ * Se valida contra la gramatica de BCP 47 en vez de escaparse porque el
+ * documento **se reescribe con expresiones regulares antes de llegar al
+ * navegador** —`transformIndexHtml` inyecta en la primera coincidencia de
+ * `<head`, y el pase del nonce busca `<script`—, y ahi un `<` deja de ser el
+ * texto inerte que seria dentro de un atributo.
+ */
+export function safeLang(lang: unknown): string {
+  if (lang === undefined) {
+    return "en";
+  }
+  if (typeof lang === "string" && LANG_TAG_RE.test(lang)) {
+    return lang;
+  }
+  // El valor puede venir de la URL: avisar por peticion deja llenar el log, y
+  // en crudo deja forjar una linea entera
+  if (!invalidLangReported) {
+    invalidLangReported = true;
+    console.warn(
+      `[suamox] lang no es una etiqueta de idioma, se sirve "en":`,
+      JSON.stringify(lang),
+    );
+  }
+  return "en";
+}
+
 export interface HeadManager {
   mode: HeadManagerMode;
-  register: (id: symbol, node: React.ReactNode) => void;
+  register: (id: symbol, node: React.ReactNode, lang?: string) => void;
   unregister: (id: symbol) => void;
   getSnapshot: () => React.ReactNode[];
+  /** `<html lang>` que pidio la pagina, si alguna lo pidio */
+  getLang: () => string | undefined;
   subscribe: (listener: () => void) => () => void;
 }
 
@@ -30,6 +65,7 @@ const canUseDOM = (): boolean => typeof window !== "undefined" && typeof documen
 
 export const createHeadManager = (mode: HeadManagerMode): HeadManager => {
   const entries = new Map<symbol, React.ReactNode>();
+  const langs = new Map<symbol, string>();
   const listeners = new Set<() => void>();
 
   const notify = (): void => {
@@ -43,16 +79,29 @@ export const createHeadManager = (mode: HeadManagerMode): HeadManager => {
 
   return {
     mode,
-    register(id, node) {
+    register(id, node, lang) {
       entries.set(id, node);
+      // Se filtra al entrar, no al salir: asi `getLang()` no puede devolver algo
+      // que el documento del servidor haya descartado
+      if (lang === undefined) langs.delete(id);
+      else langs.set(id, safeLang(lang));
       notify();
     },
     unregister(id) {
       entries.delete(id);
+      langs.delete(id);
       notify();
     },
     getSnapshot() {
       return Array.from(entries.values());
+    },
+    // Gana el ultimo que lo pida. Declararlo en dos sitios a la vez resuelve
+    // distinto en servidor que en cliente: el registro va de padre a hijo al
+    // renderizar y al reves en los efectos
+    getLang() {
+      let last: string | undefined;
+      for (const value of langs.values()) last = value;
+      return last;
     },
     subscribe(listener) {
       if (mode !== "client") {
@@ -241,8 +290,18 @@ export function HeadProvider({
     if (activeManager.mode !== "client") {
       return;
     }
+    // El que sirvio el servidor. Es el respaldo de una pagina que no declara
+    // ninguno: sin el se quedaria pegado el de la pagina anterior
+    const initialLang = document.documentElement.lang;
+
     const apply = () => {
       applyHeadNodes(activeManager.getSnapshot());
+      // Al navegar dentro de la SPA el documento no se vuelve a pedir, asi que
+      // el atributo hay que moverlo a mano
+      const lang = activeManager.getLang() ?? initialLang;
+      if (document.documentElement.lang !== lang) {
+        document.documentElement.lang = lang;
+      }
     };
     apply();
     return activeManager.subscribe(apply);
@@ -251,7 +310,19 @@ export function HeadProvider({
   return createElement(HeadContext.Provider, { value: activeManager }, children);
 }
 
-export function Head({ children }: { children: React.ReactNode }): null {
+export function Head({
+  children,
+  lang,
+}: {
+  /** Opcional: `<Head lang="es" />` a secas es un uso valido */
+  children?: React.ReactNode;
+  /**
+   * Valor de `<html lang>` para esta pagina. Va declarado una sola vez, en el
+   * layout que conoce el idioma; el loader recibe la `url` con el prefijo
+   * intacto aunque `reroute` lo quite para resolver la ruta.
+   */
+  lang?: string;
+}): null {
   const manager = useContext(HeadContext);
   const idRef = useRef<symbol | null>(null);
 
@@ -263,24 +334,24 @@ export function Head({ children }: { children: React.ReactNode }): null {
   const id = idRef.current;
   /* oxlint-enable react/refs */
 
-  const enServidor = manager != null && manager.mode === "server";
+  const isServer = manager != null && manager.mode === "server";
 
   // El registro del servidor va en render porque renderToString no corre efectos
-  if (enServidor) {
-    manager.register(id, children);
+  if (isServer) {
+    manager.register(id, children, lang);
   }
 
   // El efecto va antes de cualquier salida: con el `return` temprano que habia
   // aca, el orden de hooks dependia del modo del manager
   useEffect(() => {
-    if (!manager || enServidor) {
+    if (!manager || isServer) {
       return;
     }
-    manager.register(id, children);
+    manager.register(id, children, lang);
     return () => {
       manager.unregister(id);
     };
-  }, [manager, id, children, enServidor]);
+  }, [manager, id, children, isServer, lang]);
 
   return null;
 }

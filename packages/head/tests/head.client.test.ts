@@ -62,4 +62,52 @@ describe("Head (client)", () => {
     });
     container.remove();
   });
+
+  it("el cliente no aplica un lang que el servidor descartaria", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    document.documentElement.lang = "en";
+
+    await act(async () => {
+      root.render(
+        createElement(
+          HeadProvider,
+          null,
+          createElement(Head, { lang: '"><script>alert(1)</script>' }),
+        ),
+      );
+      await Promise.resolve();
+    });
+
+    // El servidor sirve "en" para ese valor. Si el cliente lo aplicara igual, al
+    // hidratar deshace la validacion que acaba de hacer el servidor
+    expect(document.documentElement.lang).toBe("en");
+
+    await act(async () => {
+      root.unmount();
+      await Promise.resolve();
+    });
+    container.remove();
+  });
+
+  it("aplica una etiqueta valida al navegar", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    document.documentElement.lang = "en";
+
+    await act(async () => {
+      root.render(createElement(HeadProvider, null, createElement(Head, { lang: "es-419" })));
+      await Promise.resolve();
+    });
+
+    expect(document.documentElement.lang).toBe("es-419");
+
+    await act(async () => {
+      root.unmount();
+      await Promise.resolve();
+    });
+    container.remove();
+  });
 });

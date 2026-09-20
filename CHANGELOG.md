@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.19.0 (2026-09-20)
+
+### Features
+
+- **`<Head lang>`: el documento declara el idioma de la página, no el de la plantilla.** `<html lang>` estaba escrito en duro como `en`, así que una app que sirve español lo declaraba mal en todas sus rutas. Es el atributo del que un lector de pantalla saca la fonética con la que pronuncia la página entera.
+
+  ```tsx
+  export function loader({ url }: LoaderContext) {
+    return { idioma: url.pathname.startsWith("/en") ? "en" : "es" };
+  }
+
+  export default function Layout({ children }: { children: ReactNode }) {
+    const { idioma } = useLoaderData<typeof loader>();
+    return (
+      <>
+        <Head lang={idioma} />
+        {children}
+      </>
+    );
+  }
+  ```
+
+  Va por el head manager y no por una opción del adaptador **porque es el único camino que comparten los tres modos de render**. Desarrollo, producción y SSG pasan todos por `renderPage`, así que el idioma viaja con la página renderizada. Una opción del servidor habría dejado fuera a SSG, que no tiene petición que consultar: `suamox ssg` a secas funciona sin configurar nada, porque una variante se prerenderiza con su propio pathname y el loader la ve entera.
+
+  Al navegar dentro de la SPA el atributo se mueve solo: el documento no se vuelve a pedir, y sin eso un lector de pantalla seguiría leyendo la página nueva con la fonética de la anterior. Una página que no declara ninguno vuelve al que sirvió el servidor.
+
+  Va declarado **una sola vez**, en el layout más externo que conoce el idioma. Si dos componentes lo declaran a la vez gana el último en registrarse, y ese orden no es el mismo en servidor que en cliente. Sin declarar nada, sigue saliendo `en`: ninguna app existente cambia.
+
+  **Solo se acepta una etiqueta de idioma**, y cualquier otra cosa se descarta sirviendo `en` con un aviso. El valor puede venir de la URL —el ejemplo hace `lang: params.lang`— y no basta con escapar comillas: el documento generado **se reescribe con expresiones regulares antes de llegar al navegador**. El `transformIndexHtml` de desarrollo inyecta en la primera coincidencia de `<head`, y el pase del nonce busca `<script`. Dentro de un atributo entre comillas dobles un `<` es texto inerte para el parser, pero no para esos pases: un `lang` con `<head>` desviaba la inyección de Vite al interior del atributo, y las comillas que ella trae lo cerraban. Validar en vez de escapar cierra también el caso de un loader sin tipos que devuelva `null`, que si no reventaba la ruta con un 500. Cierra #42.
+
+### Correcciones
+
+- **Un layout bajo un segmento dinámico servía datos de la ruta anterior.** El router daba un layout por estable —y le decía al servidor que se saltara su loader— comparando solo su `routeId`, que es su directorio bajo `pages/`. Un layout en `[lang]/` tiene el mismo id para `/es/correos` y `/en/correos`, así que al saltar de un idioma a otro el layout seguía mostrando el anterior. Afectaba a cualquier layout cuyo loader lea `params`, no solo al idioma.
+
+  Ahora se comparan también los parámetros que salen de la ruta del propio layout, que el `routeId` ya nombra. Un layout cuyos params no cambiaron sigue siendo estable, así que la optimización se mantiene: navegar entre dos páginas hermanas del mismo idioma no vuelve a pedir el loader del layout.
+
+  **Límite conocido, y es más ancho de lo que suena:** lo que se compara son los params de la ruta del layout, no lo que su loader lee de verdad. Un loader de layout recibe la `url` y la `query` enteras, además de `locals`, así que **nada de eso dispara una revalidación**. El caso extremo es el layout raíz, que no cuelga de ningún segmento dinámico y por tanto es estable en todas las navegaciones: si su loader lee el query string, navegar de `?id=1` a `?id=2` le sirve los datos del primero. Para eso está `revalidate()`.
+
+  De paso, el cache de layouts pasa a fijarse junto a los params y después del corte por navegación superada. Una navegación abandonada guardaba sus datos sin sus params, y la siguiente comparaba unos contra los otros.
+
+- **Desarrollo y producción servían plantillas distintas.** El adaptador tenía su propia copia inline del documento, lo que hacía que el defecto del idioma hubiera que arreglarlo dos veces —y que un arreglo en una sola dejara el otro modo roto—. Ahora desarrollo arma el documento con `generateHTML`, la misma de producción y SSG, y después lo pasa por `transformIndexHtml`. De paso se alinea el orden del `<head>`: desarrollo ponía los estilos antes del contenido de `<Head>` y producción al revés.
+
+### Packages
+
+| Paquete                        | Version anterior | Nueva version |
+| ------------------------------ | ---------------- | ------------- |
+| `@calumet/suamox`              | 0.8.3            | 0.9.0         |
+| `@calumet/suamox-head`         | 0.1.3            | 0.2.0         |
+| `@calumet/suamox-hono-adapter` | 0.9.2            | 0.9.3         |
+| `@calumet/suamox-router`       | 0.8.1            | 0.8.2         |
+
 ## 0.18.0 (2026-09-19)
 
 Actualizacion del toolchain. Se cierran las dos entradas de **Sin actualizar (deliberado)** de 0.4.0: TypeScript 7 y el linter. Sin cambios en la API publica del framework.

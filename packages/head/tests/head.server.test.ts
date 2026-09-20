@@ -29,4 +29,37 @@ describe("Head (server)", () => {
     expect(headHtml).toContain("<title>Server Title</title>");
     expect(headHtml).toMatch(/<meta name="description" content="SSR"\s*\/?>/);
   });
+
+  it("no pide lang si ninguna pagina lo declara", () => {
+    const manager = createHeadManager("server");
+    renderToString(
+      createElement(
+        HeadProvider,
+        { manager },
+        createElement(Head, null, createElement("title", null, "Sin idioma")),
+      ),
+    );
+
+    expect(manager.getLang()).toBeUndefined();
+  });
+
+  it("recoge el lang que declara la pagina", () => {
+    const manager = createHeadManager("server");
+    renderToString(createElement(HeadProvider, { manager }, createElement(Head, { lang: "es" })));
+
+    expect(manager.getLang()).toBe("es");
+  });
+
+  it("un manager por peticion: el idioma de una no se filtra al de otra", () => {
+    const primera = createHeadManager("server");
+    renderToString(
+      createElement(HeadProvider, { manager: primera }, createElement(Head, { lang: "es" })),
+    );
+
+    const segunda = createHeadManager("server");
+    renderToString(createElement(HeadProvider, { manager: segunda }, createElement(Head, null)));
+
+    expect(primera.getLang()).toBe("es");
+    expect(segunda.getLang()).toBeUndefined();
+  });
 });

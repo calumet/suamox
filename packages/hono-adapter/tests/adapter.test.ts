@@ -74,9 +74,13 @@ describe("createHonoApp", () => {
 });
 
 describe("createDevHandler", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     mocks.renderPage.mockReset();
     mocks.generateHTML.mockReset();
+    // Desarrollo arma el documento con la misma plantilla que produccion, asi
+    // que aqui interesa la de verdad: lo que se comprueba es su salida
+    const actual = await vi.importActual<typeof import("@calumet/suamox")>("@calumet/suamox");
+    mocks.generateHTML.mockImplementation(actual.generateHTML);
     mocks.serializeData.mockClear();
     mocks.matchRoute.mockReset();
     mocks.matchRoute.mockReturnValue(null);
@@ -832,8 +836,11 @@ describe("createProdHandler /__data endpoint", () => {
 });
 
 describe("createDevHandler middleware", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     mocks.renderPage.mockReset();
+    mocks.generateHTML.mockReset();
+    const actual = await vi.importActual<typeof import("@calumet/suamox")>("@calumet/suamox");
+    mocks.generateHTML.mockImplementation(actual.generateHTML);
     mocks.matchRoute.mockReset();
     mocks.matchRoute.mockReturnValue(null);
     mocks.resolveRouteModule.mockReset();

@@ -316,4 +316,45 @@ describe("generateHTML", () => {
     expect(html).toMatch(/<\/body>/);
     expect(html).toMatch(/<\/html>/);
   });
+
+  it("usa el lang que le pasan", () => {
+    expect(generateHTML({ html: "", lang: "es" })).toMatch(/<html lang="es">/);
+  });
+
+  it("sin lang cae en en, que es lo que servia antes", () => {
+    expect(generateHTML({ html: "" })).toMatch(/<html lang="en">/);
+  });
+
+  it("descarta lo que no sea una etiqueta de idioma", () => {
+    // No basta con escapar comillas: el documento se reescribe con regex antes
+    // de llegar al navegador, y un `<` dentro del atributo desvia esos pases
+    for (const hostil of [
+      '"><script>alert(1)</script>',
+      "<head><img src=x onerror=alert(1)>",
+      "<script><script>x</script>",
+      "es\n<script>",
+      "",
+    ]) {
+      const html = generateHTML({ html: "", lang: hostil });
+      expect(html).toMatch(/<html lang="en">/);
+    }
+  });
+
+  it("el primer <head> del documento es el de verdad, no uno colado por el lang", () => {
+    // El transformIndexHtml de desarrollo inyecta en la primera coincidencia
+    const html = generateHTML({ html: "", lang: "<head>" });
+
+    expect(html.indexOf("<head>")).toBe(html.indexOf("  <head>") + 2);
+  });
+
+  it("un lang no-string no tumba la ruta", () => {
+    // Un loader sin tipos puede devolver null desde una columna que lo admite
+    expect(generateHTML({ html: "", lang: null as unknown as string })).toMatch(/<html lang="en">/);
+  });
+
+  it("deja pasar las etiquetas de idioma de verdad", () => {
+    for (const valido of ["es", "en", "es-419", "zh-Hant-CN"]) {
+      expect(generateHTML({ html: "", lang: valido })).toContain(`<html lang="${valido}">`);
+    }
+  });
 });

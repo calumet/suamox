@@ -238,6 +238,7 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
     const html = generateHTML({
       html: `<div id="root">${result.html}</div>`,
       head: result.head,
+      lang: result.lang,
       includeInitialDataScript: false,
       scripts: routeScripts,
       styles: routeStyles,
