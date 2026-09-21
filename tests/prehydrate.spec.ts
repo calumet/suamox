@@ -98,3 +98,52 @@ test.describe("useClientValue", () => {
     await conSesion.close();
   });
 });
+
+// La guia decia que los elementos parcheados "necesitan" suppressHydrationWarning.
+// No lo necesitan: calla un aviso de consola de desarrollo y no cambia nada mas.
+// Estos tests lo fijan, porque es una afirmacion facil de romper sin enterarse.
+test.describe("useClientValue sin suppressHydrationWarning", () => {
+  test("React hidrata con el valor real igual que con la marca", async ({ page }) => {
+    await page.addInitScript(() => sessionStorage.setItem("idUsr", "42"));
+    await page.goto("/prehydrate-sin-marca");
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByTestId("sm-logout")).toBeVisible();
+    await expect(page.getByTestId("sm-login")).toBeHidden();
+
+    // El DOM no prueba nada, lo parchea el script. Esto pregunta a React.
+    await page.getByTestId("preguntar").click();
+    await expect(page.getByTestId("respuesta")).toHaveText("true");
+  });
+
+  // React avisa de que la diferencia de atributos "won't be patched up". Eso es
+  // sobre la pasada de hidratacion, no sobre perder el nodo: si lo hubiera
+  // perdido, este render nuevo no moveria nada.
+  test("React sigue mandando sobre el elemento despues de hidratar", async ({ page }) => {
+    await page.addInitScript(() => sessionStorage.setItem("idUsr", "42"));
+    await page.goto("/prehydrate-sin-marca");
+    await page.waitForLoadState("networkidle");
+
+    await page.getByTestId("invertir").click();
+
+    await expect(page.getByTestId("sm-logout")).toBeHidden();
+    await expect(page.getByTestId("sm-login")).toBeVisible();
+  });
+
+  test("lo unico que cuesta es un aviso, y solo en desarrollo", async ({ page }, info) => {
+    const avisos: string[] = [];
+    page.on("console", (m) => {
+      if (/hydrat|mismatch/i.test(m.text())) avisos.push(m.text());
+    });
+
+    await page.addInitScript(() => sessionStorage.setItem("idUsr", "42"));
+    await page.goto("/prehydrate-sin-marca");
+    await page.waitForLoadState("networkidle");
+
+    if (info.project.name === "prod") {
+      expect(avisos, "en produccion React no reporta mismatches").toEqual([]);
+    } else {
+      expect(avisos.length, "en desarrollo sale un aviso por pasada de hidratacion").toBe(1);
+    }
+  });
+});

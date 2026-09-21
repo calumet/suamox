@@ -26,7 +26,17 @@ export function Header() {
 }
 ```
 
-Los elementos que aparecen en `show`/`hide` llevan `suppressHydrationWarning`: el script cambia el DOM antes de que React hidrate, y React compara contra el HTML que emitio el servidor, no contra el DOM ya corregido. Sin la marca avisa por consola de una diferencia que es intencionada. El valor se corrige igual en el render siguiente.
+Los elementos que aparecen en `show`/`hide` llevan `suppressHydrationWarning` para callar un aviso de consola, y solo para eso.
+
+Lo que discrepa no es el HTML del servidor, que React ya no vuelve a ver. React recorre el DOM, se encuentra la correccion que dejo el script y la compara contra su propio primer render, que `useSyncExternalStore` construye a partir de `getServerSnapshot` precisamente para que reproduzca al servidor. Por eso el aviso dice que el cliente quiere el fallback:
+
+```
+<button id="btn-logout"
++   hidden={true}     lo que React renderiza al hidratar
+-   hidden={null}     lo que el script ya dejo en el DOM
+```
+
+**No es obligatorio.** Sin la marca el valor acaba igual de bien, porque el store re-renderiza en cuanto `getSnapshot` y `getServerSnapshot` dejan de coincidir, y React sigue mandando sobre el elemento despues de hidratar. Lo unico que cambia es un `console.error` en desarrollo, uno por pasada de hidratacion, que lista los elementos afectados. En produccion React no avisa. Lo fijan los e2e de `tests/prehydrate.spec.ts` contra `/prehydrate-sin-marca`.
 
 ## La firma
 
@@ -75,7 +85,7 @@ El script solo toca lo que le indiques. Cualquier otra cosa derivada del valor s
 <p>{isLoggedIn ? "dentro" : "fuera"}</p>
 ```
 
-`suppressHydrationWarning` **no** lo arregla: silencia el aviso pero deja el valor del servidor, asi que el texto se queda mal. La solucion es que tambien se parchee:
+`suppressHydrationWarning` tampoco lo arregla, aunque no por lo que suele decirse. El texto no se queda mal, React lo corrige al re-renderizar. El problema es cuando. Ese render llega despues del primer pintado, que es exactamente el parpadeo que el hook existe para quitar: medido a 6x de CPU, el boton parcheado se corrige a los 192 ms y el primer pintado cae a los 196, mientras que el texto no se mueve hasta los 620. La solucion es que tambien se parchee:
 
 ```tsx
 // bien: los dos parrafos entran en show/hide

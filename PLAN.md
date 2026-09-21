@@ -641,7 +641,13 @@ const locale = useClientValue("en", () => {
 
 Sin patch no hay correccion visual pre-hidratacion. React hidrata con el valor correcto (sin mismatch), pero el HTML del servidor se muestra con el fallback hasta que React hidrate. Esto es aceptable cuando el cambio visual es menor.
 
-#### `suppressHydrationWarning` y por que es necesario
+#### `suppressHydrationWarning`
+
+> Lo que sigue es el plan, escrito antes de implementar, y se quedo corto en dos
+> cosas. La marca **no** es obligatoria: sin ella el valor acaba igual de bien y
+> React sigue mandando sobre el elemento, asi que lo unico que cuesta es un aviso
+> de consola en desarrollo. Y el mecanismo no es el que se describe aqui. La
+> version buena esta en `docs/guias/prehydrate.md`, fijada por los e2e.
 
 El inline script modifica el DOM antes de que React hidrate. Pero React no compara contra el DOM actual del browser, sino contra lo que el servidor renderizo. Cuando React hidrata y ve que un atributo (ej: `style`) es diferente a lo que el servidor genero, emite un hydration mismatch warning:
 
@@ -679,7 +685,9 @@ const loginHref =
     : `/${lang}/login`;
 ```
 
-Estas branches server/client deben moverse dentro de `useClientValue` o marcarse con `suppressHydrationWarning` en el elemento que las usa. El framework podria agregar `suppressHydrationWarning` automaticamente a los elementos seleccionados por `show`/`hide` en una implementacion futura, pero eso requiere control sobre el JSX que no es trivial.
+Estas branches server/client deben moverse dentro de `useClientValue` o marcarse con `suppressHydrationWarning` en el elemento que las usa.
+
+Ponerla el framework no es trabajo pendiente, es imposible desde aqui: React lee `suppressHydrationWarning` de las props del elemento y nunca del DOM, asi que el script inline no puede escribirla con ninguna grafia. Solo puede hacerlo quien escribe el JSX. Para que la pusiera el framework tendria que ser el dueno del elemento, o sea otra API en vez de selectores. Como ademas la marca no es obligatoria, no hay nada que compense ese cambio.
 
 #### Restricciones de `resolve` y `patch`
 
