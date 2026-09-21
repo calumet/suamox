@@ -8,8 +8,10 @@ export default function PrehydratePage() {
     hide: "#btn-login, #estado-fuera",
   });
 
-  // Los elementos que el script parchea llevan suppressHydrationWarning: React
-  // compara contra el HTML del servidor, no contra el DOM ya corregido.
+  // Los elementos que el script parchea llevan suppressHydrationWarning para
+  // callar el aviso de consola de desarrollo. No es obligatorio: en
+  // /prehydrate-sin-marca esta la misma pagina sin ella, y los e2e comprueban
+  // que el valor acaba igual.
   return (
     <div>
       <h1 data-testid="titulo">Prehydrate</h1>

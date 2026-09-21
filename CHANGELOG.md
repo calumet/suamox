@@ -503,7 +503,7 @@ Las 42 que habia se revisaron una por una, con `oxlint --report-unused-disable-d
   <a id="btn-login" hidden={isLoggedIn}>Ingresar</a>
   ```
 
-  `show` y `hide` aplican el atributo `hidden` nativo en vez de un `data-*` con CSS del framework. En el JSX se escribe `hidden={!isLoggedIn}` a secas: React omite el atributo cuando vale `false`, mientras que un `data-*` lo emitiria como la cadena `"false"` y un selector `[data-x]` acabaria casandolo igual. Ademas `hidden` es semantico y no obliga a inyectar CSS global. Los elementos parcheados llevan `suppressHydrationWarning`, porque React compara contra el HTML del servidor y no contra el DOM ya corregido.
+  `show` y `hide` aplican el atributo `hidden` nativo en vez de un `data-*` con CSS del framework. En el JSX se escribe `hidden={!isLoggedIn}` a secas: React omite el atributo cuando vale `false`, mientras que un `data-*` lo emitiria como la cadena `"false"` y un selector `[data-x]` acabaria casandolo igual. Ademas `hidden` es semantico y no obliga a inyectar CSS global. Los elementos parcheados llevan `suppressHydrationWarning`, que no es obligatorio y solo calla el aviso de consola en desarrollo: React compara su render de hidratacion, construido desde `getServerSnapshot`, contra el DOM que el script ya corrigio.
 
   **El valor de React no viaja en el script.** El cliente ejecuta `resolve` por su cuenta, con `useSyncExternalStore`, y el script inline solo adelanta la correccion del DOM al primer pintado. Emparejar cliente y servidor por una clave derivada del codigo no funciona: el minificador reescribe el cuerpo de la funcion, asi que el bundle de servidor y el de cliente no producen la misma. Con este reparto un fallo del script cuesta el parpadeo, no el valor.
 
