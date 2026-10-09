@@ -544,13 +544,32 @@ describe("generateRoutesModule", () => {
     const routes: RouteRecord[] = [];
     const reroutePath = "/project/src/reroute.ts";
 
-    const serverCode = generateRoutesModule(routes, { target: "server", reroutePath });
-    const clientCode = generateRoutesModule(routes, { target: "client", reroutePath });
+    const serverCode = generateRoutesModule(routes, {
+      target: "server",
+      reroutePath,
+      rerouteHasVariants: true,
+    });
+    const clientCode = generateRoutesModule(routes, {
+      target: "client",
+      reroutePath,
+      rerouteHasVariants: true,
+    });
 
     expect(serverCode).toContain("export const routeReroute = __reroute.reroute;");
     expect(serverCode).toContain("export const routeVariants = __reroute.variants;");
     expect(clientCode).not.toContain("routeVariants");
     expect(clientCode).not.toContain("routeReroute");
+  });
+
+  // Leer un export que no existe hace que rolldown avise en cada build
+  it("no lee `variants` si reroute.ts no lo exporta", () => {
+    const code = generateRoutesModule([], {
+      target: "server",
+      reroutePath: "/project/src/reroute.ts",
+    });
+
+    expect(code).toContain("export const routeReroute = __reroute.reroute;");
+    expect(code).not.toContain("__reroute.variants");
   });
 
   it("la cadena de middleware solo va al servidor, la bandera a los dos", () => {

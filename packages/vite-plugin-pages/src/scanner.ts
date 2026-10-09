@@ -314,6 +314,7 @@ export interface ScanResult {
   hasMiddleware: boolean;
   middlewarePath?: string;
   reroutePath?: string;
+  rerouteHasVariants: boolean;
 }
 
 /**
@@ -529,6 +530,11 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
       // no existe, continuar
     }
   }
+  // Si el parser falla se reexporta igual: un aviso de mas antes que perder las variantes
+  const rerouteHasVariants = reroutePath
+    ? (parseExports(reroutePath, await readFile(reroutePath, "utf-8"))?.names.has("variants") ??
+      true)
+    : false;
 
   return {
     routes: sortedRoutes,
@@ -537,5 +543,6 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     hasMiddleware,
     middlewarePath,
     reroutePath,
+    rerouteHasVariants,
   };
 }
