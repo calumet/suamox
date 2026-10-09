@@ -45,6 +45,32 @@ El filtro recibe el nombre del archivo construido, y se precarga cada fuente que
 
 No hay valor por defecto a propósito, igual que en SvelteKit, Next y Astro: un paquete como `@fontsource` trae un archivo por subset (latin, latin-ext, cyrillic, greek, vietnamese…) y el navegador baja solo los que necesita por `unicode-range`. Precargarlos todos baja todos. Elige los que usa la primera pantalla.
 
+### Fuentes que dependen de la petición
+
+`preloadFonts` es el mismo para todas las peticiones. Si la fuente la decide un dato —el tema de cada sitio guardado en la base de datos—, declara todas las opciones en el CSS (un `@font-face` no se baja hasta que algo lo usa) y precarga la elegida con `<Head>`. `?url` devuelve la misma URL con hash que pide el CSS, en build y en desarrollo:
+
+```tsx
+import manrope from "@fontsource-variable/manrope/files/manrope-latin-wght-normal.woff2?url";
+
+const FUENTES = { MANROPE: [manrope] /* … */ };
+
+export default function Layout({ children }: { children: ReactNode }) {
+  const { tema } = useLoaderData<typeof loader>();
+  return (
+    <>
+      <Head>
+        {FUENTES[tema.tipografia].map((href) => (
+          <link key={href} rel="preload" as="font" type="font/woff2" href={href} crossOrigin="" />
+        ))}
+      </Head>
+      {children}
+    </>
+  );
+}
+```
+
+Deja esas fuentes fuera del filtro de `preloadFonts`, o se precargan todas las opciones en cada página.
+
 ## Recomendaciones
 
 - Mantén los estilos globales en `src/styles/global.css`.
