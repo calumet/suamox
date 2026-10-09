@@ -35,4 +35,24 @@ test.describe("el manifest no sale por HTTP", () => {
     expect(script).toBeTruthy();
     expect((await request.get(script!)).status()).toBe(200);
   });
+
+  // Antes solo casaba `index|client|jsx-runtime-*.js`, y ningun build actual
+  // produce esos nombres: CSS, JS y fuentes salian sin `Cache-Control`.
+  test("todo lo de /assets/ sale inmutable, no solo ciertos nombres", async ({ page, request }) => {
+    const html = await (await page.goto("/counter"))!.text();
+    const hrefs = [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((m) => m[1]!);
+
+    expect(hrefs.some((href) => href.endsWith(".css"))).toBe(true);
+    expect(hrefs.some((href) => href.endsWith(".js"))).toBe(true);
+    for (const href of hrefs) {
+      const response = await request.get(href);
+      expect(response.headers()["cache-control"], href).toBe("public, max-age=31536000, immutable");
+    }
+  });
+
+  test("un asset que no existe no se marca inmutable", async ({ request }) => {
+    const response = await request.get("/assets/no-existe-XXXXXXXX.js");
+
+    expect(response.headers()["cache-control"] ?? "").not.toContain("immutable");
+  });
 });

@@ -28,7 +28,7 @@ export function Button() {
 
 ## Comportamiento por modo
 
-- `dev`: Vite inyecta estilos con HMR. El adaptador SSR recolecta automáticamente todo el CSS del grafo de módulos para prevenir FOUC.
+- `dev`: Vite inyecta estilos con HMR. El adaptador SSR recolecta automáticamente todo el CSS del grafo de módulos para prevenir FOUC, en el orden de los `@import`: lo importado antes que quien lo importa.
 - `build` + SSR: el adaptador lee el manifest de Vite e inyecta `<link rel="stylesheet">` en el HTML.
 - `build:ssg`: el prerender también lee el manifest e inyecta CSS en cada página estática.
 

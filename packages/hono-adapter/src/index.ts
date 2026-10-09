@@ -194,6 +194,9 @@ const resolveRequestOrigin = (request: Request, allowedHosts?: string[]): string
  * `importedModules` del grafo del entorno SSR y tomando las URLs `.css`, que
  * Vite sirve directamente como `<link>` en desarrollo.
  *
+ * Postorden: un `@import` va antes que las reglas de quien lo importa, y en CSS
+ * el orden decide la cascada.
+ *
  * Solo aplica a dev; en produccion el CSS lo emite el build del cliente.
  */
 const collectPageCssFromSsrGraph = (vite: ViteDevServer, filePath: string): string[] => {
@@ -211,10 +214,10 @@ const collectPageCssFromSsrGraph = (vite: ViteDevServer, filePath: string): stri
     }
     seen.add(mod);
     for (const dep of mod.importedModules) {
-      if (dep.url && /\.css($|\?)/.test(dep.url)) {
-        css.add(dep.url);
-      }
       walk(dep);
+    }
+    if (mod.url && /\.css($|\?)/.test(mod.url)) {
+      css.add(mod.url);
     }
   };
   for (const mod of mods) {
@@ -1040,15 +1043,12 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     c: Context,
     next: () => Promise<void>,
   ) => Promise<Response | void>;
+  // Vite pone hash a todo lo que emite en `assetsDir`, asi que el criterio es la
+  // carpeta. ponytail: un `public/assets/` sin hash tambien queda inmutable.
   app.use("/assets/*", async (c, next) => {
     const response = await assetHandler(c, next);
-    const headers = response?.headers;
-    if (
-      headers &&
-      typeof headers.set === "function" &&
-      /^\/assets\/(index|client|jsx-runtime)-[^/]+\.js$/.test(c.req.path)
-    ) {
-      headers.set("Cache-Control", "public, max-age=31536000, immutable");
+    if (response?.ok) {
+      response.headers.set("Cache-Control", "public, max-age=31536000, immutable");
     }
     return response;
   });

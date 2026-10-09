@@ -1,17 +1,9 @@
+@import "./reset.css";
+
 :root {
   /* Marcador para el e2e: distingue el global de cualquier otra hoja */
   --suamox-global: 1;
   font-family: "Inter", "Segoe UI", sans-serif;
   color: #0f172a;
   background: #f8fafc;
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
 }
