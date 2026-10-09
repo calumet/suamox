@@ -75,6 +75,14 @@ Qué hace cada script:
 - `build:ssg`: ejecuta solo SSG (requiere build previo).
 - `preview`: arranca en modo producción (`NODE_ENV=production`).
 
+### Variables de entorno
+
+Todos los comandos cargan el `.env` de la aplicación en `process.env` antes de arrancar, así que el servidor, el build y el SSG ven lo mismo. Lo resuelve `loadEnv` de Vite: `.env`, `.env.local`, `.env.[modo]` y `.env.[modo].local`, con modo `development` en `dev` y `production` en los demás.
+
+- Lo que ya trae el entorno manda sobre el archivo: en un despliegue un `.env` olvidado no pisa las variables del sistema.
+- Se busca en el `envDir` de `vite.config.ts` (por defecto, la raíz de la app). En un monorepo con el `.env` en la raíz, `envDir: "../.."`.
+- Sin prefijo: llega todo, no solo `VITE_*`. Lo que va al cliente sigue siendo solo lo que expone `import.meta.env`.
+
 ## 5) Flujo recomendado
 
 Desarrollo:
