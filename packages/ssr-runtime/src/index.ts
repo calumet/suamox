@@ -642,6 +642,7 @@ export function generateHTML(options: {
   initialData?: unknown;
   scripts?: string[];
   preloadScripts?: string[];
+  preloadFonts?: string[];
   styles?: string[];
   includeInitialDataScript?: boolean;
   scriptPlacement?: "head" | "body";
@@ -667,6 +668,7 @@ export function generateHTML(options: {
     initialData,
     scripts = [],
     preloadScripts = [],
+    preloadFonts = [],
     styles = [],
     includeInitialDataScript = true,
     scriptPlacement = "body",
@@ -682,6 +684,12 @@ export function generateHTML(options: {
   const uniqueStyles = Array.from(new Set(styles));
   const uniquePreloadScripts = Array.from(new Set(preloadScripts));
   const uniqueScripts = Array.from(new Set(scripts));
+
+  // `crossorigin` siempre: una fuente se pide en modo CORS, y sin el atributo el
+  // navegador descarta la precarga y la vuelve a pedir
+  const fontTags = Array.from(new Set(preloadFonts))
+    .map((href) => `<link rel="preload" as="font" href="${escapeAttr(href)}" crossorigin>`)
+    .join("\n    ");
 
   const styleTags = uniqueStyles
     .map((href) => `<link rel="stylesheet" href="${escapeAttr(href)}">`)
@@ -725,6 +733,7 @@ export function generateHTML(options: {
   const headContent = [
     cspMeta,
     head,
+    fontTags,
     styleTags,
     preloadTags,
     scriptPlacement === "head" ? scriptTags : "",

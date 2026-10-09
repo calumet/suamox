@@ -14,6 +14,8 @@ export interface SuamoxPagesOptions {
   pagesDir?: string;
   extensions?: string[];
   defaultMode?: DefaultPageMode;
+  /** Fuentes del CSS de cada ruta que se precargan, por nombre de archivo. Solo en build */
+  preloadFonts?: RegExp;
 }
 
 export type { RouteRecord, RouteSegment, ParsedRoute } from "./types.js";
@@ -74,6 +76,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       middlewarePath: result.middlewarePath,
       reroutePath: result.reroutePath,
       apiRoutes: result.apiRoutes,
+      preloadFonts: options.preloadFonts,
     });
 
     if (logErrors && result.errors.length > 0) {

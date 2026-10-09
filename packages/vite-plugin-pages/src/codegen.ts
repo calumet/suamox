@@ -13,6 +13,7 @@ export interface GenerateRoutesOptions {
   middlewarePath?: string;
   reroutePath?: string;
   apiRoutes?: ApiRouteRecord[];
+  preloadFonts?: RegExp;
 }
 
 /**
@@ -29,6 +30,7 @@ export function generateRoutesModule(
     hasMiddleware = false,
     middlewarePath,
     reroutePath,
+    preloadFonts,
   } = options;
   const apiRoutes: ApiRouteRecord[] = options.apiRoutes ?? [];
   const defaultPrerender = defaultMode === "ssg";
@@ -196,6 +198,13 @@ export function generateRoutesModule(
           : "")
       : "";
 
+  // En el bundle del servidor porque es lo unico que comparten el adaptador y el SSG
+  const fontsExport =
+    target === "server" && preloadFonts
+      ? // Sin `g` ni `y`: con ellas `test()` guarda estado entre llamadas
+        `export const preloadFonts = ${new RegExp(preloadFonts.source, preloadFonts.flags.replace(/[gy]/g, ""))};\n`
+      : "";
+
   // API routes: solo en el modulo del servidor
   let apiRoutesCode = "";
   if (target === "server" && apiRoutes && apiRoutes.length > 0) {
@@ -231,7 +240,7 @@ ${routeObjects.join(",\n")}
 ];
 
 export const base = ${JSON.stringify(normalizedBase)};
-${rerouteExports}${runtimeReExports}${apiRoutesCode}
+${rerouteExports}${runtimeReExports}${apiRoutesCode}${fontsExport}
 export default routes;
 `;
 }

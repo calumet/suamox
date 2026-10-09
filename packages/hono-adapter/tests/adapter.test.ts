@@ -553,6 +553,53 @@ describe("createProdHandler", () => {
     expect(body).toContain("/assets/client.css");
   });
 
+  it("precarga solo las fuentes de la ruta que elige el filtro del entry", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-fonts-"));
+    const clientDir = join(root, "dist", "client");
+    const routeFilePath = join(root, "src", "pages", "index.tsx");
+    const layoutFilePath = join(root, "src", "pages", "root.tsx");
+
+    await mkdir(join(root, "dist", "server"), { recursive: true });
+    await mkdir(join(clientDir, ".vite"), { recursive: true });
+    await writeFile(
+      join(root, "dist", "server", "entry-server.mjs"),
+      `export const routes = [];\nexport const preloadFonts = /-latin-wght-/;`,
+    );
+    await writeFile(
+      join(clientDir, ".vite", "manifest.json"),
+      JSON.stringify({
+        "virtual:pages/client-entry": { file: "assets/client.js", isEntry: true },
+        "src/pages/root.tsx?__suamox-client-route": {
+          file: "assets/root.js",
+          css: ["assets/root.css"],
+          assets: [
+            "assets/geist-latin-wght-normal-AAAA.woff2",
+            "assets/geist-cyrillic-wght-normal-BBBB.woff2",
+            "assets/logo-latin-wght-CCCC.png",
+          ],
+        },
+      }),
+    );
+    mocks.matchRoute.mockReturnValue({
+      route: { filePath: routeFilePath, layoutFilePaths: [layoutFilePath] },
+      params: {},
+    });
+    mocks.renderPage.mockResolvedValue({ status: 200, html: "", head: "", initialData: null });
+    mocks.generateHTML.mockReturnValue("<html></html>");
+
+    const app = createProdHandler({
+      root,
+      clientDir,
+      serverEntry: join(root, "dist", "server", "entry-server.mjs"),
+      staticDir: join(root, "dist", "static"),
+    });
+    await app.request("http://localhost/");
+
+    expect(mocks.generateHTML).toHaveBeenCalledWith(
+      expect.objectContaining({ preloadFonts: ["/assets/geist-latin-wght-normal-AAAA.woff2"] }),
+    );
+  });
+
   // El HTML prerenderizado ya esta en disco: el middleware de la app no lo puede
   // cambiar, pero el hook del adaptador es infraestructura y aplica igual
   it("serves prerendered HTML after the adapter hook and without the app middleware", async () => {

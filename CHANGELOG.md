@@ -23,6 +23,10 @@
 
 - **La CLI carga el `.env` de la aplicación.** Ningún comando lo hacía y Vite solo expone en `import.meta.env` lo que lleva `VITE_`, así que lo que lee el servidor —la URL del backend, el host— no llegaba, y cada app tenía que escribir un cargador para `dev`/`preview` y otro envolviendo `suamox build`. Ahora la CLI lo carga en su propio `process.env` antes de despachar, con `loadEnv` de Vite y sin prefijo: lo heredan los procesos hijos y lo ve `runSsg`, que corre en el mismo proceso. Modo `development` en `dev` y `production` en `build`, `preview` y `ssg`. Lo que ya trae el entorno manda sobre el archivo, y el directorio sale del `envDir` de `vite.config.ts`, para un monorepo con el `.env` en la raíz. `vite` pasa a ser peer de la CLI; ya lo era en la práctica, porque la CLI lo ejecuta.
 
+- **Precarga de fuentes: `suamoxPages({ preloadFonts: /-latin-wght-/ })`.** Una fuente declarada en el CSS no se pide hasta que el navegador lee la hoja, y con `font-display: swap` eso es un salto de tipografía. Con la opción, el HTML de SSR y SSG lleva `<link rel="preload" as="font" crossorigin>` para las fuentes que el CSS de la ruta declara —sacadas de los `assets` del manifest— y que cumplen el filtro. No hay valor por defecto, igual que en SvelteKit, Next y Astro: `@fontsource` trae un archivo por subset y precargarlos todos es bajar cirílico, griego y vietnamita en cada visita; el portal de escuela declara 16. En desarrollo no se precarga, porque depende del manifest del build.
+
+  El filtro viaja en el bundle del servidor, que es lo único que comparten el adaptador y el SSG: la CLI llama a `runSsg()` sin opciones.
+
 ### Correcciones
 
 - **Ningún recurso de `/assets/` se cacheaba.** El adaptador solo marcaba inmutables los `index|client|jsx-runtime-*.js`, nombres que ningún build actual produce. CSS, JS y fuentes salían sin `Cache-Control` ni validadores, y el navegador los volvía a pedir en cada carga. Con las fuentes, eso era un salto de tipografía en cada visita y no solo en la primera. Ahora todo lo que se sirve de `/assets/` va con `public, max-age=31536000, immutable`: Vite pone hash a todo lo de `assetsDir`, así que el criterio es la carpeta.
@@ -33,9 +37,10 @@
 
 | Paquete                             | Version anterior | Nueva version |
 | ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox`                   | 0.11.0           | 0.11.1        |
 | `@calumet/suamox-cli`               | 0.3.0            | 0.4.0         |
 | `@calumet/suamox-create-app`        | 0.5.0            | 0.5.1         |
-| `@calumet/suamox-hono-adapter`      | 0.11.1           | 0.11.2        |
+| `@calumet/suamox-hono-adapter`      | 0.11.1           | 0.12.0        |
 | `@calumet/suamox-vite-plugin-pages` | 0.15.0           | 0.16.0        |
 
 ## 0.23.0 (2026-09-20)

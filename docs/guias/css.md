@@ -32,6 +32,19 @@ export function Button() {
 - `build` + SSR: el adaptador lee el manifest de Vite e inyecta `<link rel="stylesheet">` en el HTML.
 - `build:ssg`: el prerender también lee el manifest e inyecta CSS en cada página estática.
 
+## Precarga de fuentes
+
+Una fuente declarada en el CSS no se pide hasta que el navegador ha leído la hoja, y con `font-display: swap` eso se ve como un salto de tipografía. `preloadFonts` hace que el HTML las anuncie en el `<head>`:
+
+```ts
+// vite.config.ts
+suamoxPages({ preloadFonts: /-latin-wght-/ });
+```
+
+El filtro recibe el nombre del archivo construido, y se precarga cada fuente que lo cumpla entre las que declara el CSS de la ruta (la entrada, sus layouts y la página). Va en SSR y SSG; en desarrollo no, porque sale del manifest del build.
+
+No hay valor por defecto a propósito, igual que en SvelteKit, Next y Astro: un paquete como `@fontsource` trae un archivo por subset (latin, latin-ext, cyrillic, greek, vietnamese…) y el navegador baja solo los que necesita por `unicode-range`. Precargarlos todos baja todos. Elige los que usa la primera pantalla.
+
 ## Recomendaciones
 
 - Mantén los estilos globales en `src/styles/global.css`.
