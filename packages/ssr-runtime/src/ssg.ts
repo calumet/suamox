@@ -16,6 +16,7 @@ import { renderPage } from "./server";
 interface PrerenderAssets {
   scripts?: string[];
   preloadScripts?: string[];
+  preloadFonts?: string[];
   styles?: string[];
 }
 
@@ -127,6 +128,7 @@ function resolvePrerenderPath(route: RouteRecord, params: Record<string, string>
 type ManifestEntry = {
   file: string;
   css?: string[];
+  assets?: string[];
   imports?: string[];
   dynamicImports?: string[];
   isEntry?: boolean;
@@ -150,6 +152,30 @@ function toManifestKey(rootDir: string, filePath: string): string | null {
   // El build del cliente importa paginas y layouts con el query de stripping, asi que
   // el manifest las indexa con el query incluido.
   return `${relativePath}?${CLIENT_ROUTE_QUERY}`;
+}
+
+/** Las fuentes que el CSS de esas entradas declara y que el filtro de la app elige */
+function collectFontsFromManifest(
+  manifest: Manifest,
+  keys: string[],
+  filter: RegExp,
+  base: string,
+): string[] {
+  const fonts = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (key: string): void => {
+    if (visited.has(key)) return;
+    visited.add(key);
+    const entry = manifest[key];
+    for (const asset of entry?.assets ?? []) {
+      if (/\.(woff2?|ttf|otf)$/.test(asset) && filter.test(asset)) {
+        fonts.add(`${base}/${asset}`);
+      }
+    }
+    for (const importKey of entry?.imports ?? []) visit(importKey);
+  };
+  for (const key of keys) visit(key);
+  return Array.from(fonts);
 }
 
 function collectStylesFromManifest(manifest: Manifest, keys: string[], prefix = ""): string[] {
@@ -244,6 +270,7 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
       scripts: routeScripts,
       styles: routeStyles,
       preloadScripts: routePreloadScripts,
+      preloadFonts: resolvedAssets?.preloadFonts,
       prehydrateScripts: result.prehydrateScripts,
       csp: cspOption(options.csp),
     });
@@ -373,6 +400,7 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
     base?: string;
     routeReroute?: RerouteFn;
     routeVariants?: (pathname: string) => string[];
+    preloadFonts?: RegExp;
   };
 
   // Solo si el entry lo re-exporta: el `import()` de arriba ya ejecuto el registro
@@ -404,11 +432,7 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
     console.warn("[suamox] Vite manifest not found. Static HTML may miss CSS links.");
   }
 
-  const resolveRouteStyles = (route: RouteRecord): string[] => {
-    if (Object.keys(manifest).length === 0) {
-      return [];
-    }
-
+  const resolveRouteKeys = (route: RouteRecord): string[] => {
     const routeKey = route.filePath ? toManifestKey(rootDir, route.filePath) : null;
     // La entrada del cliente arrastra el CSS global. Se busca por `isEntry`
     // porque su clave depende de que modulo sea la entrada
@@ -423,10 +447,13 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
         keys.push(layoutKey);
       }
     }
-
-    const cssPrefix = resolvedBase === "/" ? "/client" : `${resolvedBase}/client`;
-    return collectStylesFromManifest(manifest, keys, cssPrefix);
+    return keys;
   };
+
+  const cssPrefix = resolvedBase === "/" ? "/client" : `${resolvedBase}/client`;
+  // Sin `/client`: la precarga tiene que ser la URL exacta que pide el CSS
+  const fontBase = resolvedBase === "/" ? "" : resolvedBase;
+  const { preloadFonts } = serverModule;
 
   await rm(resolvedOutDir, { recursive: true, force: true });
 
@@ -435,9 +462,15 @@ export async function runSsg(options: RunSsgOptions = {}): Promise<void> {
     outDir: resolvedOutDir,
     baseUrl,
     base: resolvedBase,
-    resolveAssets: ({ route }) => ({
-      styles: resolveRouteStyles(route),
-    }),
+    resolveAssets: ({ route }) => {
+      const keys = resolveRouteKeys(route);
+      return {
+        styles: collectStylesFromManifest(manifest, keys, cssPrefix),
+        preloadFonts: preloadFonts
+          ? collectFontsFromManifest(manifest, keys, preloadFonts, fontBase)
+          : [],
+      };
+    },
     csp: options.csp,
     variants: serverModule.routeVariants,
   });

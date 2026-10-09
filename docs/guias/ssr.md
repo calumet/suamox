@@ -28,7 +28,7 @@ En desarrollo:
 
 En producción, el adaptador:
 
-- Sirve assets de `dist/client`.
+- Sirve assets de `dist/client`. Todo lo de `/assets/` sale con `Cache-Control: public, max-age=31536000, immutable`, porque Vite le pone hash; no metas archivos sin hash en `public/assets/`.
 - Importa `dist/server/entry-server.js`.
 - Renderiza SSR con el runtime.
 - Inyecta scripts y CSS leyendo el manifest de Vite.

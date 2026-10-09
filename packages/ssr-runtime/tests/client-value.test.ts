@@ -250,3 +250,18 @@ describe("CSP", () => {
     expect(html.match(/<script nonce="abc123"/g)).toHaveLength(2);
   });
 });
+
+describe("precarga de fuentes", () => {
+  it("emite el preload con crossorigin y antes de las hojas", () => {
+    const html = generateHTML({
+      html: "<div>x</div>",
+      styles: ["/assets/root.css"],
+      preloadFonts: ["/assets/geist-latin.woff2"],
+    });
+
+    expect(html).toContain(
+      '<link rel="preload" as="font" href="/assets/geist-latin.woff2" crossorigin>',
+    );
+    expect(html.indexOf("geist-latin.woff2")).toBeLessThan(html.indexOf("root.css"));
+  });
+});

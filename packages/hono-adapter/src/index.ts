@@ -194,6 +194,8 @@ const resolveRequestOrigin = (request: Request, allowedHosts?: string[]): string
  * `importedModules` del grafo del entorno SSR y tomando las URLs `.css`, que
  * Vite sirve directamente como `<link>` en desarrollo.
  *
+ * Postorden: un `@import` va antes que quien lo importa.
+ *
  * Solo aplica a dev; en produccion el CSS lo emite el build del cliente.
  */
 const collectPageCssFromSsrGraph = (vite: ViteDevServer, filePath: string): string[] => {
@@ -211,10 +213,10 @@ const collectPageCssFromSsrGraph = (vite: ViteDevServer, filePath: string): stri
     }
     seen.add(mod);
     for (const dep of mod.importedModules) {
-      if (dep.url && /\.css($|\?)/.test(dep.url)) {
-        css.add(dep.url);
-      }
       walk(dep);
+    }
+    if (mod.url && /\.css($|\?)/.test(mod.url)) {
+      css.add(mod.url);
     }
   };
   for (const mod of mods) {
@@ -929,6 +931,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   type ManifestEntry = {
     file: string;
     css?: string[];
+    assets?: string[];
     imports?: string[];
     dynamicImports?: string[];
     isEntry?: boolean;
@@ -978,17 +981,11 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   // el mismo que el del bundle del servidor, y con un reroute resolverian distinto
   const collectManifestAssets = (
     route: RouteRecord | undefined,
-  ): { preloadScripts: string[]; styles: string[] } => {
+    fontFilter: RegExp | undefined,
+  ): { preloadScripts: string[]; preloadFonts: string[]; styles: string[] } => {
     const preloadScripts = new Set<string>();
+    const preloadFonts = new Set<string>();
     const styles = new Set<string>();
-
-    const manifestKeys = Object.keys(manifest);
-    if (manifestKeys.length === 0) {
-      return {
-        preloadScripts: Array.from(preloadScripts),
-        styles: Array.from(styles),
-      };
-    }
 
     const visited = new Set<string>();
     const visit = (key: string): void => {
@@ -1007,6 +1004,11 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       }
       for (const cssPath of entry.css ?? []) {
         styles.add(`/${cssPath}`);
+      }
+      for (const asset of entry.assets ?? []) {
+        if (fontFilter?.test(asset) && /\.(woff2?|ttf|otf)$/.test(asset)) {
+          preloadFonts.add(`/${asset}`);
+        }
       }
       for (const importKey of entry.imports ?? []) {
         visit(importKey);
@@ -1031,6 +1033,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 
     return {
       preloadScripts: Array.from(preloadScripts),
+      preloadFonts: Array.from(preloadFonts),
       styles: Array.from(styles),
     };
   };
@@ -1040,15 +1043,11 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     c: Context,
     next: () => Promise<void>,
   ) => Promise<Response | void>;
+  // Vite pone hash a todo lo que emite en `assetsDir`.
   app.use("/assets/*", async (c, next) => {
     const response = await assetHandler(c, next);
-    const headers = response?.headers;
-    if (
-      headers &&
-      typeof headers.set === "function" &&
-      /^\/assets\/(index|client|jsx-runtime)-[^/]+\.js$/.test(c.req.path)
-    ) {
-      headers.set("Cache-Control", "public, max-age=31536000, immutable");
+    if (response?.ok) {
+      response.headers.set("Cache-Control", "public, max-age=31536000, immutable");
     }
     return response;
   });
@@ -1122,6 +1121,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     matchRoute: typeof matchRoute;
     resolveRouteModule: typeof resolveRouteModule;
     onRequest?: MiddlewareFunction;
+    preloadFonts?: RegExp;
   };
 
   const loadServerEntry = async (): Promise<ServerEntryRuntime> => {
@@ -1140,6 +1140,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       resolveRouteModule:
         (mod.resolveRouteModule as typeof resolveRouteModule) ?? resolveRouteModule,
       onRequest: mod.onRequest as MiddlewareFunction | undefined,
+      preloadFonts: mod.preloadFonts as RegExp | undefined,
     };
   };
 
@@ -1380,7 +1381,10 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
           const nonce = options.csp ? createNonce() : undefined;
 
           // Generar HTML completo (sin hidratación para rutas prerender)
-          const { preloadScripts, styles } = collectManifestAssets(match?.route);
+          const { preloadScripts, preloadFonts, styles } = collectManifestAssets(
+            match?.route,
+            entry.preloadFonts,
+          );
           const prodInitialData = isPrerender
             ? undefined
             : result.layoutData
@@ -1392,6 +1396,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
             initialData: prodInitialData,
             scripts: isPrerender ? [] : [entryClientScript()],
             preloadScripts: isPrerender ? [] : preloadScripts,
+            preloadFonts,
             styles,
             scriptPlacement: "head",
             includeInitialDataScript: !isPrerender,

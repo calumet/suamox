@@ -5,7 +5,7 @@ import { basename, dirname, relative, resolve } from "node:path";
 import fg from "fast-glob";
 import { parseSync } from "vite";
 
-import { expandOptionalSegment, parseRoute, sortRoutes, validateRoutes } from "./parser.js";
+import { parseRoute, sortRoutes, validateRoutes } from "./parser.js";
 import type { ApiRouteRecord, LayoutMeta, RouteRecord } from "./types.js";
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
@@ -311,7 +311,6 @@ export interface ScanResult {
   routes: RouteRecord[];
   apiRoutes: ApiRouteRecord[];
   errors: string[];
-  warnings: string[];
   hasMiddleware: boolean;
   middlewarePath?: string;
   reroutePath?: string;
@@ -378,23 +377,15 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     : null;
 
   const errors: string[] = [];
-  const warnings: string[] = [];
 
   await checkMiddlewareExports(middlewareFiles, errors);
 
-  const parsedRoutes = await Promise.all(
-    pageFiles.map(async (file): Promise<RouteRecord[]> => {
-      const {
-        route,
-        errors: parseErrors,
-        warnings: parseWarnings,
-      } = parseRoute(file, absolutePagesDir);
+  const routes = await Promise.all(
+    pageFiles.map(async (file): Promise<RouteRecord> => {
+      const { route, errors: parseErrors } = parseRoute(file, absolutePagesDir);
 
       if (parseErrors.length > 0) {
         errors.push(...parseErrors.map((err) => `${file}: ${err}`));
-      }
-      if (parseWarnings.length > 0) {
-        warnings.push(...parseWarnings.map((warn) => `${file}: ${warn}`));
       }
 
       // Detectar loader / getStaticPaths / prerender / layout via AST (Oxc).
@@ -428,10 +419,9 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
         route.hasPrerender = fallbackHasPrerender(content);
       }
 
-      return expandOptionalSegment(route);
+      return route;
     }),
   );
-  const routes = parsedRoutes.flat();
 
   // Validar rutas
   const validationErrors = validateRoutes(routes);
@@ -464,16 +454,9 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     const apiFiles = allApiFiles.filter((file) => !isMiddlewareFile(file, extensions));
 
     for (const file of apiFiles) {
-      const {
-        route: parsedApiRoute,
-        errors: parseErrors,
-        warnings: parseWarnings,
-      } = parseRoute(file, apiDir);
+      const { route, errors: parseErrors } = parseRoute(file, apiDir);
       if (parseErrors.length > 0) {
         errors.push(...parseErrors.map((err) => `${file}: ${err}`));
-      }
-      if (parseWarnings.length > 0) {
-        warnings.push(...parseWarnings.map((warn) => `${file}: ${warn}`));
       }
 
       // Detectar metodos HTTP exportados
@@ -485,22 +468,17 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
             new RegExp(`\\bexport\\s+(async\\s+)?function\\s+${method}\\b`).test(content),
           );
 
-      for (const route of expandOptionalSegment(parsedApiRoute)) {
-        // Prefixar la ruta con /api
-        const apiPath = route.path === "/" ? "/api" : `/api${route.path}`;
-
-        apiRoutes.push({
-          path: apiPath,
-          filePath: route.filePath,
-          type: "api",
-          httpMethods,
-          params: route.params,
-          isCatchAll: route.isCatchAll,
-          isIndex: route.isIndex,
-          priority: route.priority,
-          middlewares: collectMiddlewareForFile(route.filePath, apiMiddlewareMap, apiDir),
-        });
-      }
+      apiRoutes.push({
+        path: route.path === "/" ? "/api" : `/api${route.path}`,
+        filePath: route.filePath,
+        type: "api",
+        httpMethods,
+        params: route.params,
+        isCatchAll: route.isCatchAll,
+        isIndex: route.isIndex,
+        priority: route.priority,
+        middlewares: collectMiddlewareForFile(route.filePath, apiMiddlewareMap, apiDir),
+      });
     }
   } catch {
     // src/api/ no existe, no hay API routes
@@ -556,7 +534,6 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
     routes: sortedRoutes,
     apiRoutes,
     errors,
-    warnings,
     hasMiddleware,
     middlewarePath,
     reroutePath,

@@ -667,3 +667,13 @@ describe("API routes codegen", () => {
     expect(code).not.toContain("_api");
   });
 });
+
+describe("preloadFonts", () => {
+  it("va solo en el modulo del servidor, y sin flags con estado", () => {
+    const server = generateRoutesModule([], { target: "server", preloadFonts: /latin/gi });
+    const client = generateRoutesModule([], { target: "client", preloadFonts: /latin/gi });
+
+    expect(server).toContain("export const preloadFonts = /latin/i;");
+    expect(client).not.toContain("preloadFonts");
+  });
+});

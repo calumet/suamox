@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { runSsg } from "@calumet/suamox/ssg";
+import { loadConfigFromFile, loadEnv } from "vite";
 
 const pnpmCmd = "pnpm";
 
@@ -61,9 +62,29 @@ const runTsx = async (args: string[], env?: NodeJS.ProcessEnv) => {
   await run(pnpmCmd, ["exec", "tsx", ...args], { env });
 };
 
+// En este proceso porque `runSsg` corre aqui; el entorno manda sobre el archivo.
+const loadAppEnv = async (command: "serve" | "build", mode: string): Promise<void> => {
+  const root = process.cwd();
+  const loaded = await loadConfigFromFile({ command, mode }, undefined, root, "silent");
+  const config = loaded?.config ?? {};
+  if (config.envDir === false) {
+    return;
+  }
+  const envDir = resolve(root, config.root ?? "", config.envDir ?? "");
+  for (const [key, value] of Object.entries(loadEnv(mode, envDir, ""))) {
+    process.env[key] ??= value;
+  }
+};
+
 const main = async () => {
   const args = process.argv.slice(2);
   const command = args[0] ?? "help";
+
+  if (command === "dev") {
+    await loadAppEnv("serve", "development");
+  } else if (command === "build" || command === "preview" || command === "ssg") {
+    await loadAppEnv(command === "build" ? "build" : "serve", "production");
+  }
 
   switch (command) {
     case "version": {

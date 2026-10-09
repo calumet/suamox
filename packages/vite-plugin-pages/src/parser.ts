@@ -10,7 +10,6 @@ import type { RouteRecord, RouteSegment, ParsedRoute } from "./types.js";
  */
 export function parseRoute(filePath: string, pagesDir: string): ParsedRoute {
   const errors: string[] = [];
-  const warnings: string[] = [];
   const relativePath = relative(pagesDir, filePath);
 
   // Quitar extensión
@@ -40,25 +39,12 @@ export function parseRoute(filePath: string, pagesDir: string): ParsedRoute {
       continue;
     }
 
-    // Manejar segmento opcional [[param]]
+    // Sin esto caeria en `[param]` con nombre `[lang]`
     if (part.startsWith("[[") && part.endsWith("]]")) {
-      const paramName = part.slice(2, -2);
-      if (!paramName) {
-        errors.push(`Invalid optional segment: ${part}`);
-        continue;
-      }
-      if (paramName.startsWith("...")) {
-        errors.push(`Optional catch-all segment is not supported: ${part}`);
-        continue;
-      }
-
-      segments.push({
-        type: "optional",
-        value: `:${paramName}`,
-        paramName,
-      });
-      params.push(paramName);
-      pathParts.push(`:${paramName}`);
+      errors.push(
+        `Optional segments were removed in 0.16.0: ${part}. ` +
+          "Use src/reroute.ts instead: https://github.com/calumet/suamox/blob/main/docs/guias/reroute.md",
+      );
       continue;
     }
 
@@ -112,25 +98,6 @@ export function parseRoute(filePath: string, pagesDir: string): ParsedRoute {
     pathParts.push(part);
   }
 
-  const optionalIndex = segments.findIndex((segment) => segment.type === "optional");
-  if (optionalIndex !== -1) {
-    warnings.push(
-      "Optional segments are deprecated and will be removed in a future release. " +
-        "Use src/reroute.ts instead: https://github.com/calumet/suamox/blob/main/docs/guias/reroute.md",
-    );
-
-    if (segments.some((segment, i) => segment.type === "optional" && i !== optionalIndex)) {
-      errors.push("Only one optional segment is allowed per route");
-    }
-
-    // Si lo que sigue no es estatico, las dos rutas casan la misma URL y no hay
-    // forma de saber si el primer segmento es el parametro o el siguiente
-    const next = segments[optionalIndex + 1];
-    if (next && next.type !== "static") {
-      errors.push("An optional segment must be followed by a static segment");
-    }
-  }
-
   // Construir path final
   const path = "/" + pathParts.join("/");
 
@@ -149,7 +116,7 @@ export function parseRoute(filePath: string, pagesDir: string): ParsedRoute {
     priority,
   };
 
-  return { route, errors, warnings };
+  return { route, errors };
 }
 
 /**
@@ -169,7 +136,7 @@ function calculatePriority(segments: RouteSegment[], isIndex: boolean): number {
   for (const segment of segments) {
     if (segment.type === "static") {
       priority += 10;
-    } else if (segment.type === "param" || segment.type === "optional") {
+    } else if (segment.type === "param") {
       priority += 5;
     } else if (segment.type === "catchAll") {
       hasCatchAll = true;
@@ -196,29 +163,6 @@ function calculatePriority(segments: RouteSegment[], isIndex: boolean): number {
   }
 
   return priority;
-}
-
-/**
- * Expande un segmento opcional en sus dos rutas: sin el parámetro y con él
- */
-export function expandOptionalSegment(route: RouteRecord): RouteRecord[] {
-  const index = route.segments.findIndex((segment) => segment.type === "optional");
-  if (index === -1) {
-    return [route];
-  }
-
-  const paramName = route.segments[index]!.paramName;
-  const segments = route.segments.filter((_, i) => i !== index);
-
-  const withoutParam: RouteRecord = {
-    ...route,
-    path: "/" + segments.map((segment) => segment.value).join("/"),
-    params: route.params.filter((param) => param !== paramName),
-    segments,
-    priority: calculatePriority(segments, route.isIndex),
-  };
-
-  return [withoutParam, route];
 }
 
 /**

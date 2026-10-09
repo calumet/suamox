@@ -31,38 +31,7 @@ La regla 3 existe porque sin ella las dos puntúan igual y desempataba el orden 
 
 Lo que sí queda empatado son dos patrones con la **misma forma** —`/blog/:slug` y `/blog/:id`—, que casan exactamente las mismas URLs. Ahí cuál gane es arbitrario se ordene como se ordene; el orden es estable entre builds, pero si te encuentras en ese caso, el arreglo es no tener las dos rutas.
 
-## Segmento opcional (deprecado)
-
-> **Deprecado.** `[[lang]]/about.tsx` sigue funcionando y avisa al arrancar. Se quita en una versión próxima. Usa [reroute](./reroute.md).
-
-Un segmento entre dobles corchetes compilaba a dos rutas, una sin el parámetro y otra con él, para tener un idioma por defecto sin prefijo. **No sirve para eso en cuanto la app tiene páginas con parámetro**: `[[lang]]/[slug].tsx` genera `/:lang` y `/:slug`, que casan las mismas URLs, y nada en el patrón permite saber si `/mision-y-vision` es el idioma o el slug.
-
-Con reroute el idioma no entra a la tabla de rutas, así que la ambigüedad no llega a existir:
-
-```txt
-src/
-  reroute.ts
-  pages/
-    ingresar.tsx      ->  /ingresar  y  /en/ingresar
-    [slug].tsx        ->  /:slug     y  /en/:slug
-```
-
-### Migración
-
-Mueve la página fuera de la carpeta opcional y lee el prefijo de `url`, que llega intacta al loader:
-
-```diff
-- // src/pages/[[lang]]/ingresar.tsx
-- export function loader({ params }: LoaderContext) {
--   return { idioma: params.lang ?? "es" };
-- }
-+ // src/pages/ingresar.tsx
-+ export function loader({ url }: LoaderContext) {
-+   return { idioma: idiomaDe(url) };
-+ }
-```
-
-Y declara el prefijo una vez en `src/reroute.ts`. Ver [reroute](./reroute.md).
+No hay segmento opcional: `[[lang]]` se quitó en 0.16.0 y da error. Para un prefijo de idioma usa [reroute](./reroute.md).
 
 ## El root de la app
 
