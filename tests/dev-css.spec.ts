@@ -25,9 +25,6 @@ test.describe("CSS en desarrollo", () => {
     );
   });
 
-  // El recorrido en preorden sacaba primero a quien importa y despues lo
-  // importado, al reves de la cascada: con Tailwind, la escala por defecto
-  // pisaba la del design system hasta que hidrataba
   test("una hoja importada con @import va antes que la que la importa", async ({ page }) => {
     const html = await (await page.goto("/counter"))!.text();
     const hrefs = [...html.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)].map((m) => m[1]!);

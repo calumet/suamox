@@ -194,8 +194,7 @@ const resolveRequestOrigin = (request: Request, allowedHosts?: string[]): string
  * `importedModules` del grafo del entorno SSR y tomando las URLs `.css`, que
  * Vite sirve directamente como `<link>` en desarrollo.
  *
- * Postorden: un `@import` va antes que las reglas de quien lo importa, y en CSS
- * el orden decide la cascada.
+ * Postorden: un `@import` va antes que quien lo importa.
  *
  * Solo aplica a dev; en produccion el CSS lo emite el build del cliente.
  */
@@ -1043,8 +1042,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     c: Context,
     next: () => Promise<void>,
   ) => Promise<Response | void>;
-  // Vite pone hash a todo lo que emite en `assetsDir`, asi que el criterio es la
-  // carpeta. ponytail: un `public/assets/` sin hash tambien queda inmutable.
+  // Vite pone hash a todo lo que emite en `assetsDir`.
   app.use("/assets/*", async (c, next) => {
     const response = await assetHandler(c, next);
     if (response?.ok) {

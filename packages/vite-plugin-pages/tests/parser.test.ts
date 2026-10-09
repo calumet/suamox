@@ -112,7 +112,6 @@ describe("parseRoute", () => {
     expect(errors).toEqual([]);
   });
 
-  // Se quito en 0.16.0. Sin el error caeria en `[param]` con nombre `[lang]`
   for (const parts of [["[[lang]]", "ingresar.tsx"], ["[[...resto]].tsx"], ["[[]]", "x.tsx"]]) {
     it(`el segmento opcional da error y apunta a reroute: ${parts.join("/")}`, () => {
       const { route, errors } = parseRoute(join(pagesDir, ...parts), pagesDir);

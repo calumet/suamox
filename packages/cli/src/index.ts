@@ -62,9 +62,7 @@ const runTsx = async (args: string[], env?: NodeJS.ProcessEnv) => {
   await run(pnpmCmd, ["exec", "tsx", ...args], { env });
 };
 
-// En el `process.env` de la CLI y no en el de cada hijo: `runSsg` corre en este
-// mismo proceso. Lo que ya trae el entorno manda, para que un `.env` olvidado no
-// pise las variables de un despliegue.
+// En este proceso porque `runSsg` corre aqui; el entorno manda sobre el archivo.
 const loadAppEnv = async (command: "serve" | "build", mode: string): Promise<void> => {
   const root = process.cwd();
   const loaded = await loadConfigFromFile({ command, mode }, undefined, root, "silent");

@@ -36,8 +36,6 @@ test.describe("el manifest no sale por HTTP", () => {
     expect((await request.get(script!)).status()).toBe(200);
   });
 
-  // Antes solo casaba `index|client|jsx-runtime-*.js`, y ningun build actual
-  // produce esos nombres: CSS, JS y fuentes salian sin `Cache-Control`.
   test("todo lo de /assets/ sale inmutable, no solo ciertos nombres", async ({ page, request }) => {
     const html = await (await page.goto("/counter"))!.text();
     const hrefs = [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((m) => m[1]!);
