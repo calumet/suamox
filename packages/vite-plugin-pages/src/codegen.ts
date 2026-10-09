@@ -12,6 +12,7 @@ export interface GenerateRoutesOptions {
   hasMiddleware?: boolean;
   middlewarePath?: string;
   reroutePath?: string;
+  rerouteHasVariants?: boolean;
   apiRoutes?: ApiRouteRecord[];
   preloadFonts?: RegExp;
 }
@@ -30,6 +31,7 @@ export function generateRoutesModule(
     hasMiddleware = false,
     middlewarePath,
     reroutePath,
+    rerouteHasVariants = false,
     preloadFonts,
   } = options;
   const apiRoutes: ApiRouteRecord[] = options.apiRoutes ?? [];
@@ -183,7 +185,7 @@ export function generateRoutesModule(
   const rerouteExports =
     target === "server" && reroutePath
       ? `export const routeReroute = __reroute.reroute;\n` +
-        `export const routeVariants = __reroute.variants;\n`
+        (rerouteHasVariants ? `export const routeVariants = __reroute.variants;\n` : "")
       : "";
 
   // En el módulo servidor, re-exportar funciones del runtime para que

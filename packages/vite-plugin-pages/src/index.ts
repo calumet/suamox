@@ -75,6 +75,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       hasMiddleware: result.hasMiddleware,
       middlewarePath: result.middlewarePath,
       reroutePath: result.reroutePath,
+      rerouteHasVariants: result.rerouteHasVariants,
       apiRoutes: result.apiRoutes,
       preloadFonts: options.preloadFonts,
     });

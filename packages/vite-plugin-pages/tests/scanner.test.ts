@@ -682,3 +682,21 @@ export function DELETE() { return new Response('remove'); }`,
     expect(result.apiRoutes).toEqual([]);
   });
 });
+
+describe("scanRoutes reroute", () => {
+  for (const [source, expected] of [
+    ["export function reroute() {}", false],
+    ["export function reroute() {}\nexport const variants = () => [];", true],
+    ["const v = () => [];\nexport function reroute() {}\nexport { v as variants };", true],
+  ] as const) {
+    it(`detecta si reroute.ts exporta variants: ${expected}`, async () => {
+      const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+      await writeFileWithDirs(join(root, "src", "pages", "index.tsx"), "export default 1;");
+      await writeFileWithDirs(join(root, "src", "reroute.ts"), source);
+
+      const result = await scanRoutes({ pagesDir: "src/pages", extensions: [".ts", ".tsx"], root });
+
+      expect(result.rerouteHasVariants).toBe(expected);
+    });
+  }
+});
