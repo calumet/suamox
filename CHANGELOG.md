@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.24.1 (2026-10-09)
+
+### Correcciones
+
+- **El build avisaba de `variants` en toda app con `src/reroute.ts` sin ese export.** `variants` es opcional —solo lo usa el SSG para escribir las variantes de lo que prerenderiza—, pero el módulo virtual del servidor lo leía siempre, y rolldown respondía con `IMPORT_IS_UNDEFINED` en cada `suamox build`. Un aviso que sale siempre se acaba ignorando, también el día que señala un export que sí falta. Ahora el plugin mira los exports de `reroute.ts` con el mismo parser de las páginas y solo reexporta `variants` si existe. `reroute` se sigue leyendo siempre: si falta, el aviso es legítimo.
+
+### Packages
+
+| Paquete                             | Version anterior | Nueva version |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox-create-app`        | 0.5.1            | 0.5.2         |
+| `@calumet/suamox-vite-plugin-pages` | 0.16.0           | 0.16.1        |
+
 ## 0.24.0 (2026-10-08)
 
 ### Breaking Changes
