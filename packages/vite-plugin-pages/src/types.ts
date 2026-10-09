@@ -27,7 +27,7 @@ export interface RouteRecord {
 }
 
 export interface RouteSegment {
-  type: "static" | "param" | "catchAll" | "optional";
+  type: "static" | "param" | "catchAll";
   value: string;
   paramName?: string;
 }
@@ -35,7 +35,6 @@ export interface RouteSegment {
 export interface ParsedRoute {
   route: RouteRecord;
   errors: string[];
-  warnings: string[];
 }
 
 export interface StaticPathEntry {
