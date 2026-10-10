@@ -1,4 +1,4 @@
-import type { LoaderContext } from "@calumet/suamox";
+import type { LoaderContext, PageProps } from "@calumet/suamox";
 
 import { contarVisita } from "../lib/registro";
 import { getServerOnlyData } from "../lib/secrets.server";
@@ -16,12 +16,9 @@ export function loader(_ctx: LoaderContext) {
 }
 
 // MARKER_LOADER_FUNCTION_BODY is a string inside the loader that should NOT appear
-// in the client bundle, since the transform hook strips loaders from page files.
-export default function SecretTestPage({
-  data,
-}: {
-  data: { message: string; visitas: number } | null;
-}) {
+// in the client bundle, since the plugin strips loaders from page files.
+// `typeof loader` en las props: nombrarlo en un tipo no debe conservarlo en el cliente
+export default function SecretTestPage({ data }: PageProps<typeof loader>) {
   return (
     <div>
       <h1 data-testid="secret-heading">Secret Test</h1>

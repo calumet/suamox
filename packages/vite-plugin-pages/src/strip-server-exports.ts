@@ -288,7 +288,27 @@ function exportedName(specifier: ESTree.ExportSpecifier): string {
   return exported.type === "Identifier" ? exported.name : String(exported.value);
 }
 
-const SKIPPED_KEYS = new Set(["type", "start", "end", "range", "loc"]);
+/**
+ * Las posiciones de tipo no son lecturas: el stripping corre sobre el fuente TS, y con ellas
+ * `PageProps<typeof loader>` dejaba vivo el `loader` y lo que importa
+ */
+const TYPE_KEYS = [
+  "typeAnnotation",
+  "returnType",
+  "typeParameters",
+  "typeArguments",
+  "superTypeArguments",
+  "implements",
+];
+
+const SKIPPED_KEYS = new Set(["type", "start", "end", "range", "loc", ...TYPE_KEYS]);
+
+/** Declaraciones que solo existen para el compilador */
+const TYPE_ONLY_NODES = new Set([
+  "TSTypeAliasDeclaration",
+  "TSInterfaceDeclaration",
+  "TSDeclareFunction",
+]);
 
 function isNode(value: unknown): value is AstNode {
   return (
@@ -312,7 +332,7 @@ function collectRefs(node: unknown, out: Set<string>): void {
     for (const item of node) collectRefs(item, out);
     return;
   }
-  if (!isNode(node)) return;
+  if (!isNode(node) || TYPE_ONLY_NODES.has(node.type)) return;
 
   switch (node.type) {
     case "Identifier":

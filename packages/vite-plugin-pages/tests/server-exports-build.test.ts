@@ -25,11 +25,15 @@ describe("build del cliente con mapas de fuente", () => {
       [
         `import { leer } from "../datos.server";`,
         `interface Datos { texto: string }`,
+        `declare function useLoaderData<T>(): T;`,
         `export function loader(): Datos {`,
         `  return { texto: leer() + "${SECRETO_LOADER}" };`,
         `}`,
-        `export default function Page({ data }: { data: Datos }) {`,
-        `  return <p>{data.texto}</p>;`,
+        // Como `PageProps<typeof loader>`: nombrar el loader en un tipo no lo usa en runtime
+        `type Props = { data: ReturnType<typeof loader> };`,
+        `export default function Page({ data }: Props) {`,
+        `  const otra = useLoaderData<typeof loader>();`,
+        `  return <p>{data.texto}{otra.texto}</p>;`,
         `}`,
       ].join("\n"),
     );

@@ -12,6 +12,16 @@ function strip(source: string): string | null {
   return result.code;
 }
 
+/** Como lo recibe el plugin en `load`: el fuente TS, que conserva sus tipos tras el stripping */
+function stripTs(source: string): string | null {
+  const parsed = parseSync("/pages/page.tsx", source);
+  expect(parsed.errors).toEqual([]);
+  const result = stripServerExports(source, parsed.program, "/pages/page.tsx");
+  if (!result) return null;
+  expect(parseSync("/pages/page.tsx", result.code).errors).toEqual([]);
+  return result.code;
+}
+
 function exportNames(code: string): string[] {
   const names: string[] = [];
   for (const statement of parseSync("/out.js", code).module.staticExports) {
@@ -43,6 +53,39 @@ export default function Page() { return Head; }
     expect(code).not.toContain("./db");
     expect(code).toContain("@calumet/suamox-head");
     expect(exportNames(code!)).toEqual(["default"]);
+  });
+
+  it("nombrar el loader en un tipo no lo conserva ni a sus imports", () => {
+    for (const uso of [
+      `export default function Page({ data }: PageProps<typeof loader>) { return data; }`,
+      `export default function Page() { return useLoaderData<typeof loader>(); }`,
+      `type Datos = Awaited<ReturnType<typeof loader>>;\nexport default function Page(p: { d: Datos }) { return p; }`,
+      `interface Props { data: ReturnType<typeof loader> }\nexport default function Page(p: Props) { return p; }`,
+      `export default function Page(): ReturnType<typeof loader> | null { return null; }`,
+      `export default function Page() { return (null as unknown as ReturnType<typeof loader>); }`,
+    ]) {
+      const code = stripTs(`
+import { sesionActual } from "@coma/auth/lecturas";
+import { useLoaderData, type PageProps } from "@calumet/suamox";
+export async function loader() { return sesionActual(); }
+${uso}
+`);
+
+      expect(code, uso).not.toContain("@coma/auth/lecturas");
+      expect(code, uso).not.toContain("export async function loader");
+    }
+  });
+
+  it("lo que corre en runtime dentro de una expresión TS sigue contando", () => {
+    const code = stripTs(`
+import { db } from "./db";
+import { formato } from "./formato";
+export function loader() { return db.all(); }
+export default function Page() { return (formato as (x: string) => string)("a"); }
+`);
+
+    expect(code).not.toContain("./db");
+    expect(code).toContain("./formato");
   });
 
   it("removes imports of side-effectful modules, which tree shaking cannot", () => {
