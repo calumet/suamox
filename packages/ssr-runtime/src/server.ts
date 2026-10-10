@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import {
   HeadProvider,
   createHeadManager,
@@ -143,4 +145,31 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
       html: "<h1>500 - Internal Server Error</h1>",
     };
   }
+}
+
+/** Lo que una acción de `*.actions.ts` puede leer de la petición que la invocó. */
+export interface ActionContext {
+  request: Request;
+  url: URL;
+  locals: Record<string, unknown>;
+}
+
+// En `globalThis` porque en dev el adaptador y la acción pueden cargar copias distintas de
+// este módulo, y cada copia tendría su propio almacén
+const actionStorageKey = Symbol.for("suamox.actionContext");
+const actionStorage = ((globalThis as Record<symbol, unknown>)[actionStorageKey] ??=
+  new AsyncLocalStorage<ActionContext>()) as AsyncLocalStorage<ActionContext>;
+
+/** Contexto de la acción en curso. Lanza si se llama fuera de una. */
+export function getActionContext(): ActionContext {
+  const context = actionStorage.getStore();
+  if (!context) {
+    throw new Error("[suamox] getActionContext() can only be called inside an action");
+  }
+  return context;
+}
+
+/** Uso interno del adaptador: corre `fn` con el contexto de la acción. */
+export function runWithActionContext<T>(context: ActionContext, fn: () => T): T {
+  return actionStorage.run(context, fn);
 }

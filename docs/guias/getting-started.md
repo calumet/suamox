@@ -105,6 +105,7 @@ pnpm run preview
 - [router.md](./router.md): navegación cliente y API de `startRouter`.
 - [head.md](./head.md): manejo de metadatos con `<Head>`.
 - [data-loading.md](./data-loading.md): `loader`, `getStaticPaths`, `prerender`, `csr`.
+- [actions.md](./actions.md): escrituras que corren en el servidor, con `*.actions.ts`.
 - [ssr.md](./ssr.md): ciclo SSR en dev y producción.
 - [ssg.md](./ssg.md): prerender y salida estática.
 - [../operaciones/github-packages-checklist.md](../operaciones/github-packages-checklist.md): publicación y versionado en GitHub Packages.

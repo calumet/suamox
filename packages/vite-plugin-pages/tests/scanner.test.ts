@@ -15,6 +15,29 @@ const normalizePath = (value: string): string => value.replace(/\\/g, "/");
 
 const normalizeList = (values: string[] | undefined): string[] => (values ?? []).map(normalizePath);
 
+describe("scanRoutes archivos de acciones", () => {
+  it("no toma un *.actions.ts como página ni como ruta de API", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));
+    await writeFileWithDirs(
+      join(root, "src", "pages", "index.tsx"),
+      "export default function Page() { return null; }",
+    );
+    await writeFileWithDirs(
+      join(root, "src", "pages", "notas.actions.ts"),
+      "export async function guardar() {}",
+    );
+    await writeFileWithDirs(
+      join(root, "src", "api", "notas.actions.ts"),
+      "export async function POST() { return new Response(); }",
+    );
+
+    const result = await scanRoutes({ pagesDir: "src/pages", extensions: [".tsx", ".ts"], root });
+
+    expect(result.routes.map((route) => route.path)).toEqual(["/"]);
+    expect(result.apiRoutes).toEqual([]);
+  });
+});
+
 describe("scanRoutes layouts", () => {
   it("collects layouts from root to leaf and skips layout files as routes", async () => {
     const root = await mkdtemp(join(tmpdir(), "suamox-pages-"));

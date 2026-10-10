@@ -18,6 +18,7 @@ docs/
     reroute.md
     head.md
     data-loading.md
+    actions.md
     ssr.md
     ssg.md
   operaciones/
@@ -33,9 +34,10 @@ docs/
 5. [Reroute](./guias/reroute.md)
 6. [Head](./guias/head.md)
 7. [Data loading](./guias/data-loading.md)
-8. [SSR](./guias/ssr.md)
-9. [SSG](./guias/ssg.md)
-10. [Publicación en GitHub Packages](./operaciones/github-packages-checklist.md)
+8. [Acciones](./guias/actions.md)
+9. [SSR](./guias/ssr.md)
+10. [SSG](./guias/ssg.md)
+11. [Publicación en GitHub Packages](./operaciones/github-packages-checklist.md)
 
 ## Mantenimiento
 
