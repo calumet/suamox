@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.25.1 (2026-10-09)
+
+### Correcciones
+
+- **Lo que una página importa solo para su `loader` volvía al bundle del navegador.** Desde 0.17.0 el plugin quita los exports de servidor sobre el fuente TS, en `load`, para que no lleguen a los mapas de fuente. Pero al buscar quién usa cada declaración también contaba las posiciones de tipo, así que una página con `PageProps<typeof loader>` o `useLoaderData<typeof loader>()` dejaba vivo el `loader` y, con él, todo lo que importaba. En una app con módulos que leen `process.env` al importarse, eso era configuración del servidor en el cliente y un error en la consola de cada página. Ahora las anotaciones, los argumentos de tipo, `implements` y las declaraciones de tipos e interfaces no cuentan como uso. La página de prueba de stripping del ejemplo usa `PageProps<typeof loader>`, así que el e2e cubre el caso.
+
+### Packages
+
+| Paquete                             | Version anterior | Nueva version |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox-create-app`        | 0.5.3            | 0.5.4         |
+| `@calumet/suamox-vite-plugin-pages` | 0.17.0           | 0.17.1        |
+
 ## 0.25.0 (2026-10-09)
 
 ### Breaking Changes

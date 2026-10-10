@@ -15,7 +15,7 @@
     "@calumet/suamox-head": "^0.2.0",
     "@calumet/suamox-hono-adapter": "^0.13.0",
     "@calumet/suamox-router": "^0.13.0",
-    "@calumet/suamox-vite-plugin-pages": "^0.17.0",
+    "@calumet/suamox-vite-plugin-pages": "^0.17.1",
     "@hono/node-server": "^2.1.1",
     "hono": "^4.13.8",
     "react": "^19.3.0",
