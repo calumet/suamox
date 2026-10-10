@@ -21,7 +21,7 @@ import {
   serializeData,
   stripBase,
 } from "@calumet/suamox";
-import { renderPage } from "@calumet/suamox/server";
+import { renderPage, runWithActionContext } from "@calumet/suamox/server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import type { Context } from "hono";
 import { Hono } from "hono";
@@ -190,6 +190,18 @@ const resolveRequestOrigin = (request: Request, allowedHosts?: string[]): string
 };
 
 /**
+ * La petición con la URL validada. Conserva método y cuerpo: sin ellos un `POST` llegaba al
+ * middleware de producción como un `GET` vacío, mientras en dev llegaba completo.
+ */
+const toSafeRequest = (request: Request, safeUrl: URL): Request =>
+  new Request(safeUrl, {
+    method: request.method,
+    headers: request.headers,
+    body: methodSupportsRequestBody(request.method) ? request.body : undefined,
+    duplex: "half",
+  } as RequestInit & { duplex: "half" });
+
+/**
  * Recolecta el CSS que importa un archivo ya renderizado, recorriendo
  * `importedModules` del grafo del entorno SSR y tomando las URLs `.css`, que
  * Vite sirve directamente como `<link>` en desarrollo.
@@ -240,6 +252,9 @@ const collectPageCssFromSsrGraph = (vite: ViteDevServer, filePath: string): stri
  *
  * Calling `next()` executes the full pipeline (loaders + render) and returns
  * the real `Response`. Not calling `next()` short-circuits the pipeline.
+ *
+ * On `/__actions/:id`, `context.action` names the action being called (`file` relative to
+ * the project root, `name` of the export), so a guard can authorize per action.
  */
 type MiddlewareFunction = (
   context: {
@@ -248,6 +263,7 @@ type MiddlewareFunction = (
     pathname: string;
     params: Record<string, string>;
     locals: Record<string, unknown>;
+    action?: ActionTarget;
   },
   next: () => Promise<Response>,
 ) => Response | Promise<Response>;
@@ -304,6 +320,7 @@ const runMiddleware = async (
   pathname: string,
   params: Record<string, string>,
   pipeline: (locals: Record<string, unknown>) => Promise<Response>,
+  action?: ActionTarget,
 ): Promise<Response> => {
   // `undefined` es "no hay middleware global", legitimo. Cualquier otra cosa que no
   // sea funcion es un `middleware.ts` mal escrito, y descartarla dejaria la ruta sin
@@ -326,7 +343,7 @@ const runMiddleware = async (
   }
 
   const locals: Record<string, unknown> = {};
-  const context = { request, url, pathname, params, locals };
+  const context = { request, url, pathname, params, locals, ...(action ? { action } : {}) };
 
   let reached = -1;
   let calledNextTwice = false;
@@ -380,6 +397,180 @@ const runMiddleware = async (
 const isInvalidDataRequest = (c: Context): boolean => {
   const fetchSite = c.req.header("sec-fetch-site");
   return !!fetchSite && fetchSite !== "same-origin" && fetchSite !== "none";
+};
+
+type ActionFunction = (...args: unknown[]) => unknown;
+
+/** La acción que se llama: `file` relativo a la raíz del proyecto y el nombre del export */
+interface ActionTarget {
+  file: string;
+  name: string;
+}
+
+/** Lo que se sabe de una acción sin cargar su módulo */
+interface ResolvedAction extends ActionTarget {
+  load: () => Promise<unknown>;
+}
+
+/** Espejos de los de `@calumet/suamox-router`. Solo los pone el adaptador */
+const ACTION_DATA_HEADER = "x-suamox-action";
+const ACTION_REDIRECT_HEADER = "x-suamox-redirect";
+const ACTION_REDIRECT_STATUS_HEADER = "x-suamox-redirect-status";
+
+/** Una `x-suamox-*` que traiga el `Response` de un backend se haría pasar por las del adaptador */
+const withoutFrameworkHeaders = (response: Response): Response => {
+  const headers = new Headers(response.headers);
+  const own = [...headers.keys()].filter((key) => key.startsWith("x-suamox-"));
+  if (own.length === 0) {
+    return response;
+  }
+  for (const key of own) {
+    headers.delete(key);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+};
+
+const ACTION_ID_PATTERN = /^[0-9a-f]{16}$/;
+
+/**
+ * Para lo que escribe, no basta con lo de `/__data`: sin `Sec-Fetch-Site` se exige un
+ * `Origin` del mismo host, y sin ninguno de los dos se rechaza.
+ */
+const isSameOriginRequest = (c: Context): boolean => {
+  const fetchSite = c.req.header("sec-fetch-site");
+  if (fetchSite) {
+    return fetchSite === "same-origin";
+  }
+  const origin = c.req.header("origin");
+  if (!origin) {
+    return false;
+  }
+  try {
+    return new URL(origin).host === new URL(c.req.url).host;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Una página recibe el cuerpo de un `POST`, y un formulario de otro sitio es una petición
+ * simple: sin preflight y con la cookie. Lo que escribe a una página viene de ella misma;
+ * un callback externo va a una ruta de API
+ */
+const isBlockedPageWrite = (c: Context): boolean =>
+  methodSupportsRequestBody(c.req.method) && !isSameOriginRequest(c);
+
+/** Un único `FormData`, o la lista de argumentos en JSON. Cualquier otra cosa es `null` */
+const readActionArgs = async (c: Context): Promise<unknown[] | null> => {
+  const contentType = c.req.header("content-type") ?? "";
+  try {
+    if (contentType.startsWith("multipart/form-data")) {
+      return [await c.req.formData()];
+    }
+    if (contentType.startsWith("application/json")) {
+      const args: unknown = await c.req.json();
+      return Array.isArray(args) ? args : null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+};
+
+/**
+ * `POST /__actions/:id`, igual en dev y en prod. Corre el middleware global, no el de una
+ * ruta: la acción no pertenece a ninguna. El guardia sabe cuál se llama por `context.action`.
+ */
+const handleAction = async (
+  c: Context,
+  resolveAction: (id: string) => Promise<ResolvedAction | undefined>,
+  loadMiddleware: () => Promise<MiddlewareFunction | undefined>,
+  allowedHosts: string[] | undefined,
+): Promise<Response> => {
+  if (!isSameOriginRequest(c)) {
+    return c.json({ error: "Cross-origin request blocked" }, 403);
+  }
+
+  // `fetch` seguiría la redirección en silencio: un guardia que manda a `/login` haría
+  // creer que la escritura salió bien. En cabeceras, que el cuerpo de una acción no puede poner
+  const asRedirect = (location: string, status: number): Response =>
+    new Response(null, {
+      status: 204,
+      headers: {
+        [ACTION_REDIRECT_HEADER]: location,
+        [ACTION_REDIRECT_STATUS_HEADER]: String(status),
+      },
+    });
+
+  try {
+    const id = c.req.param("id") ?? "";
+    const target = ACTION_ID_PATTERN.test(id) ? await resolveAction(id) : undefined;
+    if (!target) {
+      return c.json({ error: "Action not found" }, 404);
+    }
+
+    const rawUrl = new URL(c.req.url);
+    const url = new URL(
+      `${resolveRequestOrigin(c.req.raw, allowedHosts)}${rawUrl.pathname}${rawUrl.search}`,
+    );
+    // Sin cuerpo: lo lee el adaptador para sacar los argumentos, así que las cabeceras que
+    // lo describen ya no dirían la verdad si la petición se reenvía
+    const headers = new Headers(c.req.raw.headers);
+    for (const name of ["content-length", "content-type", "transfer-encoding"]) {
+      headers.delete(name);
+    }
+    const request = new Request(url, { method: c.req.method, headers });
+
+    const response = await runMiddleware(
+      [await loadMiddleware()],
+      request,
+      url,
+      url.pathname,
+      {},
+      async (locals) => {
+        // Dentro del pipeline, como en `/__data`: si el guardia deniega, ni se lee el cuerpo
+        // ni corren los efectos de nivel superior del módulo
+        const action = (await target.load()) as ActionFunction | undefined;
+        if (typeof action !== "function") {
+          return c.json({ error: "Action not found" }, 404);
+        }
+        const args = await readActionArgs(c);
+        if (!args) {
+          return c.json({ error: "Invalid action arguments" }, 400);
+        }
+
+        const result = await runWithActionContext({ request, url, locals }, () => action(...args));
+        // `instanceof` y no por forma: lo que devuelve un cliente HTTP también trae
+        // `status` y `headers`, y se tomaría por la respuesta en vez de por los datos
+        if (result instanceof Response) {
+          return withoutFrameworkHeaders(result);
+        }
+        if (result === undefined) {
+          return new Response(null, { status: 204 });
+        }
+        return c.body(serializeData(result), 200, {
+          "Content-Type": "application/json",
+          [ACTION_DATA_HEADER]: "1",
+        });
+      },
+      { file: target.file, name: target.name },
+    );
+    const location = response.headers.get("location");
+    if (response.status >= 300 && response.status < 400 && location) {
+      return asRedirect(location, response.status);
+    }
+    return response;
+  } catch (error) {
+    if (error instanceof RedirectResponse) {
+      return asRedirect(error.location, error.status);
+    }
+    console.error(pc.red("[Action Error]"), error);
+    return c.json({ error: "Internal server error" }, 500);
+  }
 };
 
 /**
@@ -462,8 +653,11 @@ export async function createServer(options: CreateServerOptions): Promise<void> 
       });
     });
 
-    server.listen(port);
-    console.log(`Development server running at http://localhost:${port}`);
+    // Como Vite: en dev solo localhost, salvo que se pida otra interfaz. Desde la red local
+    // se podrían llamar las acciones con las credenciales de desarrollo
+    const devHostname = hostname ?? "localhost";
+    server.listen(port, devHostname);
+    console.log(`Development server running at http://${devHostname}:${port}`);
   }
 }
 
@@ -711,8 +905,38 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
     }
   });
 
+  // En dev la tabla de acciones la lleva el plugin, que la llena según transforma archivos
+  const resolveDevAction = async (id: string): Promise<ResolvedAction | undefined> => {
+    const plugin = vite.config?.plugins?.find((p) => p.name === "suamox:pages");
+    const target = (
+      plugin?.api as
+        | {
+            resolveAction?: (
+              id: string,
+            ) => { file: string; path: string; name: string } | undefined;
+          }
+        | undefined
+    )?.resolveAction?.(id);
+    if (!target) {
+      return undefined;
+    }
+    return {
+      file: target.file,
+      name: target.name,
+      load: async () =>
+        (await ssrRunner(vite).import<Record<string, unknown>>(target.path))[target.name],
+    };
+  };
+
+  app.post("/__actions/:id", (c) =>
+    handleAction(c, resolveDevAction, loadMiddleware, options.allowedHosts),
+  );
+
   // Handler SSR para páginas (el middleware de Vite se maneja en createServer)
   app.use("*", async (c) => {
+    if (isBlockedPageWrite(c)) {
+      return c.text("Cross-origin request blocked", 403);
+    }
     const url = new URL(c.req.url);
 
     try {
@@ -1122,6 +1346,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     resolveRouteModule: typeof resolveRouteModule;
     onRequest?: MiddlewareFunction;
     preloadFonts?: RegExp;
+    actions?: Record<string, ResolvedAction>;
   };
 
   const loadServerEntry = async (): Promise<ServerEntryRuntime> => {
@@ -1141,6 +1366,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
         (mod.resolveRouteModule as typeof resolveRouteModule) ?? resolveRouteModule,
       onRequest: mod.onRequest as MiddlewareFunction | undefined,
       preloadFonts: mod.preloadFonts as RegExp | undefined,
+      actions: mod.actions as ServerEntryRuntime["actions"],
     };
   };
 
@@ -1156,7 +1382,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       const url = new URL(c.req.url);
       const safeOrigin = resolveRequestOrigin(c.req.raw, allowedHosts);
       const safeUrl = new URL(`${safeOrigin}${url.pathname}${url.search}`);
-      const safeRequest = new Request(safeUrl, { headers: c.req.raw.headers });
+      const safeRequest = toSafeRequest(c.req.raw, safeUrl);
 
       const strippedPathname = stripBase(url.pathname, base);
       const match = entry.matchRoute(apiRoutes as unknown as RouteRecord[], strippedPathname);
@@ -1179,8 +1405,9 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
             });
           }
 
+          // La misma que vio el middleware: un cuerpo solo se puede leer una vez
           return handler({
-            request: c.req.raw,
+            request: safeRequest,
             url: safeUrl,
             params: match.params,
             query: safeUrl.searchParams,
@@ -1222,7 +1449,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       const safeOrigin = resolveRequestOrigin(c.req.raw, allowedHosts);
       const originalUrl = new URL(c.req.url);
       const safeUrl = new URL(`${safeOrigin}${originalUrl.pathname}${originalUrl.search}`);
-      const safeRequest = new Request(safeUrl, { headers: c.req.raw.headers });
+      const safeRequest = toSafeRequest(c.req.raw, safeUrl);
 
       // Ejecutar middleware y pipeline de datos
       return await runMiddleware(
@@ -1313,11 +1540,26 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     }
   });
 
+  app.post("/__actions/:id", (c) =>
+    handleAction(
+      c,
+      async (id) => {
+        const actions = (await loadServerEntry()).actions;
+        return actions && Object.hasOwn(actions, id) ? actions[id] : undefined;
+      },
+      async () => (await loadServerEntry()).onRequest,
+      allowedHosts,
+    ),
+  );
+
   // Handler SSR: solo para rutas que no son assets
   app.use("*", async (c) => {
     // Omitir si está solicitando un archivo de assets
     if (c.req.path.startsWith("/assets/")) {
       return c.notFound();
+    }
+    if (isBlockedPageWrite(c)) {
+      return c.text("Cross-origin request blocked", 403);
     }
     const url = new URL(c.req.url);
 
@@ -1343,7 +1585,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       // Ejecutar middleware de usuario con origin validado y pipeline SSR
       const safeOrigin = resolveRequestOrigin(c.req.raw, allowedHosts);
       const safeUrl = new URL(`${safeOrigin}${url.pathname}${url.search}`);
-      const safeRequest = new Request(safeUrl, { headers: c.req.raw.headers });
+      const safeRequest = toSafeRequest(c.req.raw, safeUrl);
 
       return await runMiddleware(
         [entry.onRequest, ...routeMiddleware(match?.route)],

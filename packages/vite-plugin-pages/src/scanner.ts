@@ -5,6 +5,7 @@ import { basename, dirname, relative, resolve } from "node:path";
 import fg from "fast-glob";
 import { parseSync } from "vite";
 
+import { isActionsFile } from "./actions.js";
 import { parseRoute, sortRoutes, validateRoutes } from "./parser.js";
 import type { ApiRouteRecord, LayoutMeta, RouteRecord } from "./types.js";
 
@@ -329,11 +330,14 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
   const pattern = `**/*${extPattern}`;
 
   // Escanear archivos
-  const files = await fg(pattern, {
-    cwd: absolutePagesDir,
-    absolute: true,
-    ignore: ["**/node_modules/**", "**/.git/**"],
-  });
+  // Un archivo de acciones junto a su página no es una ruta. Mismo criterio que el plugin
+  const files = (
+    await fg(pattern, {
+      cwd: absolutePagesDir,
+      absolute: true,
+      ignore: ["**/node_modules/**", "**/.git/**"],
+    })
+  ).filter((file) => !isActionsFile(file));
 
   const rootFile = files.find((file) => isRootFile(file, extensions, absolutePagesDir));
   const layoutFiles = files.filter((file) => isLayoutFile(file, extensions));
@@ -438,11 +442,13 @@ export async function scanRoutes(options: ScanOptions): Promise<ScanResult> {
 
   try {
     await access(apiDir);
-    const allApiFiles = await fg(pattern, {
-      cwd: apiDir,
-      absolute: true,
-      ignore: ["**/node_modules/**", "**/.git/**"],
-    });
+    const allApiFiles = (
+      await fg(pattern, {
+        cwd: apiDir,
+        absolute: true,
+        ignore: ["**/node_modules/**", "**/.git/**"],
+      })
+    ).filter((file) => !isActionsFile(file));
 
     const apiMiddlewareFiles = allApiFiles.filter((f) => isMiddlewareFile(f, extensions));
     const apiMiddlewareMap = new Map<string, string>();

@@ -31,9 +31,17 @@ vi.mock("@calumet/suamox", async (importOriginal) => {
   };
 });
 
-vi.mock("@calumet/suamox/server", () => ({
-  renderPage: mocks.renderPage,
-}));
+vi.mock("@calumet/suamox/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@calumet/suamox/server")>();
+  return {
+    renderPage: mocks.renderPage,
+    // El real: las acciones de las pruebas leen su contexto
+    runWithActionContext: actual.runWithActionContext,
+    getActionContext: actual.getActionContext,
+  };
+});
+
+import { getActionContext } from "@calumet/suamox/server";
 
 import { createDevHandler, createHonoApp, createProdHandler } from "../src/index";
 
@@ -1335,5 +1343,459 @@ describe("createProdHandler proxy", () => {
 
     const res = await app.request("http://localhost/api/nonexistent");
     expect(res.status).toBe(404);
+  });
+});
+
+describe("createDevHandler /__actions endpoint", () => {
+  const ACTION_ID = "0123456789abcdef";
+  const sameOrigin = { "sec-fetch-site": "same-origin", "content-type": "application/json" };
+
+  const createActionsApp = (
+    actionsModule: Record<string, unknown>,
+    middlewareFn?: (
+      ctx: {
+        locals: Record<string, unknown>;
+        action?: { file: string; name: string };
+        request: Request;
+      },
+      next: () => Promise<Response>,
+    ) => Promise<Response>,
+  ) => {
+    const ssrImport = vi.fn((id: string) => {
+      if (id === "/app/src/ajustes.actions.ts") {
+        return Promise.resolve(actionsModule);
+      }
+      return Promise.resolve({ routes: [], ...(middlewareFn ? { onRequest: middlewareFn } : {}) });
+    });
+    const vite = {
+      config: {
+        plugins: [
+          {
+            name: "suamox:pages",
+            api: {
+              resolveAction: (id: string) =>
+                id === ACTION_ID
+                  ? {
+                      file: "src/ajustes.actions.ts",
+                      path: "/app/src/ajustes.actions.ts",
+                      name: "guardar",
+                    }
+                  : undefined,
+            },
+          },
+        ],
+      },
+      environments: { ssr: { runner: { import: ssrImport } } },
+    } as unknown as ViteDevServer;
+    return { app: createDevHandler({ vite }), ssrImport };
+  };
+
+  const post = (app: ReturnType<typeof createDevHandler>, init: RequestInit, id = ACTION_ID) =>
+    app.request(`http://localhost/__actions/${id}`, { method: "POST", ...init });
+
+  it("corre la acción con los argumentos en JSON y serializa lo que devuelve", async () => {
+    const guardar = vi.fn((nombre: string, edad: number) => Promise.resolve({ nombre, edad }));
+    const { app } = createActionsApp({ guardar });
+
+    const response = await post(app, { headers: sameOrigin, body: JSON.stringify(["Ana", 30]) });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-suamox-action")).toBe("1");
+    expect(await response.json()).toEqual({ nombre: "Ana", edad: 30 });
+    expect(guardar).toHaveBeenCalledWith("Ana", 30);
+  });
+
+  it("responde 204 cuando la acción no devuelve nada", async () => {
+    const { app } = createActionsApp({ guardar: () => Promise.resolve(undefined) });
+
+    const response = await post(app, { headers: sameOrigin, body: "[]" });
+
+    expect(response.status).toBe(204);
+  });
+
+  it("deja pasar tal cual el Response que devuelve la acción", async () => {
+    const { app } = createActionsApp({
+      guardar: () => Promise.resolve(Response.json({ codigo: "NO_VALIDO" }, { status: 422 })),
+    });
+
+    const response = await post(app, { headers: sameOrigin, body: "[]" });
+
+    expect(response.status).toBe(422);
+    expect(response.headers.get("x-suamox-action")).toBeNull();
+    expect(await response.json()).toEqual({ codigo: "NO_VALIDO" });
+  });
+
+  it("entrega un FormData como único argumento", async () => {
+    const guardar = vi.fn((form: FormData) => Promise.resolve(form.get("nombre")));
+    const { app } = createActionsApp({ guardar });
+    const form = new FormData();
+    form.set("nombre", "Ana");
+
+    const response = await post(app, { headers: { "sec-fetch-site": "same-origin" }, body: form });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toBe("Ana");
+  });
+
+  it("da a la acción la petición y los locals del middleware global", async () => {
+    let visto: { cookie: string | null; usuario: unknown } | undefined;
+    const { app } = createActionsApp(
+      {
+        guardar: () => {
+          const { request, locals } = getActionContext();
+          visto = { cookie: request.headers.get("cookie"), usuario: locals.usuario };
+          return Promise.resolve(undefined);
+        },
+      },
+      (ctx, next) => {
+        ctx.locals.usuario = "ana";
+        return next();
+      },
+    );
+
+    await post(app, { headers: { ...sameOrigin, cookie: "sesion=1" }, body: "[]" });
+
+    expect(visto).toEqual({ cookie: "sesion=1", usuario: "ana" });
+  });
+
+  it("el middleware global puede cortar antes de que corra la acción", async () => {
+    const guardar = vi.fn();
+    const { app } = createActionsApp({ guardar }, () =>
+      Promise.resolve(new Response("no", { status: 401 })),
+    );
+
+    const response = await post(app, { headers: sameOrigin, body: "[]" });
+
+    expect(response.status).toBe(401);
+    expect(guardar).not.toHaveBeenCalled();
+  });
+
+  it("rechaza una petición de otro sitio sin cargar el módulo", async () => {
+    const { app, ssrImport } = createActionsApp({ guardar: vi.fn() });
+
+    const response = await post(app, {
+      headers: { "sec-fetch-site": "cross-site", "content-type": "application/json" },
+      body: "[]",
+    });
+
+    expect(response.status).toBe(403);
+    expect(ssrImport).not.toHaveBeenCalled();
+  });
+
+  it("sin Sec-Fetch-Site exige un Origin del mismo host", async () => {
+    const { app } = createActionsApp({ guardar: () => Promise.resolve(undefined) });
+    const json = { "content-type": "application/json" };
+
+    expect((await post(app, { headers: json, body: "[]" })).status).toBe(403);
+    expect(
+      (await post(app, { headers: { ...json, origin: "https://otro.com" }, body: "[]" })).status,
+    ).toBe(403);
+    expect(
+      (await post(app, { headers: { ...json, origin: "http://localhost" }, body: "[]" })).status,
+    ).toBe(204);
+  });
+
+  it("responde 404 a un id desconocido o mal formado", async () => {
+    const { app } = createActionsApp({ guardar: vi.fn() });
+
+    expect((await post(app, { headers: sameOrigin, body: "[]" }, "ffffffffffffffff")).status).toBe(
+      404,
+    );
+    expect((await post(app, { headers: sameOrigin, body: "[]" }, "constructor")).status).toBe(404);
+  });
+
+  it("responde 400 si el cuerpo no es una lista JSON ni un formulario", async () => {
+    const guardar = vi.fn();
+    const { app } = createActionsApp({ guardar });
+
+    expect((await post(app, { headers: sameOrigin, body: `{"a":1}` })).status).toBe(400);
+    expect((await post(app, { headers: sameOrigin, body: "no es json" })).status).toBe(400);
+    expect(
+      (
+        await post(app, {
+          headers: { "sec-fetch-site": "same-origin", "content-type": "text/plain" },
+          body: "[]",
+        })
+      ).status,
+    ).toBe(400);
+    expect(guardar).not.toHaveBeenCalled();
+  });
+
+  it("no filtra el error de la acción", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { app } = createActionsApp({
+      guardar: () => Promise.reject(new Error("token=secreto")),
+    });
+
+    const response = await post(app, { headers: sameOrigin, body: "[]" });
+
+    expect(response.status).toBe(500);
+    expect(await response.text()).not.toContain("secreto");
+    error.mockRestore();
+  });
+
+  it("una redirección del middleware viaja en cabeceras y no como 3xx", async () => {
+    const guardar = vi.fn();
+    const { app } = createActionsApp({ guardar }, () =>
+      Promise.resolve(new Response(null, { status: 302, headers: { location: "/ingresar" } })),
+    );
+
+    const response = await post(app, { headers: sameOrigin, body: "[]" });
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("x-suamox-redirect")).toBe("/ingresar");
+    expect(response.headers.get("x-suamox-redirect-status")).toBe("302");
+    expect(guardar).not.toHaveBeenCalled();
+  });
+
+  it("un RedirectResponse de la acción viaja en cabeceras", async () => {
+    const { app } = createActionsApp({
+      guardar: () => Promise.reject(new RedirectResponse("/ingresar", 303)),
+    });
+
+    const response = await post(app, { headers: sameOrigin, body: "[]" });
+
+    expect(response.headers.get("x-suamox-redirect")).toBe("/ingresar");
+    expect(response.headers.get("x-suamox-redirect-status")).toBe("303");
+  });
+
+  it("devolver un __redirect como dato no se toma por redirección", async () => {
+    const { app } = createActionsApp({
+      guardar: () => Promise.resolve({ __redirect: "https://evil.example" }),
+    });
+
+    const response = await post(app, { headers: sameOrigin, body: "[]" });
+
+    expect(response.headers.get("x-suamox-redirect")).toBeNull();
+    expect(await response.json()).toEqual({ __redirect: "https://evil.example" });
+  });
+
+  it("quita las cabeceras x-suamox-* del Response que devuelve la acción", async () => {
+    const { app } = createActionsApp({
+      guardar: () =>
+        Promise.resolve(
+          Response.json(
+            { a: 1 },
+            { headers: { "x-suamox-action": "1", "x-suamox-redirect": "https://evil.example" } },
+          ),
+        ),
+    });
+
+    const response = await post(app, { headers: sameOrigin, body: "[]" });
+
+    expect(response.headers.get("x-suamox-action")).toBeNull();
+    expect(response.headers.get("x-suamox-redirect")).toBeNull();
+    expect(await response.json()).toEqual({ a: 1 });
+  });
+
+  it("el middleware sabe qué acción se llama", async () => {
+    let vista: unknown;
+    const { app } = createActionsApp({ guardar: () => Promise.resolve(undefined) }, (ctx, next) => {
+      vista = ctx.action;
+      return next();
+    });
+
+    await post(app, { headers: sameOrigin, body: "[]" });
+
+    expect(vista).toEqual({ file: "src/ajustes.actions.ts", name: "guardar" });
+  });
+
+  it("si el guardia deniega, el módulo no se carga ni se lee el cuerpo", async () => {
+    const { app, ssrImport } = createActionsApp({ guardar: vi.fn() }, () =>
+      Promise.resolve(new Response("no", { status: 401 })),
+    );
+
+    const response = await post(app, { headers: sameOrigin, body: "no es json" });
+
+    expect(response.status).toBe(401);
+    expect(ssrImport).not.toHaveBeenCalledWith("/app/src/ajustes.actions.ts");
+  });
+
+  it("la petición del contexto no describe un cuerpo que ya no tiene", async () => {
+    let cabeceras: Record<string, string | null> = {};
+    const { app } = createActionsApp({
+      guardar: () => {
+        const { request } = getActionContext();
+        cabeceras = {
+          length: request.headers.get("content-length"),
+          type: request.headers.get("content-type"),
+          cookie: request.headers.get("cookie"),
+        };
+        return Promise.resolve(undefined);
+      },
+    });
+
+    await post(app, {
+      headers: { ...sameOrigin, cookie: "sesion=1", "content-length": "2" },
+      body: "[]",
+    });
+
+    expect(cabeceras).toEqual({ length: null, type: null, cookie: "sesion=1" });
+  });
+
+  it("un objeto con status y headers es un dato, no la respuesta", async () => {
+    const { app } = createActionsApp({
+      guardar: () => Promise.resolve({ status: 201, headers: {}, data: { id: 7 } }),
+    });
+
+    const response = await post(app, { headers: sameOrigin, body: "[]" });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 201, headers: {}, data: { id: 7 } });
+  });
+});
+
+describe("createProdHandler /__actions endpoint", () => {
+  const createProdApp = async (entry: string) => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-actions-"));
+    const serverDir = join(root, "dist", "server");
+    const clientDir = join(root, "dist", "client");
+    await mkdir(serverDir, { recursive: true });
+    await mkdir(join(root, "dist", ".vite"), { recursive: true });
+    await writeFile(join(serverDir, "entry-server.mjs"), entry);
+    await writeFile(join(root, "dist", ".vite", "manifest.json"), "{}");
+
+    return createProdHandler({
+      root,
+      clientDir,
+      serverEntry: join(serverDir, "entry-server.mjs"),
+      staticDir: join(root, "dist", "static"),
+    });
+  };
+
+  it("carga la acción desde la tabla del server entry", async () => {
+    const app = await createProdApp(
+      `export const routes = [];
+       export const actions = {
+         "0123456789abcdef": {
+           file: "src/suma.actions.ts",
+           name: "sumar",
+           load: () => Promise.resolve(async (a, b) => a + b),
+         },
+       };`,
+    );
+
+    const response = await app.request("http://localhost/__actions/0123456789abcdef", {
+      method: "POST",
+      headers: { "sec-fetch-site": "same-origin", "content-type": "application/json" },
+      body: "[2, 3]",
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toBe(5);
+  });
+
+  it("responde 404 si el build no trae acciones", async () => {
+    const app = await createProdApp(`export const routes = [];`);
+
+    const response = await app.request("http://localhost/__actions/0123456789abcdef", {
+      method: "POST",
+      headers: { "sec-fetch-site": "same-origin", "content-type": "application/json" },
+      body: "[]",
+    });
+
+    expect(response.status).toBe(404);
+  });
+});
+
+describe("createProdHandler conserva método y cuerpo", () => {
+  const createProdApp = async (entry: string) => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-metodo-"));
+    const serverDir = join(root, "dist", "server");
+    await mkdir(serverDir, { recursive: true });
+    await mkdir(join(root, "dist", ".vite"), { recursive: true });
+    await writeFile(join(serverDir, "entry-server.mjs"), entry);
+    await writeFile(join(root, "dist", ".vite", "manifest.json"), "{}");
+
+    return createProdHandler({
+      root,
+      clientDir: join(root, "dist", "client"),
+      serverEntry: join(serverDir, "entry-server.mjs"),
+      staticDir: join(root, "dist", "static"),
+    });
+  };
+
+  const matchFirst = `export const matchRoute = (routes) => ({ route: routes[0], params: {} });`;
+
+  it("el middleware de una página ve el POST con su cuerpo, como en dev", async () => {
+    const app = await createProdApp(
+      `${matchFirst}
+       export const routes = [{ path: "/formulario", params: [] }];
+       export const onRequest = async ({ request }) =>
+         Response.json({ method: request.method, body: await request.text() });`,
+    );
+
+    const response = await app.request("http://localhost/formulario", {
+      method: "POST",
+      headers: { "sec-fetch-site": "same-origin" },
+      body: "nombre=Ana",
+    });
+
+    expect(await response.json()).toEqual({ method: "POST", body: "nombre=Ana" });
+  });
+
+  it("un POST de otro sitio a una página se rechaza antes del middleware", async () => {
+    const app = await createProdApp(
+      `${matchFirst}
+       export const routes = [{ path: "/formulario", params: [] }];
+       export const onRequest = () => {
+         globalThis.__paginaCorrio = true;
+         return new Response("corrió");
+       };`,
+    );
+    (globalThis as { __paginaCorrio?: boolean }).__paginaCorrio = false;
+
+    const deOtroSitio = await app.request("http://localhost/formulario", {
+      method: "POST",
+      headers: { "sec-fetch-site": "cross-site", "content-type": "text/plain" },
+      body: "x",
+    });
+    const sinOrigen = await app.request("http://localhost/formulario", {
+      method: "POST",
+      body: "x",
+    });
+
+    expect(deOtroSitio.status).toBe(403);
+    expect(sinOrigen.status).toBe(403);
+    expect((globalThis as { __paginaCorrio?: boolean }).__paginaCorrio).toBe(false);
+  });
+
+  it("un GET de otro sitio a una página no cambia: los enlaces siguen funcionando", async () => {
+    const app = await createProdApp(
+      `${matchFirst}
+       export const routes = [{ path: "/formulario", params: [] }];
+       export const onRequest = () => new Response("ok");`,
+    );
+
+    const response = await app.request("http://localhost/formulario", {
+      headers: { "sec-fetch-site": "cross-site" },
+    });
+
+    expect(response.status).toBe(200);
+  });
+
+  it("el middleware y el handler de API reciben la misma petición", async () => {
+    const app = await createProdApp(
+      `${matchFirst}
+       export const routes = [];
+       export const onRequest = ({ request, locals }, next) => {
+         locals.method = request.method;
+         return next();
+       };
+       export const apiRoutes = [{
+         path: "/api/eco", params: [], isCatchAll: false, isIndex: false, priority: 0,
+         methods: {
+           POST: async ({ request, locals }) =>
+             Response.json({ method: locals.method, body: await request.text() }),
+         },
+       }];`,
+    );
+
+    const response = await app.request("http://localhost/api/eco", {
+      method: "POST",
+      body: "hola",
+    });
+
+    expect(await response.json()).toEqual({ method: "POST", body: "hola" });
   });
 });

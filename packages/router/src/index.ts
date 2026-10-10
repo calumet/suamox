@@ -160,6 +160,73 @@ export function revalidate(): Promise<void> {
   return Promise.resolve();
 }
 
+/** Respuesta de una acción con estado de fallo. `data` es el cuerpo ya leído. */
+export class ActionError extends Error {
+  readonly status: number;
+  readonly data: unknown;
+
+  constructor(status: number, data: unknown) {
+    super(`[suamox-router] Action failed with status ${status}`);
+    this.name = "ActionError";
+    this.status = status;
+    this.data = data;
+  }
+}
+
+/**
+ * Las pone solo el adaptador, que quita las que traiga el `Response` de una acción: marcan
+ * la respuesta que serializó él y la redirección que no se siguió
+ */
+const ACTION_DATA_HEADER = "x-suamox-action";
+const ACTION_REDIRECT_HEADER = "x-suamox-redirect";
+const ACTION_REDIRECT_STATUS_HEADER = "x-suamox-redirect-status";
+
+const readActionBody = async (response: Response): Promise<unknown> => {
+  if (response.headers.get(ACTION_DATA_HEADER)) {
+    return deserializeData(await response.json());
+  }
+  const text = await response.text();
+  if (!text) {
+    return undefined;
+  }
+  return response.headers.get("content-type")?.includes("application/json")
+    ? (JSON.parse(text) as unknown)
+    : text;
+};
+
+/**
+ * Uso interno del plugin: reemplaza cada export de un `*.actions.ts` en el bundle del
+ * navegador. Un único `FormData` viaja tal cual; cualquier otra lista de argumentos, en JSON.
+ */
+export function createAction(id: string): (...args: unknown[]) => Promise<unknown> {
+  return async (...args) => {
+    const [first] = args;
+    const isForm = args.length === 1 && first instanceof FormData;
+    const response = await fetch(`/__actions/${id}`, {
+      method: "POST",
+      headers: isForm ? undefined : { "Content-Type": "application/json" },
+      body: isForm ? first : JSON.stringify(args),
+      // El adaptador manda la redirección como dato; una de 3xx real es de otra capa
+      redirect: "manual",
+    });
+    if (response.type === "opaqueredirect") {
+      throw new ActionError(0, null);
+    }
+    // No se puede asumir que la escritura no ocurrió: la acción pudo escribir y redirigir.
+    // Quien llama decide si navega a `redirect`
+    const redirect = response.headers.get(ACTION_REDIRECT_HEADER);
+    if (redirect) {
+      const status = Number(response.headers.get(ACTION_REDIRECT_STATUS_HEADER)) || 302;
+      throw new ActionError(status, { redirect });
+    }
+    const data = await readActionBody(response);
+    if (!response.ok) {
+      throw new ActionError(response.status, data);
+    }
+    return data;
+  };
+}
+
 export async function startRouter(options: RouterOptions): Promise<RouterInstance> {
   const { routes, adapter, rootElementId = "root", baseUrl, base = "/", prefetch = true } = options;
 

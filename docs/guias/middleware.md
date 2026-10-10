@@ -24,15 +24,18 @@ export async function onRequest(
 
 El objeto `context` contiene:
 
-| Propiedad  | Tipo                      | Descripcion                                            |
-| ---------- | ------------------------- | ------------------------------------------------------ |
-| `request`  | `Request`                 | La peticion HTTP original                              |
-| `url`      | `URL`                     | La URL parseada                                        |
-| `pathname` | `string`                  | La ruta que caso, sin `base` y con el reroute aplicado |
-| `params`   | `Record<string, string>`  | Parametros de la ruta                                  |
-| `locals`   | `Record<string, unknown>` | Objeto mutable para pasar datos a los loaders          |
+| Propiedad  | Tipo                      | Descripcion                                                      |
+| ---------- | ------------------------- | ---------------------------------------------------------------- |
+| `request`  | `Request`                 | La peticion HTTP original                                        |
+| `url`      | `URL`                     | La URL parseada                                                  |
+| `pathname` | `string`                  | La ruta que caso, sin `base` y con el reroute aplicado           |
+| `params`   | `Record<string, string>`  | Parametros de la ruta                                            |
+| `locals`   | `Record<string, unknown>` | Objeto mutable para pasar datos a los loaders                    |
+| `action`   | `{ file, name }`          | Solo en `/__actions/:id`: la [acción](./actions.md) que se llama |
 
 Para cortar rutas usa `context.pathname`, no `context.url.pathname`: en las peticiones al endpoint `/__data` la URL es `/__data` y la ruta pedida viaja en el parametro `path`, asi que un guardia que lea `url` no se dispara en ninguna navegacion del cliente.
+
+Una pagina recibe el metodo y el cuerpo tal como llegaron. Un `POST`, `PUT`, `PATCH` o `DELETE` a una pagina solo se acepta desde el mismo origen (`Sec-Fetch-Site: same-origin`, o un `Origin` del mismo host); de otro sitio responde `403` antes de llegar al middleware. Un callback externo, como el retorno de una pasarela de pago, va a una ruta de API.
 
 ## Middleware por directorio
 

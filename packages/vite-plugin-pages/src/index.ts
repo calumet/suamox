@@ -1,9 +1,20 @@
-import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
 
 import pc from "picocolors";
 import { parseSync, type Plugin, type ViteDevServer } from "vite";
 
+import {
+  ACTIONS_CLIENT_MODULE_ID,
+  actionId,
+  collectActionExports,
+  generateActionStubs,
+  generateActionsCode,
+  isActionsFile,
+  referencedActionIds,
+  type ActionEntry,
+} from "./actions.js";
 import { CLIENT_ROUTE_QUERY, generateRoutesModule, type DefaultPageMode } from "./codegen.js";
 import { scanRoutes } from "./scanner.js";
 import { stripServerExports } from "./strip-server-exports.js";
@@ -16,6 +27,11 @@ export interface SuamoxPagesOptions {
   defaultMode?: DefaultPageMode;
   /** Fuentes del CSS de cada ruta que se precargan, por nombre de archivo. Solo en build */
   preloadFonts?: RegExp;
+  /**
+   * Trata como acciones los `*.actions.*` de `node_modules`. Apagado por defecto: Redux y
+   * NgRx usan el mismo nombre, y cada export pasaría a ser un endpoint
+   */
+  actionsInDependencies?: boolean;
 }
 
 export type { RouteRecord, RouteSegment, ParsedRoute } from "./types.js";
@@ -28,6 +44,18 @@ const RESOLVED_VIRTUAL_SERVER_MODULE_ID = "\0" + VIRTUAL_SERVER_MODULE_ID;
 
 const VIRTUAL_CLIENT_ENTRY_ID = "virtual:pages/client-entry";
 const RESOLVED_VIRTUAL_CLIENT_ENTRY_ID = "\0" + VIRTUAL_CLIENT_ENTRY_ID;
+
+const RESOLVED_ACTIONS_CLIENT_MODULE_ID = "\0" + ACTIONS_CLIENT_MODULE_ID;
+const ACTIONS_CLIENT_MODULE_CODE = `export { createAction } from "@calumet/suamox-router";\n`;
+
+/** Lo escribe el build del cliente, que es el que ve cada acción, y lo lee el del servidor */
+const ACTIONS_MANIFEST = ".vite/actions.json";
+
+/** Lo que el adaptador de desarrollo le pide al plugin para resolver `/__actions/:id` */
+export interface SuamoxPagesApi {
+  /** `file` relativo a la raíz, para el middleware; `path` absoluto, para cargarlo */
+  resolveAction(id: string): { file: string; path: string; name: string } | undefined;
+}
 
 /** Gancho opcional de la aplicacion, para lo que tenga que correr antes de hidratar */
 const CLIENT_HOOK_FILE = "src/client.ts";
@@ -47,6 +75,93 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
   let apiRoutesCache: ApiRouteRecord[] = [];
   let clientModuleCode: string | null = null;
   let serverModuleCode: string | null = null;
+  const actions = new Map<string, ActionEntry>();
+  // Una por proceso: los ids viajan del build del cliente al del servidor por el manifiesto.
+  // Fija con la variable cuando varias réplicas se construyen por separado
+  const actionsKey = process.env.SUAMOX_ACTIONS_KEY || randomBytes(32).toString("hex");
+
+  // El manifiesto va junto al de Vite, fuera del directorio que se sirve
+  const actionsManifestPath = () => resolve(clientOutDir, "..", ACTIONS_MANIFEST);
+
+  const isActionModule = (path: string): boolean =>
+    isActionsFile(path) &&
+    (options.actionsInDependencies === true ||
+      !path.replace(/\\/g, "/").includes("/node_modules/"));
+
+  function registerActions(
+    code: string,
+    absolutePath: string,
+  ): Array<{ id: string; name: string }> {
+    const file = relative(root, absolutePath).replace(/\\/g, "/");
+    return collectActionExports(code, absolutePath).map((name) => {
+      const id = actionId(file, name, actionsKey);
+      actions.set(id, { file, name });
+      return { id, name };
+    });
+  }
+
+  // `?raw`, `?url` y compañía emiten el archivo tal cual: no pasan por el stub de `load`
+  function rejectQueriedActions(this: { error: (message: string) => never }, id: string): void {
+    const cleanPath = (id.split("?")[0] ?? id).replace(/\\/g, "/");
+    if (id.includes("?") && isActionModule(cleanPath)) {
+      this.error(
+        `[suamox:pages] Cannot import actions file "${cleanPath}" with a query from client code. ` +
+          `Its source would reach the browser as is.`,
+      );
+    }
+  }
+
+  /**
+   * En `load` y no en `transform`: el bundler toma el `sourcesContent` de los mapas de lo
+   * que devuelve `load`, así que reemplazar después dejaría el original en el `.map`
+   */
+  const loadActionStub = {
+    order: "pre" as const,
+    handler(this: { error: (message: string) => never }, id: string): string | undefined {
+      if (id.includes("?") || !isActionModule(id)) return;
+      try {
+        return generateActionStubs(registerActions(readFileSync(id, "utf-8"), id));
+      } catch (error) {
+        this.error((error as Error).message);
+      }
+    },
+  };
+
+  /**
+   * Quita los exports de servidor de una página antes de que el bundler vea el original.
+   * Por la misma razón que las acciones: en `transform` el fuente completo, `loader`
+   * incluido, quedaba en el `sourcesContent` del mapa que se sirve.
+   */
+  function loadClientRoute(this: { error: (message: string) => never }, id: string) {
+    const filePath = (id.split("?")[0] ?? id).replace(/\\/g, "/");
+    const source = readFileSync(filePath, "utf-8");
+    const result = parseSync(filePath, source);
+
+    // Fail-safe: si el codigo no parsea limpio no se puede garantizar que el
+    // stripping de server code sea correcto, asi que se aborta el build.
+    if (result.errors.length > 0) {
+      this.error(
+        `[suamox:pages] Failed to parse exports from "${filePath}". ` +
+          `Cannot guarantee server code won't leak to the client bundle.\n` +
+          `To fix this, you can:\n` +
+          `  1. Move server-only imports to a *.server.ts file (automatically excluded from client)\n` +
+          `  2. Check the file for syntax errors\n` +
+          `Error: ${result.errors[0]?.message ?? "unknown parse error"}`,
+      );
+    }
+
+    // Sin mapa: el código devuelto pasa a ser el original de los mapas siguientes
+    return stripServerExports(source, result.program, filePath)?.code ?? source;
+  }
+
+  function serverActionsCode(): string {
+    const path = actionsManifestPath();
+    if (!existsSync(path)) return "";
+    return generateActionsCode(
+      JSON.parse(readFileSync(path, "utf-8")) as Record<string, ActionEntry>,
+      root,
+    );
+  }
 
   async function updateRoutes(logErrors = true): Promise<void> {
     const result = await scanRoutes({
@@ -136,8 +251,18 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     server.environments.client.hot.send({ type: "full-reload", path: "*" });
   }
 
+  const api: SuamoxPagesApi = {
+    resolveAction(id) {
+      const entry = actions.get(id);
+      return entry
+        ? { file: entry.file, path: resolve(root, entry.file), name: entry.name }
+        : undefined;
+    },
+  };
+
   return {
     name: "suamox:pages",
+    api,
 
     // Las entradas las declara el plugin, no la aplicacion: son las mismas en
     // todos los proyectos y su contenido lo genera este mismo plugin. La CLI de
@@ -149,7 +274,31 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       const input: Record<string, string> = env.isSsrBuild
         ? { "entry-server": VIRTUAL_SERVER_MODULE_ID }
         : { "entry-client": VIRTUAL_CLIENT_ENTRY_ID };
-      return { build: { rollupOptions: { input } } };
+      return {
+        build: { rollupOptions: { input } },
+        // Vite no aplica los plugins de la app al bundle de un worker: sin esto, un worker
+        // que importe una acción se llevaría el módulo real al navegador
+        worker: {
+          plugins: () => [
+            {
+              name: "suamox:pages-worker-actions",
+              resolveId: (id: string) =>
+                id === ACTIONS_CLIENT_MODULE_ID ? RESOLVED_ACTIONS_CLIENT_MODULE_ID : undefined,
+              load: {
+                order: "pre" as const,
+                handler(this: { error: (message: string) => never }, id: string) {
+                  return id === RESOLVED_ACTIONS_CLIENT_MODULE_ID
+                    ? ACTIONS_CLIENT_MODULE_CODE
+                    : loadActionStub.handler.call(this, id);
+                },
+              },
+              transform(this: { error: (message: string) => never }, _code: string, id: string) {
+                rejectQueriedActions.call(this, id);
+              },
+            },
+          ],
+        },
+      };
     },
 
     configResolved(config) {
@@ -161,8 +310,26 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     // El manifest sale del directorio que se sirve. Dentro queda expuesto por
     // HTTP, y con el los paths de todas las fuentes: el inventario de rutas,
     // incluidas las que nadie enlaza
-    writeBundle() {
+    writeBundle(_options, bundle) {
       if (this.environment.config.consumer !== "client") return;
+
+      // Solo las acciones cuyo id quedó en el bundle: un export que nadie importa no tiene
+      // por qué ser un endpoint. Los workers llegan aquí como assets
+      const emitted = Object.values(bundle)
+        .map((output) =>
+          output.type === "chunk"
+            ? output.code
+            : output.fileName.endsWith(".js")
+              ? String(output.source)
+              : "",
+        )
+        .join("\n");
+      const referenced = referencedActionIds(emitted, actions.keys());
+      const manifest = Object.fromEntries([...actions].filter(([id]) => referenced.has(id)));
+
+      // Siempre, aunque quede vacío: uno viejo le daría al servidor acciones que ya no existen
+      mkdirSync(dirname(actionsManifestPath()), { recursive: true });
+      writeFileSync(actionsManifestPath(), JSON.stringify(manifest));
 
       const origen = resolve(clientOutDir, ".vite", "manifest.json");
       if (!existsSync(origen)) return;
@@ -242,6 +409,11 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       if (id === VIRTUAL_CLIENT_ENTRY_ID) {
         return RESOLVED_VIRTUAL_CLIENT_ENTRY_ID;
       }
+      // Virtual para que el stub resuelva el router desde la app: un `*.actions.ts` de otro
+      // paquete del workspace no tiene por qué declararlo
+      if (id === ACTIONS_CLIENT_MODULE_ID) {
+        return RESOLVED_ACTIONS_CLIENT_MODULE_ID;
+      }
 
       // El stripping de server code solo aplica al bundle del cliente. Se
       // consulta el entorno actual (`this.environment.config.consumer`) en vez
@@ -283,57 +455,59 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
       }
     },
 
-    async load(id) {
-      if (id === RESOLVED_VIRTUAL_MODULE_ID) {
-        if (!clientModuleCode) {
-          await updateRoutes(false);
+    load: {
+      order: "pre",
+      async handler(id) {
+        if (this.environment.config.consumer === "client") {
+          const stub = loadActionStub.handler.call(this, id);
+          if (stub !== undefined) return stub;
+          if (id.includes(`?${CLIENT_ROUTE_QUERY}`)) return loadClientRoute.call(this, id);
         }
-        return clientModuleCode;
-      }
-      if (id === RESOLVED_VIRTUAL_SERVER_MODULE_ID) {
-        if (!serverModuleCode) {
-          await updateRoutes(false);
+        if (id === RESOLVED_VIRTUAL_MODULE_ID) {
+          if (!clientModuleCode) {
+            await updateRoutes(false);
+          }
+          return clientModuleCode;
         }
-        return serverModuleCode;
-      }
-      if (id === RESOLVED_VIRTUAL_CLIENT_ENTRY_ID) {
-        // El gancho va primero: los efectos de un import corren en orden, y lo
-        // que ponga la aplicacion ahi tiene que verse antes de que hidrate
-        const hook = existsSync(resolve(root, CLIENT_HOOK_FILE))
-          ? `import ${JSON.stringify("/" + CLIENT_HOOK_FILE)};\n`
-          : "";
-        return (
-          `${hook}import { startRouter } from "@calumet/suamox-router";\n` +
-          `import { routes } from ${JSON.stringify(VIRTUAL_MODULE_ID)};\n` +
-          `void startRouter({ routes });\n`
-        );
-      }
+        if (id === RESOLVED_VIRTUAL_SERVER_MODULE_ID) {
+          if (!serverModuleCode) {
+            await updateRoutes(false);
+          }
+          // En dev la tabla no va en el módulo: el adaptador le pregunta al plugin
+          return server ? serverModuleCode : `${serverModuleCode ?? ""}${serverActionsCode()}`;
+        }
+        if (id === RESOLVED_ACTIONS_CLIENT_MODULE_ID) {
+          return ACTIONS_CLIENT_MODULE_CODE;
+        }
+        if (id === RESOLVED_VIRTUAL_CLIENT_ENTRY_ID) {
+          // El gancho va primero: los efectos de un import corren en orden, y lo
+          // que ponga la aplicacion ahi tiene que verse antes de que hidrate
+          const hook = existsSync(resolve(root, CLIENT_HOOK_FILE))
+            ? `import ${JSON.stringify("/" + CLIENT_HOOK_FILE)};\n`
+            : "";
+          return (
+            `${hook}import { startRouter } from "@calumet/suamox-router";\n` +
+            `import { routes } from ${JSON.stringify(VIRTUAL_MODULE_ID)};\n` +
+            `void startRouter({ routes });\n`
+          );
+        }
+      },
     },
 
     transform(code, id) {
-      // Solo aplicar a modulos con el query string del client route
-      if (!id.includes(`?${CLIENT_ROUTE_QUERY}`)) return;
+      const cleanPath = (id.split("?")[0] ?? id).replace(/\\/g, "/");
+      if (!isActionModule(cleanPath)) return;
 
-      // En este punto Vite ya transformo TSX/TS a JS. Se usa el parser Oxc de
-      // Vite para operar sobre el AST del modulo ya transformado.
-      const filePath = (id.split("?")[0] ?? id).replace(/\\/g, "/");
-
-      const result = parseSync(filePath, code);
-
-      // Fail-safe: si el codigo no parsea limpio no se puede garantizar que el
-      // stripping de server code sea correcto, asi que se aborta el build.
-      if (result.errors.length > 0) {
-        this.error(
-          `[suamox:pages] Failed to parse exports from "${filePath}". ` +
-            `Cannot guarantee server code won't leak to the client bundle.\n` +
-            `To fix this, you can:\n` +
-            `  1. Move server-only imports to a *.server.ts file (automatically excluded from client)\n` +
-            `  2. Check the file for syntax errors\n` +
-            `Error: ${result.errors[0]?.message ?? "unknown parse error"}`,
-        );
+      if (this.environment.config.consumer === "client") {
+        rejectQueriedActions.call(this, id);
+        return;
       }
-
-      return stripServerExports(code, result.program, filePath) ?? undefined;
+      // En dev el SSR puede ver el archivo antes que el navegador, y el adaptador lo busca aquí
+      try {
+        registerActions(code, cleanPath);
+      } catch (error) {
+        this.error((error as Error).message);
+      }
     },
 
     generateBundle(_options, bundle) {

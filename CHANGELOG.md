@@ -1,5 +1,62 @@
 # Changelog
 
+## 0.25.0 (2026-10-09)
+
+### Breaking Changes
+
+- **Un `POST` de otro sitio a una página responde `403`.** Con el arreglo de abajo, en producción el middleware y los loaders de una página reciben el cuerpo de un `POST`, como ya pasaba en dev. Un formulario de otro sitio es una petición simple, sin preflight y con la cookie del usuario, así que una página que procesara ese cuerpo quedaba abierta a CSRF. Ahora los métodos que no son `GET` ni `HEAD` a una página exigen la misma revisión de origen que las acciones (`Sec-Fetch-Site: same-origin`, o un `Origin` del mismo host). `GET` y `HEAD` no cambian, y las rutas de API tampoco.
+
+  **Impacto.** Un servicio externo que hace `POST` a una página, como el retorno de una pasarela de pago o un webhook, recibe `403`.
+
+  **Migración.** Ese callback va a una ruta de API (`src/api/`), que no tiene esta revisión porque su contrato es justo recibir peticiones de fuera.
+
+- **En dev, el servidor escucha en `localhost`.** `createServer` ignoraba `hostname` en desarrollo y aceptaba conexiones de toda la red local, cuando Vite por defecto solo escucha en `localhost`. Con las acciones eso dejaba que cualquiera en la misma red ejecutara escrituras con las credenciales de desarrollo. Ahora dev usa `hostname` si se pasa y `localhost` si no.
+
+  **Impacto.** Un dev que se levanta en un contenedor o se abre desde otra máquina deja de responder.
+
+  **Migración.** Pasar la interfaz de forma explícita: `createServer({ hostname: "0.0.0.0" })`.
+
+### Features
+
+- **Acciones: funciones de servidor en `*.actions.ts`.** Una página no tenía dónde correr una escritura en el servidor de Suamox cuando el backend ocupa `/api` en el mismo origen: las rutas de API viven bajo ese prefijo y nginx se las manda al backend, y una ruta de página rehace la petición sin método ni cuerpo. Un BFF que guarda lecturas del backend en memoria no podía escribir e invalidar en el mismo paso. Ahora cada export de un `*.actions.ts` es una acción: se importa desde un componente como cualquier función y corre en el servidor, en `POST /__actions/<id>`, igual que `/__data` es el endpoint de datos del router. El archivo puede vivir fuera de `pages/`, también en un paquete del workspace, y en el bundle del navegador se reemplaza entero por un stub, así que ni su código ni sus imports llegan al cliente.
+
+  ```ts
+  // features/portal/ajustes.actions.ts
+  export async function guardarTema(valores: TemaRequest): Promise<void> {
+    const { request } = getActionContext();
+    await backend(request).put("/api/portal/tema", { body: valores });
+    await tema.invalidar();
+  }
+  ```
+
+  El adaptador solo acepta la petición del mismo origen (`Sec-Fetch-Site`, o `Origin` si falta) y corre el middleware global, que recibe en `context.action` qué acción se llama para poder autorizar por acción. El módulo se carga y el cuerpo se lee después del middleware, así que una petición denegada no ejecuta nada de la acción. Los argumentos viajan en JSON, o como un único `FormData`. La respuesta se serializa como la de un loader, un `Response` pasa tal cual salvo las cabeceras `x-suamox-*`, y un estado de fallo llega al cliente como `ActionError`. Una redirección del middleware o de la acción también llega como `ActionError`, con su destino en cabeceras que solo pone el adaptador: `fetch` la seguía en silencio y una escritura denegada por un guardia parecía exitosa. La guía está en [acciones](./docs/guias/actions.md).
+
+  Lo que queda expuesto está acotado en el build:
+
+  - Cada export tiene que ser una función declarada en el archivo. Una constante, una clase o un reexport de otro módulo son error de build: un reexport convertiría en endpoint lo que otro módulo exporta para su uso.
+  - Solo son endpoints las acciones cuyo stub quedó en el bundle del navegador. Los stubs son puros, así que un export que nadie importa desaparece con el tree-shaking y no entra en la tabla.
+  - El id es un HMAC del archivo y del export con una clave por build, para que no se pueda calcular desde fuera ni deje ver la estructura del código. Con varias réplicas construidas por separado, la clave se fija con `SUAMOX_ACTIONS_KEY`.
+  - El nombre se reconoce sin distinguir mayúsculas y con cualquier extensión de módulo: en macOS `../X.Actions` resolvía al mismo archivo sin pasar por el stub. Los de `node_modules` no cuentan salvo con `actionsInDependencies`, porque Redux y NgRx usan el mismo nombre. Un `*.actions.*` dentro de `src/pages` o `src/api` no se toma por ruta.
+  - El stub se genera al cargar el módulo y no al transformarlo, porque el bundler toma de `load` el contenido de los mapas de fuente. También se aplica a los workers, a los que Vite no les pasa los plugins de la app, e importar un `*.actions.ts` con `?raw` o `?url` desde el cliente o desde un worker es error de build.
+
+  El build del cliente escribe `dist/.vite/actions.json` y el del servidor lo lee para armar la tabla, porque solo el cliente sabe qué acciones importa la app. En dev la tabla la lleva el plugin según transforma archivos. El plugin 0.17.0 emite stubs que importan `createAction` de `@calumet/suamox-router`, así que necesita el router 0.13.0.
+
+### Correcciones
+
+- **En producción, el middleware recibía un `POST` como un `GET` sin cuerpo.** El adaptador rehacía la petición con la URL validada y solo copiaba las cabeceras, mientras en dev pasaba la petición completa: un middleware que leía el formulario funcionaba en desarrollo y fallaba en silencio al desplegar. Ahora conserva método y cuerpo en páginas, rutas de API y `/__data`, y el handler de una ruta de API recibe la misma petición que vio su middleware, con la URL validada contra `allowedHosts`.
+
+- **Con `build.sourcemap` activado, el `.map` de cada página traía su `loader`.** El plugin quitaba los exports de servidor en `transform`, pero el bundler arma el `sourcesContent` del mapa con lo que devolvió `load`, que era el fuente completo. El `.js` salía limpio y el `.map`, que el adaptador sirve en `/assets/*`, llevaba el `loader`, `getStaticPaths` y lo que importaban. Ahora se quitan en `load`, sobre el fuente TS, y el mapa apunta a ese fuente ya sin ellos.
+
+### Packages
+
+| Paquete                             | Version anterior | Nueva version |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox`                   | 0.11.1           | 0.12.0        |
+| `@calumet/suamox-create-app`        | 0.5.2            | 0.5.3         |
+| `@calumet/suamox-hono-adapter`      | 0.12.0           | 0.13.0        |
+| `@calumet/suamox-router`            | 0.12.0           | 0.13.0        |
+| `@calumet/suamox-vite-plugin-pages` | 0.16.1           | 0.17.0        |
+
 ## 0.24.1 (2026-10-09)
 
 ### Correcciones
