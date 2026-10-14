@@ -22,7 +22,7 @@
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
-    "@calumet/suamox-cli": "^0.4.0",
+    "@calumet/suamox-cli": "^0.4.1",
     "@types/node": "^26.6.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

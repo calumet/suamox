@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.25.2 (2026-10-14)
+
+### Correcciones
+
+- **Instalar el CLI avisaba de un peer sin cumplir.** El CLI 0.4.0 se publicó cuando `@calumet/suamox` iba por 0.11.x, y `workspace:^` se resuelve al publicar: quedó pidiendo `@calumet/suamox@^0.11.1`, que en `0.x` no admite 0.12.0. pnpm avisaba en cada instalación de una app al día. Se republica con el peer resuelto contra 0.12.0. Al subir la minor de un paquete del que otros dependen por peer, hay que republicar también a esos dependientes.
+
+### Packages
+
+| Paquete                      | Version anterior | Nueva version |
+| ---------------------------- | ---------------- | ------------- |
+| `@calumet/suamox-cli`        | 0.4.0            | 0.4.1         |
+| `@calumet/suamox-create-app` | 0.5.4            | 0.5.5         |
+
 ## 0.25.1 (2026-10-09)
 
 ### Correcciones
