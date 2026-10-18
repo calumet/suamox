@@ -573,6 +573,11 @@ const handleAction = async (
   }
 };
 
+const DEFAULT_SERVER_ENTRY = "dist/server/entry-server.js";
+
+/** El `base` como prefijo de URL: sin barra final, y vacío en la raíz */
+const basePrefix = (base: string): string => base.replace(/\/+$/, "");
+
 /**
  * Crea una app de Hono con soporte SSR
  */
@@ -605,7 +610,12 @@ export async function createServer(options: CreateServerOptions): Promise<void> 
   if (isProd) {
     // Modo producción: usar serve estándar
     const { serve } = await import("@hono/node-server");
-    const app = createProdHandler(adapterOptions);
+    // El `base` de la config de Vite viaja en el bundle del servidor, como en dev
+    const entryURL = pathToFileURL(
+      resolve(process.cwd(), adapterOptions.serverEntry ?? DEFAULT_SERVER_ENTRY),
+    ).href;
+    const { base } = (await import(entryURL)) as { base?: string };
+    const app = createProdHandler({ ...adapterOptions, base });
     if (hostname) {
       console.log(`Production server running at http://${hostname}:${port}`);
       serve({ fetch: app.fetch, port, hostname });
@@ -699,6 +709,9 @@ const ssrRunner = (vite: ViteDevServer): ModuleRunner => {
 export function createDevHandler(options: DevHandlerOptions): Hono {
   const { vite, onRequest, onBeforeRender, onAfterRender } = options;
   const app = createHonoApp(options);
+  // Las rutas del framework cuelgan del `base`, igual que las que Vite sirve antes que esta app
+  const prefix = basePrefix(vite.config?.base ?? "/");
+  const routes = prefix ? app.basePath(prefix) : app;
 
   // Carga @calumet/suamox a través de Vite para compartir la misma instancia
   // de contextos React (LoaderDataContext, StaticPropsContext) con las páginas.
@@ -718,7 +731,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
   };
 
   // API routes handler (dev)
-  app.all("/api/*", async (c) => {
+  routes.all("/api/*", async (c) => {
     try {
       const runtime = await loadRuntime();
       const routesModule = await ssrRunner(vite).import<{
@@ -785,7 +798,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
   });
 
   // Endpoint de datos para client-side navigation
-  app.get("/__data", async (c) => {
+  routes.get("/__data", async (c) => {
     if (isInvalidDataRequest(c)) {
       return c.json({ error: "Cross-origin request blocked" }, 403);
     }
@@ -928,12 +941,12 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
     };
   };
 
-  app.post("/__actions/:id", (c) =>
+  routes.post("/__actions/:id", (c) =>
     handleAction(c, resolveDevAction, loadMiddleware, options.allowedHosts),
   );
 
   // Handler SSR para páginas (el middleware de Vite se maneja en createServer)
-  app.use("*", async (c) => {
+  routes.use("*", async (c) => {
     if (isBlockedPageWrite(c)) {
       return c.text("Cross-origin request blocked", 403);
     }
@@ -1106,18 +1119,24 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
 export function createProdHandler(options: ProdHandlerOptions): Hono {
   const {
     clientDir = "dist/client",
-    serverEntry = "dist/server/entry-server.js",
+    serverEntry = DEFAULT_SERVER_ENTRY,
     onRequest,
     onBeforeRender,
     onAfterRender,
     root = process.cwd(),
     staticDir = "dist/static",
-    base = "/",
+    base: rawBase = "/",
     allowedHosts,
     proxy,
   } = options;
 
   const app = createHonoApp(options);
+  // Todo lo del framework (assets, API, `/__data`, acciones, páginas) cuelga del `base`.
+  // El proxy no: sus rutas las escribe la aplicación tal cual
+  const prefix = basePrefix(rawBase);
+  // Como lo normaliza el plugin: `stripBase` no espera la barra final
+  const base = prefix || "/";
+  const routes = prefix ? app.basePath(prefix) : app;
 
   // Proxy reverso: reenvía rutas configuradas al backend
   if (proxy) {
@@ -1184,7 +1203,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
           "pagina saldria sin hidratar. Corre el build del cliente antes de arrancar.",
       );
     }
-    return `/${entryChunk.file}`;
+    return `${prefix}/${entryChunk.file}`;
   };
 
   const toManifestKey = (filePath: string): string | null => {
@@ -1223,15 +1242,15 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       }
 
       if (entry.file && isScriptAsset(entry.file)) {
-        const href = `/${entry.file}`;
+        const href = `${prefix}/${entry.file}`;
         preloadScripts.add(href);
       }
       for (const cssPath of entry.css ?? []) {
-        styles.add(`/${cssPath}`);
+        styles.add(`${prefix}/${cssPath}`);
       }
       for (const asset of entry.assets ?? []) {
         if (fontFilter?.test(asset) && /\.(woff2?|ttf|otf)$/.test(asset)) {
-          preloadFonts.add(`/${asset}`);
+          preloadFonts.add(`${prefix}/${asset}`);
         }
       }
       for (const importKey of entry.imports ?? []) {
@@ -1262,13 +1281,14 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     };
   };
 
-  // Servir assets estáticos desde el directorio de build del cliente
-  const assetHandler = serveStatic({ root: clientDir }) as (
+  // Servir assets estáticos desde el directorio de build del cliente. En disco no llevan el base
+  const withoutBase = (path: string): string => stripBase(path, base);
+  const assetHandler = serveStatic({ root: clientDir, rewriteRequestPath: withoutBase }) as (
     c: Context,
     next: () => Promise<void>,
   ) => Promise<Response | void>;
   // Vite pone hash a todo lo que emite en `assetsDir`.
-  app.use("/assets/*", async (c, next) => {
+  routes.use("/assets/*", async (c, next) => {
     const response = await assetHandler(c, next);
     if (response?.ok) {
       response.headers.set("Cache-Control", "public, max-age=31536000, immutable");
@@ -1282,11 +1302,11 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
      renderizador: la raíz se queda sin SSR y sin su HTML prerenderizado. El
      resto de las rutas nunca lo notaron porque no resuelven a ningún archivo y
      caen a `next()`. */
-  const publicHandler = serveStatic({ root: clientDir }) as (
+  const publicHandler = serveStatic({ root: clientDir, rewriteRequestPath: withoutBase }) as (
     c: Context,
     next: () => Promise<void>,
   ) => Promise<Response | void>;
-  app.use("*", async (c, next) => {
+  routes.use("*", async (c, next) => {
     if (c.req.path.endsWith("/")) {
       return next();
     }
@@ -1294,7 +1314,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   });
 
   if (staticFallbackEnabled) {
-    app.use("/client/*", serveStatic({ root: staticDir }));
+    routes.use("/client/*", serveStatic({ root: staticDir, rewriteRequestPath: withoutBase }));
   }
 
   const resolveStaticHtmlPath = (pathname: string): string | null => {
@@ -1371,7 +1391,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   };
 
   // API routes handler (prod)
-  app.all("/api/*", async (c) => {
+  routes.all("/api/*", async (c) => {
     try {
       const entry = await loadServerEntry();
       const apiRoutes = entry.apiRoutes;
@@ -1425,7 +1445,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   });
 
   // Endpoint de datos para client-side navigation
-  app.get("/__data", async (c) => {
+  routes.get("/__data", async (c) => {
     if (isInvalidDataRequest(c)) {
       return c.json({ error: "Cross-origin request blocked" }, 403);
     }
@@ -1540,7 +1560,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     }
   });
 
-  app.post("/__actions/:id", (c) =>
+  routes.post("/__actions/:id", (c) =>
     handleAction(
       c,
       async (id) => {
@@ -1553,9 +1573,9 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
   );
 
   // Handler SSR: solo para rutas que no son assets
-  app.use("*", async (c) => {
+  routes.use("*", async (c) => {
     // Omitir si está solicitando un archivo de assets
-    if (c.req.path.startsWith("/assets/")) {
+    if (c.req.path.startsWith(`${prefix}/assets/`)) {
       return c.notFound();
     }
     if (isBlockedPageWrite(c)) {

@@ -46,7 +46,10 @@ const VIRTUAL_CLIENT_ENTRY_ID = "virtual:pages/client-entry";
 const RESOLVED_VIRTUAL_CLIENT_ENTRY_ID = "\0" + VIRTUAL_CLIENT_ENTRY_ID;
 
 const RESOLVED_ACTIONS_CLIENT_MODULE_ID = "\0" + ACTIONS_CLIENT_MODULE_ID;
-const ACTIONS_CLIENT_MODULE_CODE = `export { createAction } from "@calumet/suamox-router";\n`;
+// El stub de cada acción no conoce el `base`: lo pone aquí, que se genera ya con la config resuelta
+const actionsClientModuleCode = (base: string): string =>
+  `import { createAction as create } from "@calumet/suamox-router";\n` +
+  `export const createAction = (id) => create(id, ${JSON.stringify(base)});\n`;
 
 /** Lo escribe el build del cliente, que es el que ve cada acción, y lo lee el del servidor */
 const ACTIONS_MANIFEST = ".vite/actions.json";
@@ -288,7 +291,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
                 order: "pre" as const,
                 handler(this: { error: (message: string) => never }, id: string) {
                   return id === RESOLVED_ACTIONS_CLIENT_MODULE_ID
-                    ? ACTIONS_CLIENT_MODULE_CODE
+                    ? actionsClientModuleCode(basePath)
                     : loadActionStub.handler.call(this, id);
                 },
               },
@@ -477,7 +480,7 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
           return server ? serverModuleCode : `${serverModuleCode ?? ""}${serverActionsCode()}`;
         }
         if (id === RESOLVED_ACTIONS_CLIENT_MODULE_ID) {
-          return ACTIONS_CLIENT_MODULE_CODE;
+          return actionsClientModuleCode(basePath);
         }
         if (id === RESOLVED_VIRTUAL_CLIENT_ENTRY_ID) {
           // El gancho va primero: los efectos de un import corren en orden, y lo

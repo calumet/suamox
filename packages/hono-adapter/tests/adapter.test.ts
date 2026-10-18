@@ -652,6 +652,79 @@ describe("createProdHandler", () => {
   });
 });
 
+describe("createProdHandler con base", () => {
+  beforeEach(() => {
+    mocks.renderPage.mockReset();
+    mocks.generateHTML.mockReset();
+    mocks.matchRoute.mockReset();
+  });
+
+  it("sirve assets, API y páginas bajo el base, y emite las URLs con el prefijo", async () => {
+    const root = await mkdtemp(join(tmpdir(), "suamox-base-"));
+    const serverDir = join(root, "dist", "server");
+    const clientDir = join(root, "dist", "client");
+    const routeFilePath = join(root, "src", "pages", "index.tsx");
+
+    await mkdir(serverDir, { recursive: true });
+    await mkdir(join(clientDir, ".vite"), { recursive: true });
+    await mkdir(join(clientDir, "assets"), { recursive: true });
+    await writeFile(
+      join(serverDir, "entry-server.mjs"),
+      `export const routes = [{ path: '/', filePath: ${JSON.stringify(routeFilePath)} }];\n` +
+        `export const apiRoutes = [{ path: '/api/salud' }];`,
+    );
+    await writeFile(
+      join(clientDir, ".vite", "manifest.json"),
+      JSON.stringify({
+        "virtual:pages/client-entry": {
+          file: "assets/client.js",
+          isEntry: true,
+          css: ["assets/client.css"],
+        },
+      }),
+    );
+    // En disco sin el base: Vite emite el build igual con o sin él
+    await writeFile(join(clientDir, "assets", "client.js"), "console.log(1)");
+
+    const salud = vi.fn(() => new Response("ok"));
+    mocks.matchRoute.mockImplementation(((_routes: unknown, pathname: string) => {
+      if (pathname === "/") return { route: { filePath: routeFilePath }, params: {} };
+      if (pathname === "/api/salud") return { route: { methods: { GET: salud } }, params: {} };
+      return null;
+    }) as never);
+    mocks.renderPage.mockResolvedValue({ status: 200, html: "", head: "", initialData: null });
+    mocks.generateHTML.mockReturnValue("<html></html>");
+
+    const app = createProdHandler({
+      root,
+      clientDir,
+      serverEntry: join(serverDir, "entry-server.mjs"),
+      staticDir: join(root, "dist", "static"),
+      base: "/docs/",
+    });
+
+    expect((await app.request("http://localhost/docs/")).status).toBe(200);
+    expect(mocks.generateHTML).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scripts: ["/docs/assets/client.js"],
+        styles: ["/docs/assets/client.css"],
+      }),
+    );
+
+    const asset = await app.request("http://localhost/docs/assets/client.js");
+    expect(asset.status).toBe(200);
+    expect(await asset.text()).toBe("console.log(1)");
+
+    const api = await app.request("http://localhost/docs/api/salud");
+    expect(await api.text()).toBe("ok");
+    expect(salud).toHaveBeenCalledTimes(1);
+
+    // Fuera del base no hay nada: en un dominio compartido esas rutas son de otra app
+    expect((await app.request("http://localhost/api/salud")).status).toBe(404);
+    expect((await app.request("http://localhost/assets/client.js")).status).toBe(404);
+  });
+});
+
 describe("createProdHandler /__data endpoint", () => {
   const createProdApp = async (loaderRoute?: {
     path: string;

@@ -142,6 +142,7 @@ Suamox lee `base` automáticamente de la config de Vite y lo aplica en:
 - **SSR (dev y prod)**: el servidor strip el base antes de hacer match de rutas.
 - **SSG**: los archivos HTML se generan bajo `dist/static/grupos/...`.
 - **CSS en SSG**: los paths de assets usan el prefijo base.
+- **Endpoints del framework**: `/api/*`, `/__data`, `/__actions/:id` y `/assets/*` cuelgan del base (`/grupos/api/...`), y los scripts y estilos se emiten con él. Fuera del base el servidor responde `404`, así que dos apps pueden compartir dominio detrás de un proxy.
 
 No necesitas configurar el base en cada paquete individualmente.
 
