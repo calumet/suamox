@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.25.3 (2026-10-18)
+
+### Correcciones
+
+- **Una app con `base` no funcionaba en producción.** El servidor de producción tomaba `base` de sus opciones, con `/` por defecto, y no del bundle del servidor: `createServer` nunca se lo pasaba, así que ninguna página bajo el prefijo casaba. Además, el adaptador montaba `/api/*`, `/__data`, `/__actions/:id` y `/assets/*` en la raíz, emitía los scripts y estilos sin el prefijo, y el router pedía `/__data` y `/__actions` en la raíz. Detrás de un proxy que publica la app en una sub-ruta de un dominio compartido, esas peticiones llegaban a otra app. Ahora `createServer` lee `base` del bundle del servidor, como ya hacía dev con la config de Vite; las rutas del framework cuelgan del prefijo en dev y en producción; los assets se emiten y se sirven con él; y el router y las acciones lo anteponen. Fuera del `base` el adaptador responde `404`. Las rutas del `proxy` siguen como las escribe la aplicación. Los `href` del markup siguen siendo responsabilidad de la aplicación (`import.meta.env.BASE_URL`).
+
+### Packages
+
+| Paquete                             | Version anterior | Nueva version |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox-create-app`        | 0.5.5            | 0.5.6         |
+| `@calumet/suamox-hono-adapter`      | 0.13.0           | 0.13.1        |
+| `@calumet/suamox-router`            | 0.13.0           | 0.13.1        |
+| `@calumet/suamox-vite-plugin-pages` | 0.17.1           | 0.17.2        |
+
 ## 0.25.2 (2026-10-14)
 
 ### Correcciones

@@ -198,11 +198,11 @@ const readActionBody = async (response: Response): Promise<unknown> => {
  * Uso interno del plugin: reemplaza cada export de un `*.actions.ts` en el bundle del
  * navegador. Un único `FormData` viaja tal cual; cualquier otra lista de argumentos, en JSON.
  */
-export function createAction(id: string): (...args: unknown[]) => Promise<unknown> {
+export function createAction(id: string, base = "/"): (...args: unknown[]) => Promise<unknown> {
   return async (...args) => {
     const [first] = args;
     const isForm = args.length === 1 && first instanceof FormData;
-    const response = await fetch(`/__actions/${id}`, {
+    const response = await fetch(`${base === "/" ? "" : base}/__actions/${id}`, {
       method: "POST",
       headers: isForm ? undefined : { "Content-Type": "application/json" },
       body: isForm ? first : JSON.stringify(args),
@@ -362,7 +362,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
             }
           }
 
-          const dataUrl = new URL("/__data", origin);
+          const dataUrl = new URL(`${base === "/" ? "" : base}/__data`, origin);
           dataUrl.searchParams.set("path", url.pathname);
           url.searchParams.forEach((value, key) => {
             dataUrl.searchParams.append(key, value);
