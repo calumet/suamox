@@ -685,6 +685,7 @@ describe("createProdHandler con base", () => {
     );
     // En disco sin el base: Vite emite el build igual con o sin él
     await writeFile(join(clientDir, "assets", "client.js"), "console.log(1)");
+    await writeFile(join(clientDir, "index.html"), "<html>shell de vite</html>");
 
     const salud = vi.fn(() => new Response("ok"));
     mocks.matchRoute.mockImplementation(((_routes: unknown, pathname: string) => {
@@ -704,6 +705,8 @@ describe("createProdHandler con base", () => {
     });
 
     expect((await app.request("http://localhost/docs/")).status).toBe(200);
+    // Sin barra final también renderiza, en vez de servir el index.html del build
+    expect(await (await app.request("http://localhost/docs")).text()).toBe("<html></html>");
     expect(mocks.generateHTML).toHaveBeenCalledWith(
       expect.objectContaining({
         scripts: ["/docs/assets/client.js"],

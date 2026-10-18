@@ -1307,7 +1307,8 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
     next: () => Promise<void>,
   ) => Promise<Response | void>;
   routes.use("*", async (c, next) => {
-    if (c.req.path.endsWith("/")) {
+    // `/base` sin barra es la raíz de la app, no el directorio de `index.html`
+    if (c.req.path.endsWith("/") || c.req.path === prefix) {
       return next();
     }
     return publicHandler(c, next);
