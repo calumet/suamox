@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.25.4 (2026-10-18)
+
+### Correcciones
+
+- **Con `base`, cada navegación recargaba la página entera.** La entrada del cliente que genera el plugin arrancaba el router con `startRouter({ routes })`, sin el `base`. El router no reconocía las rutas bajo el prefijo y dejaba que el navegador cargara cada enlace como una página nueva. Ahora le pasa el `base` del módulo virtual, como ya decía la guía del router.
+
+### Packages
+
+| Paquete                             | Version anterior | Nueva version |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox-create-app`        | 0.5.6            | 0.5.7         |
+| `@calumet/suamox-vite-plugin-pages` | 0.17.2           | 0.17.3        |
+
 ## 0.25.3 (2026-10-18)
 
 ### Correcciones
