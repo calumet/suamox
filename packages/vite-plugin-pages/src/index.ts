@@ -490,8 +490,8 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
             : "";
           return (
             `${hook}import { startRouter } from "@calumet/suamox-router";\n` +
-            `import { routes } from ${JSON.stringify(VIRTUAL_MODULE_ID)};\n` +
-            `void startRouter({ routes });\n`
+            `import { routes, base } from ${JSON.stringify(VIRTUAL_MODULE_ID)};\n` +
+            `void startRouter({ routes, base });\n`
           );
         }
       },
