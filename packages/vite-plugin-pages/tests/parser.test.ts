@@ -340,4 +340,45 @@ describe("validateRoutes", () => {
 
     expect(errors).toEqual([]);
   });
+
+  const fallbackRoute = (path: string, filePath: string, middlewares: string[]): RouteRecord => ({
+    path,
+    filePath,
+    params: [],
+    isCatchAll: false,
+    isIndex: false,
+    segments: [],
+    priority: 110,
+    middlewares,
+  });
+
+  it("rechaza un 404 o un 500 bajo una carpeta con middleware propio", () => {
+    const routes = [
+      fallbackRoute("/perfil", "/pages/perfil.tsx", ["/pages/middleware.ts"]),
+      fallbackRoute("/500", "/pages/(privado)/500.tsx", [
+        "/pages/middleware.ts",
+        "/pages/(privado)/middleware.ts",
+      ]),
+      fallbackRoute("/404", "/pages/(privado)/404.tsx", [
+        "/pages/middleware.ts",
+        "/pages/(privado)/middleware.ts",
+      ]),
+    ];
+
+    const errors = validateRoutes(routes);
+
+    expect(errors).toHaveLength(2);
+    expect(errors[0]).toContain("Fallback page under a folder with middleware");
+    expect(errors[0]).toContain("/pages/(privado)/500.tsx");
+    expect(errors[1]).toContain("/pages/(privado)/404.tsx");
+  });
+
+  it("acepta el middleware de la raiz, que llevan todas las rutas", () => {
+    const routes = [
+      fallbackRoute("/perfil", "/pages/perfil.tsx", ["/pages/middleware.ts"]),
+      fallbackRoute("/500", "/pages/500.tsx", ["/pages/middleware.ts"]),
+    ];
+
+    expect(validateRoutes(routes)).toEqual([]);
+  });
 });
