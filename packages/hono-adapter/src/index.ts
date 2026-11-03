@@ -52,6 +52,10 @@ const shouldHydrate = (result: RenderResult): boolean =>
 const errorRouteOf = (routes: RouteRecord[]): RouteRecord | undefined =>
   routes.find((route) => route.path === "/500");
 
+/** Sin ruta que case se pinta `/404`: su guardia es la que corre, no ninguna */
+const notFoundRouteOf = (routes: RouteRecord[]): RouteRecord | undefined =>
+  routes.find((route) => route.path === "/404");
+
 /** La marca le dice al router que hidrate `500.tsx` y no la ruta de la URL */
 const rootHtml = (result: RenderResult): string =>
   `<div id="root"${result.errorPage ? " data-suamox-error" : ""}>${result.html}</div>`;
@@ -983,7 +987,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
       // Ejecutar middleware de usuario y pipeline SSR
       const middlewareFn = await loadMiddleware();
       return await runMiddleware(
-        [middlewareFn, ...routeMiddleware(match?.route)],
+        [middlewareFn, ...routeMiddleware(match?.route ?? notFoundRouteOf(routes))],
         c.req.raw,
         url,
         resolveRoutePathname(strippedPathname),
@@ -1621,7 +1625,7 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
       const safeRequest = toSafeRequest(c.req.raw, safeUrl);
 
       return await runMiddleware(
-        [entry.onRequest, ...routeMiddleware(match?.route)],
+        [entry.onRequest, ...routeMiddleware(match?.route ?? notFoundRouteOf(entry.routes))],
         safeRequest,
         safeUrl,
         resolveRoutePathname(strippedPathname),

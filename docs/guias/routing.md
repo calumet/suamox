@@ -123,7 +123,9 @@ No recibe el error, para no exponer en el navegador lo que lanzó el servidor. E
 
 Si `500.tsx` también falla, por ejemplo porque lanza el loader de uno de sus layouts, o si no existe, se devuelve un HTML básico con status 500 y sin el script del cliente.
 
-`404.tsx` y `500.tsx` no pueden ir bajo una carpeta con `middleware.ts` propio, porque se pintan en lugar de otra ruta y con el middleware de esa: el de su carpeta no correría. El build falla si están ahí; en dev solo avisa. El `middleware.ts` de la raíz de `pages/` sí vale, porque lo llevan todas las rutas.
+Cuando ninguna ruta casa con la URL, corre el middleware de la carpeta de `404.tsx`, porque es la página que se pinta. Así, un `middleware.ts` en la raíz de `pages/` también protege las URLs desconocidas: si redirige a quien no ha iniciado sesión, lo hará también ahí.
+
+`500.tsx` se pinta en lugar de la ruta que falló, con el middleware que ya corrió para esa ruta. Por eso `404.tsx` y `500.tsx` no pueden llevar un `middleware.ts` que no lleven todas las rutas, como el de una carpeta `(privado)/`. Si lo llevan, el build falla; en dev solo avisa. El `middleware.ts` de la raíz de `pages/` sí vale, porque lo llevan todas.
 
 ## Prioridad de rutas
 

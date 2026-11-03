@@ -1059,6 +1059,26 @@ describe("createDevHandler middleware", () => {
     expect(response.status).toBe(500);
   });
 
+  it("sin ruta que case corre el middleware de la ruta /404, que es la que se pinta", async () => {
+    const guard = vi.fn(() => Promise.resolve(new Response("denegado", { status: 401 })));
+    const notFound = { path: "/404", params: [], middleware: [guard] };
+
+    const vite = {
+      environments: {
+        ssr: { runner: { import: createSsrImport([notFound]) } },
+        client: { transformRequest: vi.fn((_url: string) => Promise.resolve({ code: "" })) },
+      },
+      transformIndexHtml: vi.fn((_url: string, html: string) => Promise.resolve(html)),
+    } as unknown as ViteDevServer;
+
+    const app = createDevHandler({ vite });
+    const response = await app.request("http://localhost/no-existe");
+
+    expect(guard).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(401);
+    expect(mocks.renderPage).not.toHaveBeenCalled();
+  });
+
   // Descartarla dejaria la carpeta sin guardia en silencio: es el fallo que la
   // feature existe para evitar, asi que falla cerrado
   it("rejects a route middleware entry that is not a function", async () => {

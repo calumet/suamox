@@ -7,6 +7,9 @@
 - **El build falla si `404.tsx` o `500.tsx` están bajo una carpeta con `middleware.ts` propio.** Estas páginas se pintan en lugar de otra ruta y con el middleware de esa, así que la guardia de su carpeta no corría: los loaders de sus layouts podían ejecutarse para quien esa guardia habría rechazado. El `middleware.ts` de la raíz de `pages/` sí vale, porque lo llevan todas las rutas. En dev solo se avisa.
   - **Impacto:** una app con, por ejemplo, `src/pages/(privado)/404.tsx` y `src/pages/(privado)/middleware.ts` deja de compilar.
   - **Migración:** mueve la página fuera de esa carpeta, por ejemplo a `src/pages/404.tsx`.
+- **Una URL sin ruta corre el middleware de la carpeta de `404.tsx`.** Antes solo corría el global, `src/middleware.ts`, y `404.tsx` y sus layouts se pintaban sin la guardia de `src/pages/middleware.ts`: los loaders de esos layouts devolvían sus datos a quien la guardia habría rechazado. Si además fallaba un loader del 404, `500.tsx` se pintaba igual de desprotegida.
+  - **Impacto:** un guardia en `src/pages/middleware.ts` ahora también corre en las URLs desconocidas. Si redirige a quien no ha iniciado sesión, esas URLs también redirigen.
+  - **Migración:** si el 404 tiene que verse sin sesión, mueve las páginas protegidas y su `middleware.ts` a una carpeta de grupo, como `src/pages/(app)/`, y deja `404.tsx` en la raíz.
 
 ### Features
 
