@@ -45,6 +45,17 @@ const CLIENT_ROUTE_QUERY = "__suamox-client-route";
  */
 const DEV_CLIENT_ENTRY_URL = "/@id/__x00__virtual:pages/client-entry";
 
+/** El HTML basico de un 500 no es ninguna ruta: hidratarlo pintaria encima la que casó */
+const shouldHydrate = (result: RenderResult): boolean =>
+  result.status < 500 || result.errorPage === true;
+
+const errorRouteOf = (routes: RouteRecord[]): RouteRecord | undefined =>
+  routes.find((route) => route.path === "/500");
+
+/** La marca le dice al router que hidrate `500.tsx` y no la ruta de la URL */
+const rootHtml = (result: RenderResult): string =>
+  `<div id="root"${result.errorPage ? " data-suamox-error" : ""}>${result.html}</div>`;
+
 /** Respuesta de `/__data`, en el mismo formato que `window.__INITIAL_DATA__`. */
 function dataResponse(c: Context, value: unknown): Response {
   return c.body(serializeData(value), 200, { "Content-Type": "application/json" });
@@ -1023,15 +1034,16 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
           // Pagina y layouts por separado: un layout no cuelga del grafo de la
           // pagina, son hermanos que compone el runtime. El CSS global vive en el
           // layout raiz, asi que sin recorrerlos no habria estilos en desarrollo
-          const cssFiles = match
-            ? [match.route.filePath, ...(match.route.layoutFilePaths ?? [])]
+          const renderedRoute = result.errorPage ? errorRouteOf(routes) : match?.route;
+          const cssFiles = renderedRoute
+            ? [renderedRoute.filePath, ...(renderedRoute.layoutFilePaths ?? [])]
             : [];
           const devCssLinks = Array.from(
             new Set(cssFiles.flatMap((file) => collectPageCssFromSsrGraph(vite, file))),
           );
 
-          // Scripts de cliente: solo para rutas que no son prerender
-          const clientEntry = isPrerender ? [] : [DEV_CLIENT_ENTRY_URL];
+          const hydrate = !isPrerender && shouldHydrate(result);
+          const clientEntry = hydrate ? [DEV_CLIENT_ENTRY_URL] : [];
 
           // Los scripts inline no entran aca: van despues de
           // `transformIndexHtml`, porque el pase del nonce tiene que alcanzar
@@ -1039,7 +1051,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
           const template = await vite.transformIndexHtml(
             url.pathname,
             generateHTML({
-              html: `<div id="root">${result.html}</div>`,
+              html: rootHtml(result),
               head: result.head,
               styles: devCssLinks,
               scripts: clientEntry,
@@ -1076,7 +1088,7 @@ export function createDevHandler(options: DevHandlerOptions): Hono {
           );
 
           // Inyectar datos iniciales solo para rutas con hidratación
-          if (!isPrerender) {
+          if (hydrate) {
             const initialDataPayload = result.layoutData
               ? { page: result.initialData ?? null, layouts: result.layoutData }
               : (result.initialData ?? null);
@@ -1640,29 +1652,29 @@ export function createProdHandler(options: ProdHandlerOptions): Hono {
 
           // Detectar si la ruta es prerender
           const resolvedMatch = match ? await entry.resolveRouteModule(match.route) : null;
-          const isPrerender = resolvedMatch?.prerender === true;
+          const hydrate = resolvedMatch?.prerender !== true && shouldHydrate(result);
           const nonce = options.csp ? createNonce() : undefined;
 
           // Generar HTML completo (sin hidratación para rutas prerender)
           const { preloadScripts, preloadFonts, styles } = collectManifestAssets(
-            match?.route,
+            result.errorPage ? errorRouteOf(entry.routes) : match?.route,
             entry.preloadFonts,
           );
-          const prodInitialData = isPrerender
+          const prodInitialData = !hydrate
             ? undefined
             : result.layoutData
               ? { page: result.initialData ?? null, layouts: result.layoutData }
               : result.initialData;
           const html = generateHTML({
-            html: `<div id="root">${result.html}</div>`,
+            html: rootHtml(result),
             head: result.head,
             initialData: prodInitialData,
-            scripts: isPrerender ? [] : [entryClientScript()],
-            preloadScripts: isPrerender ? [] : preloadScripts,
+            scripts: hydrate ? [entryClientScript()] : [],
+            preloadScripts: hydrate ? preloadScripts : [],
             preloadFonts,
             styles,
             scriptPlacement: "head",
-            includeInitialDataScript: !isPrerender,
+            includeInitialDataScript: hydrate,
             prehydrateScripts: result.prehydrateScripts,
             nonce,
             lang: result.lang,

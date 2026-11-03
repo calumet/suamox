@@ -53,6 +53,7 @@ test.describe("navegacion completa", () => {
 
     expect(response.status()).toBe(500);
     await expect(page).toHaveURL(/\/loader-roto$/);
+    await expect(page.locator("h1")).toHaveText("500 - Algo falló");
     expect(await marcador(page)).toBeUndefined();
   });
 });
