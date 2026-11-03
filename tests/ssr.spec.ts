@@ -35,7 +35,6 @@ test.describe("SSR rendering", () => {
   test("renders 404 page content for unmatched routes", async ({ page }) => {
     await page.goto("/this-does-not-exist");
 
-    // The catch-all route handles all unmatched paths
     await expect(page.locator("h1")).toContainText("404");
   });
 });

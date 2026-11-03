@@ -17,7 +17,7 @@ if (localStorage.getItem("tema") === "oscuro") {
 
 ## Qué hace
 
-- Intercepta clicks en links internos.
+- Intercepta clicks en links a rutas de la aplicación.
 - Resuelve la ruta desde el manifest `virtual:pages`.
 - Obtiene datos del loader via `/__data?path=...` (los loaders son server-only, nunca se ejecutan en el browser).
 - Sigue las redirecciones del servidor: si el destino es una ruta del cliente navega sin recargar y reemplaza la entrada del historial; si no (ruta SSG, API u otro origen), hace una carga completa.
@@ -91,6 +91,12 @@ También se ignoran enlaces con:
 - `download`
 - `mailto:` y `tel:`
 
-## 404 en cliente
+## Rutas que no son de la aplicación
 
-Si existe la ruta `/404`, el router la usa cuando no encuentra coincidencia de ruta.
+El router solo intercepta los enlaces que casan con una ruta de la aplicación. A uno sin ruta propia lo deja pasar y el navegador se lo pide al servidor. Así, una URL del mismo origen que sirve otro backend detrás del proxy (por ejemplo, un sistema heredado) llega a ese backend. Si nadie la sirve, el servidor pinta `/404` con status `404`.
+
+Con un catch-all en la raíz (`src/pages/[...all].tsx`) todas las URLs casan. Los enlaces a otro backend necesitan entonces el opt-out por enlace.
+
+## Si fallan los datos
+
+Si `/__data` falla durante una navegación (por ejemplo, porque un loader lanza o la red se cae), el router recarga la página y el servidor pinta esa URL. La dirección ya cambió, así que la pantalla no puede quedarse en la página anterior. `revalidate()` no recarga: rechaza y deja los datos anteriores.

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.25.5 (2026-11-03)
+
+### Correcciones
+
+- **Un enlace del mismo origen sin ruta propia mostraba el 404 de la aplicación.** El router interceptaba cualquier enlace del mismo origen y, si no casaba con ninguna ruta, pintaba `/404` en el cliente. Con un proxy que sirve parte del origen desde otro backend, como un sistema heredado, el navegador nunca le pedía esa URL al servidor. Ahora el router solo intercepta los enlaces que casan con una ruta, igual que ya hacía con las redirecciones. Los demás los carga el navegador: si no los sirve otro backend, el servidor pinta `/404` con status `404`. Un catch-all en la raíz sigue casando con todo; ahí hace falta el opt-out por enlace.
+- **Si `/__data` fallaba al navegar, la dirección cambiaba y la pantalla no.** El router cambiaba la URL antes de pedir los datos y, si la respuesta era un error, lanzaba sin pintar nada: la pantalla se quedaba en la página anterior sin avisar. Ahora recarga la página para que el servidor la pinte. `revalidate()` no cambia: rechaza y deja los datos anteriores.
+
+### Packages
+
+| Paquete                      | Version anterior | Nueva version |
+| ---------------------------- | ---------------- | ------------- |
+| `@calumet/suamox-create-app` | 0.5.7            | 0.5.8         |
+| `@calumet/suamox-router`     | 0.13.1           | 0.13.2        |
+
 ## 0.25.4 (2026-10-18)
 
 ### Correcciones
