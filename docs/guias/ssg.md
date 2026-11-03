@@ -103,6 +103,10 @@ El HTML prerenderizado se sirve directamente desde disco, sin pasar por `src/mid
 
 El hook `onRequest` del adaptador sí se ejecuta: es infraestructura —logging, headers— y aplica a toda respuesta.
 
+## Si falla una página
+
+Si un loader o el render de una página prerenderizada falla, el build falla también y nombra la ruta; el error queda en la consola. No se escribe en disco el HTML del 500, ni el de `500.tsx`, porque desde ahí se serviría con status 200 como si fuera la página buena.
+
 ## Comportamiento en producción
 
 Al usar `suamox preview`:

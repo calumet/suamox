@@ -10,6 +10,9 @@
 - **Una URL sin ruta corre el middleware de la carpeta de `404.tsx`.** Antes solo corría el global, `src/middleware.ts`, y `404.tsx` y sus layouts se pintaban sin la guardia de `src/pages/middleware.ts`: los loaders de esos layouts devolvían sus datos a quien la guardia habría rechazado. Si además fallaba un loader del 404, `500.tsx` se pintaba igual de desprotegida.
   - **Impacto:** un guardia en `src/pages/middleware.ts` ahora también corre en las URLs desconocidas. Si redirige a quien no ha iniciado sesión, esas URLs también redirigen.
   - **Migración:** si el 404 tiene que verse sin sesión, mueve las páginas protegidas y su `middleware.ts` a una carpeta de grupo, como `src/pages/(app)/`, y deja `404.tsx` en la raíz.
+- **El SSG falla si una página prerenderizada responde 500.** Antes escribía en disco el HTML del error, y ahora sería el de `500.tsx`, que el servidor sirve con 200 como si fuera la página buena.
+  - **Impacto:** un build en el que fallaba un loader o el render de una página `prerender` terminaba bien; ahora termina con un error que nombra la ruta.
+  - **Migración:** corrige el loader que falla, o quita `prerender` de esa página si sus datos no están disponibles en el build.
 
 ### Features
 

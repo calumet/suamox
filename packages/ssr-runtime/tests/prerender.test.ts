@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createElement } from "react";
-import { beforeEach, afterEach, describe, expect, it } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 import { registerReroute } from "../src/index";
 import type { RouteRecord } from "../src/index";
@@ -249,6 +249,35 @@ describe("prerender", () => {
     await expect(prerender({ routes, outDir, baseUrl: "http://localhost" })).rejects.toThrow(
       /prerender = true.*middleware chain/s,
     );
+  });
+
+  it("falla el build si un loader falla al prerenderizar, aunque exista 500.tsx", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/rota",
+        isIndex: false,
+        prerender: true,
+        loader: () => {
+          throw new Error("Loader failed");
+        },
+      }),
+      createMockRoute({
+        path: "/500",
+        filePath: "/pages/500.tsx",
+        isIndex: false,
+        component: (() => createElement("h1", null, "Algo falló")) as RouteRecord["component"],
+      }),
+    ];
+
+    try {
+      await expect(prerender({ routes, outDir, baseUrl: "http://localhost" })).rejects.toThrow(
+        "Prerendering /rota failed with status 500",
+      );
+      await expect(readFile(join(outDir, "rota", "index.html"), "utf-8")).rejects.toThrow();
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   it("writes the variants of every prerendered pathname", async () => {
