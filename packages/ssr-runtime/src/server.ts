@@ -13,7 +13,7 @@ import { renderToStaticMarkup, renderToString } from "react-dom/server";
 
 import { ClientValueProvider, createClientValueManager } from "./client-value.js";
 import { RedirectResponse, createPageElement, matchRoute, resolveRouteModule } from "./index.js";
-import type { LoaderContext, RenderOptions, RenderResult } from "./index.js";
+import type { LoaderContext, RenderOptions, RenderResult, RouteRecord } from "./index.js";
 
 const renderHeadToString = (nodes: React.ReactNode[]): string => {
   const startTag = `<meta ${headMarkerAttribute}="${headMarkerStartValue}">`;
@@ -29,7 +29,7 @@ const renderHeadToString = (nodes: React.ReactNode[]): string => {
  * Renderiza una página con SSR
  */
 export async function renderPage(options: RenderOptions): Promise<RenderResult> {
-  const { pathname, request, routes, props = {}, locals = {} } = options;
+  const { pathname, routes } = options;
 
   // Hacer match de ruta
   const match = matchRoute(routes, pathname);
@@ -42,14 +42,22 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
     };
   }
 
-  const resolvedMatch = match ?? { route: notFoundRoute!, params: {} };
-  const { route, params } = resolvedMatch;
+  return renderRoute(options, match ?? { route: notFoundRoute!, params: {} });
+}
+
+async function renderRoute(
+  options: RenderOptions,
+  { route, params }: { route: RouteRecord; params: Record<string, string> },
+): Promise<RenderResult> {
+  const { request, routes, props = {}, locals = {} } = options;
   const errorPage = route.path === "/500";
-  const status = !match || route.path === "/404" ? 404 : errorPage ? 500 : 200;
-  // Si falla la pagina, `500.tsx` en su lugar; si falla ella misma, el HTML basico
+  const status = route.path === "/404" ? 404 : errorPage ? 500 : 200;
+  const errorRoute = routes.find((candidate) => candidate.path === "/500");
+  // Si falla la pagina, `500.tsx` en su lugar; si falla ella misma, el HTML basico. El
+  // registro va directo y no por `matchRoute`: un reroute de `/500` no puede desviarlo
   const renderError = (): Promise<RenderResult> | RenderResult =>
-    !errorPage && routes.some((candidate) => candidate.path === "/500")
-      ? renderPage({ ...options, pathname: "/500", props: {} })
+    errorRoute && !errorPage
+      ? renderRoute({ ...options, props: {} }, { route: errorRoute, params: {} })
       : { status: 500, html: "<h1>500 - Internal Server Error</h1>" };
   const resolvedRoute = await resolveRouteModule(route);
   const url = new URL(request.url);

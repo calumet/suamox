@@ -11,6 +11,7 @@ import {
   createPageElement,
   serializeData,
   deserializeData,
+  registerReroute,
 } from "../src/index";
 import type { RouteRecord, LoaderContext, LayoutInfo } from "../src/index";
 import { renderPage } from "../src/server";
@@ -181,6 +182,46 @@ describe("renderPage", () => {
     expect(result.html).toContain("Algo falló");
 
     consoleErrorSpy.mockRestore();
+  });
+
+  it("un reroute de /500 no desvia la pagina de error ni la deja en bucle", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fails = () => {
+      throw new Error("Loader failed");
+    };
+    const routes: RouteRecord[] = [
+      createMockRoute({ path: "/error", loader: fails }),
+      createMockRoute({ path: "/404", loader: fails }),
+      createMockRoute({
+        path: "/500",
+        // oxlint-disable-next-line typescript/no-explicit-any
+        component: (() => createElement("h1", null, "Algo falló")) as any,
+      }),
+      createMockRoute({
+        path: "/inicio",
+        // oxlint-disable-next-line typescript/no-explicit-any
+        component: (() => createElement("p", null, "inicio")) as any,
+      }),
+    ];
+    const request = createMockRequest("http://localhost:3000/error");
+
+    try {
+      // Hacia una URL sin ruta, cuyo 404 tambien falla: antes, recursion sin fin
+      registerReroute((pathname) => (pathname === "/500" ? "/errores/500" : undefined));
+      const result = await renderPage({ pathname: "/error", request, routes });
+      expect(result.status).toBe(500);
+      expect(result.html).toContain("Algo falló");
+
+      // Hacia una pagina que funciona: antes, un 200 con el HTML de esa pagina
+      registerReroute((pathname) => (pathname === "/500" ? "/inicio" : undefined));
+      const desviado = await renderPage({ pathname: "/error", request, routes });
+      expect(desviado.status).toBe(500);
+      expect(desviado.errorPage).toBe(true);
+      expect(desviado.html).toContain("Algo falló");
+    } finally {
+      registerReroute(null);
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   it("si 500.tsx tambien falla, devuelve el HTML basico", async () => {
