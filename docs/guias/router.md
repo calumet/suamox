@@ -57,6 +57,8 @@ await router.navigate("/perfil", { replace: true, scroll: false });
 - `replace`: usa `history.replaceState` en vez de `pushState`.
 - `scroll`: controla scroll automático tras navegar (`true` por defecto).
 
+Un destino de otro origen se abre con una carga completa. `navigate()` rechaza los protocolos que ejecutan código o lo incrustan (`javascript:`, `data:`, `blob:` y compañía), igual que las redirecciones de un loader, para que un destino que viene del usuario no se convierta en un XSS. Si el destino viene de un `?returnTo=` o de un formulario y tiene que quedarse en la aplicación, valídalo también con `isSameOriginRedirect()` de `@calumet/suamox`.
+
 ## Revalidar
 
 Vuelve a ejecutar los loaders de la ruta activa, incluidos los de sus layouts, y actualiza lo que devuelve `useLoaderData()`. Sirve para refrescar la pantalla después de una escritura sin recargarla entera:

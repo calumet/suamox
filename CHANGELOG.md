@@ -18,6 +18,7 @@
 ### Correcciones
 
 - **El 500 de un loader hidrataba la página que había fallado.** El servidor respondía 500 con su HTML básico, pero con el script del cliente y `__INITIAL_DATA__ = null`. El cliente hidrataba encima la página de la URL con `data` en `null`, React avisaba de un desajuste y la pantalla mostraba la página como si nada hubiera fallado. Ahora el HTML básico de un 500 va sin el script del cliente.
+- **`navigate("javascript:...")` ejecutaba el código.** Un destino que no era del mismo origen acababa en `location.assign` sin mirar el protocolo, así que si una app le pasaba a `navigate()` texto del usuario, eso era un XSS. Ahora `navigate()` rechaza los mismos protocolos que las redirecciones de un loader (`javascript:`, `data:`, `blob:`…). El router suma sus primeros tests unitarios.
 
 ### Packages
 

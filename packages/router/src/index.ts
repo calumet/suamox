@@ -489,6 +489,10 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     const url = new URL(to, origin);
 
     if (!isClientNavigable(url)) {
+      // `to` puede venir del usuario: un `javascript:` en `assign` ejecutaria su codigo
+      if (!hasSafeRedirectProtocol(url.href)) {
+        throw new Error(`[suamox-router] Blocked navigation to unsafe URL: ${url.href}`);
+      }
       window.location.assign(url.toString());
       return;
     }
