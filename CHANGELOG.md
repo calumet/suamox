@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.26.0 (2026-11-03)
+
+### Features
+
+- **Página de error `500.tsx`.** Si existe `src/pages/500.tsx`, el servidor la pinta con status 500 cuando falla un loader de la página o de sus layouts, o el render. La página va dentro de sus layouts y se hidrata: el adaptador marca la raíz con `data-suamox-error` y el router hidrata esa ruta en lugar de la que casó con la URL. `RenderResult` suma `errorPage`. La página no recibe el error.
+
+### Correcciones
+
+- **El 500 de un loader hidrataba la página que había fallado.** El servidor respondía 500 con su HTML básico, pero con el script del cliente y `__INITIAL_DATA__ = null`. El cliente hidrataba encima la página de la URL con `data` en `null`, React avisaba de un desajuste y la pantalla mostraba la página como si nada hubiera fallado. Ahora el HTML básico de un 500 va sin el script del cliente.
+
+### Packages
+
+| Paquete                        | Version anterior | Nueva version |
+| ------------------------------ | ---------------- | ------------- |
+| `@calumet/suamox`              | 0.12.0           | 0.13.0        |
+| `@calumet/suamox-cli`          | 0.4.1            | 0.4.2         |
+| `@calumet/suamox-create-app`   | 0.5.8            | 0.5.9         |
+| `@calumet/suamox-hono-adapter` | 0.13.1           | 0.14.0        |
+| `@calumet/suamox-router`       | 0.13.2           | 0.14.0        |
+
+`@calumet/suamox-cli` se republica sin cambios para que su peer acepte `@calumet/suamox` 0.13.
+
 ## 0.25.5 (2026-11-03)
 
 ### Correcciones

@@ -257,6 +257,8 @@ export interface RenderResult {
   redirectTo?: string;
   /** Scripts inline de `useClientValue`, para inyectar al final del body */
   prehydrateScripts?: string[];
+  /** Se pintó `500.tsx`: el cliente hidrata esa ruta y no la que casó con la URL */
+  errorPage?: boolean;
 }
 
 export interface HydrationAdapter {

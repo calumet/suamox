@@ -44,7 +44,13 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
 
   const resolvedMatch = match ?? { route: notFoundRoute!, params: {} };
   const { route, params } = resolvedMatch;
-  const status = !match || route.path === "/404" ? 404 : 200;
+  const errorPage = route.path === "/500";
+  const status = !match || route.path === "/404" ? 404 : errorPage ? 500 : 200;
+  // Si falla la pagina, `500.tsx` en su lugar; si falla ella misma, el HTML basico
+  const renderError = (): Promise<RenderResult> | RenderResult =>
+    !errorPage && routes.some((candidate) => candidate.path === "/500")
+      ? renderPage({ ...options, pathname: "/500", props: {} })
+      : { status: 500, html: "<h1>500 - Internal Server Error</h1>" };
   const resolvedRoute = await resolveRouteModule(route);
   const url = new URL(request.url);
 
@@ -54,6 +60,7 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
       html: "",
       head: renderHeadToString([]),
       initialData: null,
+      errorPage,
     };
   }
 
@@ -105,10 +112,7 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
       };
     }
     console.error("Loader error:", error);
-    return {
-      status: 500,
-      html: "<h1>500 - Internal Server Error</h1>",
-    };
+    return renderError();
   }
 
   // Renderizar componente con React SSR
@@ -137,13 +141,11 @@ export async function renderPage(options: RenderOptions): Promise<RenderResult> 
       initialData: data,
       layoutData,
       prehydrateScripts: clientValueManager.getSnapshot(),
+      errorPage,
     };
   } catch (error) {
     console.error("Render error:", error);
-    return {
-      status: 500,
-      html: "<h1>500 - Internal Server Error</h1>",
-    };
+    return renderError();
   }
 }
 

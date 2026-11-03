@@ -293,7 +293,14 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     },
   ): Promise<void> => {
     const activeId = ++navigationId;
-    const match = resolveMatch(routes, stripBase(url.pathname, base));
+    // El servidor pintó `500.tsx` en lugar de la ruta de la URL
+    const errorRoute =
+      useInitialData && rootElement.hasAttribute("data-suamox-error")
+        ? routes.find((route) => route.path === "/500")
+        : undefined;
+    const match = errorRoute
+      ? { route: errorRoute, params: {} }
+      : resolveMatch(routes, stripBase(url.pathname, base));
 
     if (!match) {
       return;

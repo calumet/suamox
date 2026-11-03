@@ -115,6 +115,14 @@ La bandera se salta los `layout.tsx`, **no** el `root.tsx`: la página sigue den
 Si defines `src/pages/404.tsx`, Suamox la usa para rutas no encontradas.
 Si no existe, se devuelve un fallback HTML básico con status 404.
 
+## Página 500
+
+Si defines `src/pages/500.tsx`, Suamox la pinta con status 500 cuando falla el loader de una página o de uno de sus layouts, o cuando falla su render. La URL no cambia. La página va dentro de sus propios layouts, como cualquier otra, y se hidrata: desde ahí el router navega sin recargar. Para sacarla de los layouts, usa `export const layout = false`.
+
+No recibe el error, para no exponer en el navegador lo que lanzó el servidor. El error se registra en la consola del servidor.
+
+Si `500.tsx` también falla, por ejemplo porque lanza el loader de uno de sus layouts, o si no existe, se devuelve un HTML básico con status 500 y sin el script del cliente.
+
 ## Prioridad de rutas
 
 El runtime ordena rutas automáticamente:

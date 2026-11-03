@@ -154,6 +154,58 @@ describe("renderPage", () => {
     consoleErrorSpy.mockRestore();
   });
 
+  it("pinta 500.tsx en lugar de la pagina cuyo loader falla", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const routes: RouteRecord[] = [
+      createMockRoute({
+        path: "/error",
+        loader: () => {
+          throw new Error("Loader failed");
+        },
+      }),
+      createMockRoute({
+        path: "/500",
+        // oxlint-disable-next-line typescript/no-explicit-any
+        component: (() => createElement("h1", null, "Algo falló")) as any,
+      }),
+    ];
+
+    const result = await renderPage({
+      pathname: "/error",
+      request: createMockRequest("http://localhost:3000/error"),
+      routes,
+    });
+
+    expect(result.status).toBe(500);
+    expect(result.errorPage).toBe(true);
+    expect(result.html).toContain("Algo falló");
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("si 500.tsx tambien falla, devuelve el HTML basico", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fails = () => {
+      throw new Error("Loader failed");
+    };
+    const routes: RouteRecord[] = [
+      createMockRoute({ path: "/error", loader: fails }),
+      createMockRoute({ path: "/500", loader: fails }),
+    ];
+
+    const result = await renderPage({
+      pathname: "/error",
+      request: createMockRequest("http://localhost:3000/error"),
+      routes,
+    });
+
+    expect(result.status).toBe(500);
+    expect(result.errorPage).toBeUndefined();
+    expect(result.html).toContain("500 - Internal Server Error");
+
+    consoleErrorSpy.mockRestore();
+  });
+
   it("leaves layoutData undefined when no layout has a loader", async () => {
     const layoutInfo: LayoutInfo = {
       component: (({ children }: { children: ReactNode }) =>
