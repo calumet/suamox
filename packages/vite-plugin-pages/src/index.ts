@@ -177,7 +177,10 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
     globalMiddlewarePath = result.middlewarePath;
     // Los que dejan la app en un estado en que un guardia puede no correr
     fatalErrors = result.errors.filter(
-      (err) => err.includes("Duplicate route path") || err.includes('must export "onRequest"'),
+      (err) =>
+        err.includes("Duplicate route path") ||
+        err.includes('must export "onRequest"') ||
+        err.includes("Fallback page under a folder with middleware"),
     );
     apiRoutesCache = result.apiRoutes;
     clientModuleCode = generateRoutesModule(result.routes, {
@@ -378,8 +381,9 @@ export function suamoxPages(options: SuamoxPagesOptions = {}): Plugin {
 
       // Rutas duplicadas: cual gana depende del orden, y si una esta en carpeta
       // protegida y la otra no, eso decide si el guardia corre. Middleware sin
-      // `onRequest`: la carpeta se queda sin guardia. En dev solo se avisa; el
-      // build no puede publicar una app asi
+      // `onRequest`: la carpeta se queda sin guardia. Un 404 o un 500 bajo
+      // middleware propio: se pintan sin el. En dev solo se avisa; el build no
+      // puede publicar una app asi
       if (!server && fatalErrors.length > 0) {
         this.error(
           `[suamox:pages] Route errors:\n${fatalErrors.map((e) => `  - ${e}`).join("\n")}`,

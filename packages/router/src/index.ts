@@ -272,6 +272,8 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     if (target.pathname.startsWith(`${apiPrefix}/`) || target.pathname === apiPrefix) {
       return false;
     }
+    // Sin `/404` de por medio: una URL sin ruta propia puede ser de otro backend en el
+    // mismo origen, y si no lo es el servidor pinta el 404 con su status
     const match = matchRoute(routes, stripBase(target.pathname, base));
     return !!match && !match.route.prerender;
   };
@@ -291,7 +293,14 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     },
   ): Promise<void> => {
     const activeId = ++navigationId;
-    const match = resolveMatch(routes, stripBase(url.pathname, base));
+    // El servidor pintó `500.tsx` en lugar de la ruta de la URL
+    const errorRoute =
+      useInitialData && rootElement.hasAttribute("data-suamox-error")
+        ? routes.find((route) => route.path === "/500")
+        : undefined;
+    const match = errorRoute
+      ? { route: errorRoute, params: {} }
+      : resolveMatch(routes, stripBase(url.pathname, base));
 
     if (!match) {
       return;
@@ -381,13 +390,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
             typeof json === "object" &&
             "__redirect" in (json as Record<string, unknown>)
           ) {
-            const redirectData = json as { __redirect: string };
-            if (!hasSafeRedirectProtocol(redirectData.__redirect)) {
-              throw new Error(
-                `[suamox-router] Blocked redirect to unsafe URL: ${redirectData.__redirect}`,
-              );
-            }
-            redirectTo = new URL(redirectData.__redirect, origin);
+            redirectTo = new URL((json as { __redirect: string }).__redirect, origin);
           } else if (
             json != null &&
             typeof json === "object" &&
@@ -412,6 +415,12 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
           if (activeId !== navigationId) {
             return;
           }
+          // La URL ya cambio: sin sus datos la pantalla no puede quedarse en la anterior, y
+          // que la pinte el servidor. `revalidate` no cambia la URL y rechaza
+          if (!revalidate && !useInitialData) {
+            window.location.reload();
+            return;
+          }
           throw err;
         }
       }
@@ -422,6 +431,9 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     }
 
     if (redirectTo) {
+      if (!hasSafeRedirectProtocol(redirectTo.href)) {
+        throw new Error(`[suamox-router] Blocked redirect to unsafe URL: ${redirectTo.href}`);
+      }
       if (isClientNavigable(redirectTo)) {
         if (redirects >= MAX_REDIRECTS) {
           throw new Error(`[suamox-router] Too many redirects: ${redirectTo.pathname}`);
@@ -476,20 +488,11 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
   const navigate = async (to: string, options?: NavigateOptions): Promise<void> => {
     const url = new URL(to, origin);
 
-    if (url.origin !== window.location.origin) {
-      window.location.assign(url.toString());
-      return;
-    }
-
-    // API routes: delegar al browser
-    const apiPrefix = base === "/" ? "/api" : `${base}/api`;
-    if (url.pathname.startsWith(apiPrefix + "/") || url.pathname === apiPrefix) {
-      window.location.assign(url.toString());
-      return;
-    }
-
-    const match = resolveMatch(routes, stripBase(url.pathname, base));
-    if (!match || match.route.prerender) {
+    if (!isClientNavigable(url)) {
+      // `to` puede venir del usuario: un `javascript:` en `assign` ejecutaria su codigo
+      if (!hasSafeRedirectProtocol(url.href)) {
+        throw new Error(`[suamox-router] Blocked navigation to unsafe URL: ${url.href}`);
+      }
       window.location.assign(url.toString());
       return;
     }
@@ -524,7 +527,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     }
     lastPrefetchPath = path;
 
-    const match = resolveMatch(routes, path);
+    const match = matchRoute(routes, path);
     if (!match || !match.route.load) {
       return;
     }
@@ -562,23 +565,7 @@ export async function startRouter(options: RouterOptions): Promise<RouterInstanc
     }
 
     const url = new URL(href, window.location.href);
-    if (url.origin !== window.location.origin) {
-      return;
-    }
-
-    if (isSameDocumentHash(url)) {
-      return;
-    }
-
-    // No interceptar links a API routes — requieren request HTTP normal
-    const apiPrefix = base === "/" ? "/api" : `${base}/api`;
-    if (url.pathname.startsWith(apiPrefix + "/") || url.pathname === apiPrefix) {
-      return;
-    }
-
-    // No interceptar links a páginas SSG — requieren full page reload
-    const match = resolveMatch(routes, stripBase(url.pathname, base));
-    if (match?.route.prerender) {
+    if (isSameDocumentHash(url) || !isClientNavigable(url)) {
       return;
     }
 

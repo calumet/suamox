@@ -188,6 +188,13 @@ export function sortRoutes(routes: RouteRecord[]): RouteRecord[] {
 export function validateRoutes(routes: RouteRecord[]): string[] {
   const errors: string[] = [];
   const pathMap = new Map<string, RouteRecord>();
+  // El de la raiz de `pages/` lo llevan todas: ya corrio para la ruta en cuyo lugar se pintan
+  const shared = routes
+    .map((route) => route.middlewares ?? [])
+    .reduce<string[] | null>(
+      (acc, chain) => (acc ? acc.filter((file) => chain.includes(file)) : chain),
+      null,
+    );
 
   for (const route of routes) {
     // Verificar paths duplicados
@@ -200,6 +207,19 @@ export function validateRoutes(routes: RouteRecord[]): string[] {
       );
     } else {
       pathMap.set(route.path, route);
+    }
+
+    // El 404 y el 500 se pintan en lugar de otra ruta, con el middleware de esa: el
+    // `middleware.ts` de su carpeta no correria
+    if (
+      (route.path === "/404" || route.path === "/500") &&
+      (route.middlewares ?? []).some((file) => !shared?.includes(file))
+    ) {
+      errors.push(
+        `Fallback page under a folder with middleware: ${route.filePath}\n` +
+          `  ${route.path} renders in place of other routes, so its folder's middleware would not run. ` +
+          `Move it out of that folder.`,
+      );
     }
   }
 

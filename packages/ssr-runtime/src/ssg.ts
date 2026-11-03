@@ -255,6 +255,13 @@ export async function prerender(options: PrerenderOptions): Promise<void> {
       routes,
       props,
     });
+    // Un loader o un render que falla daria un 500 escrito en disco y servido con 200
+    if (result.status >= 500 && route.path !== "/500") {
+      throw new Error(
+        `[suamox] Prerendering ${normalizedPath} failed with status ${result.status}. ` +
+          `The error is logged above; fix it before publishing the static build.`,
+      );
+    }
     const resolvedAssets = resolveAssets
       ? await resolveAssets({ pathname: normalizedPath, route })
       : undefined;

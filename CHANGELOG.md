@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.26.0 (2026-11-03)
+
+### Breaking Changes
+
+- **El build falla si `404.tsx` o `500.tsx` están bajo una carpeta con `middleware.ts` propio.** Estas páginas se pintan en lugar de otra ruta y con el middleware de esa, así que la guardia de su carpeta no corría: los loaders de sus layouts podían ejecutarse para quien esa guardia habría rechazado. El `middleware.ts` de la raíz de `pages/` sí vale, porque lo llevan todas las rutas. En dev solo se avisa.
+  - **Impacto:** una app con, por ejemplo, `src/pages/(privado)/404.tsx` y `src/pages/(privado)/middleware.ts` deja de compilar.
+  - **Migración:** mueve la página fuera de esa carpeta, por ejemplo a `src/pages/404.tsx`.
+- **Una URL sin ruta corre el middleware de la carpeta de `404.tsx`.** Antes solo corría el global, `src/middleware.ts`, y `404.tsx` y sus layouts se pintaban sin la guardia de `src/pages/middleware.ts`: los loaders de esos layouts devolvían sus datos a quien la guardia habría rechazado. Si además fallaba un loader del 404, `500.tsx` se pintaba igual de desprotegida.
+  - **Impacto:** un guardia en `src/pages/middleware.ts` ahora también corre en las URLs desconocidas. Si redirige a quien no ha iniciado sesión, esas URLs también redirigen.
+  - **Migración:** si el 404 tiene que verse sin sesión, mueve las páginas protegidas y su `middleware.ts` a una carpeta de grupo, como `src/pages/(app)/`, y deja `404.tsx` en la raíz.
+- **El SSG falla si una página prerenderizada responde 500.** Antes escribía en disco el HTML del error, y ahora sería el de `500.tsx`, que el servidor sirve con 200 como si fuera la página buena.
+  - **Impacto:** un build en el que fallaba un loader o el render de una página `prerender` terminaba bien; ahora termina con un error que nombra la ruta.
+  - **Migración:** corrige el loader que falla, o quita `prerender` de esa página si sus datos no están disponibles en el build.
+
+### Features
+
+- **Página de error `500.tsx`.** Si existe `src/pages/500.tsx`, el servidor la pinta con status 500 cuando falla un loader de la página o de sus layouts, o el render. La página va dentro de sus layouts y se hidrata: el adaptador marca la raíz con `data-suamox-error` y el router hidrata esa ruta en lugar de la que casó con la URL. `RenderResult` suma `errorPage`. La página no recibe el error.
+
+### Correcciones
+
+- **El 500 de un loader hidrataba la página que había fallado.** El servidor respondía 500 con su HTML básico, pero con el script del cliente y `__INITIAL_DATA__ = null`. El cliente hidrataba encima la página de la URL con `data` en `null`, React avisaba de un desajuste y la pantalla mostraba la página como si nada hubiera fallado. Ahora el HTML básico de un 500 va sin el script del cliente.
+- **`navigate("javascript:...")` ejecutaba el código.** Un destino que no era del mismo origen acababa en `location.assign` sin mirar el protocolo, así que si una app le pasaba a `navigate()` texto del usuario, eso era un XSS. Ahora `navigate()` rechaza los mismos protocolos que las redirecciones de un loader (`javascript:`, `data:`, `blob:`…). El router suma sus primeros tests unitarios.
+
+### Packages
+
+| Paquete                             | Version anterior | Nueva version |
+| ----------------------------------- | ---------------- | ------------- |
+| `@calumet/suamox`                   | 0.12.0           | 0.13.0        |
+| `@calumet/suamox-cli`               | 0.4.1            | 0.4.2         |
+| `@calumet/suamox-create-app`        | 0.5.8            | 0.5.9         |
+| `@calumet/suamox-hono-adapter`      | 0.13.1           | 0.14.0        |
+| `@calumet/suamox-router`            | 0.13.2           | 0.14.0        |
+| `@calumet/suamox-vite-plugin-pages` | 0.17.3           | 0.18.0        |
+
+`@calumet/suamox-cli` se republica sin cambios para que su peer acepte `@calumet/suamox` 0.13.
+
+## 0.25.5 (2026-11-03)
+
+### Correcciones
+
+- **Un enlace del mismo origen sin ruta propia mostraba el 404 de la aplicación.** El router interceptaba cualquier enlace del mismo origen y, si no casaba con ninguna ruta, pintaba `/404` en el cliente. Con un proxy que sirve parte del origen desde otro backend, como un sistema heredado, el navegador nunca le pedía esa URL al servidor. Ahora el router solo intercepta los enlaces que casan con una ruta, igual que ya hacía con las redirecciones. Los demás los carga el navegador: si no los sirve otro backend, el servidor pinta `/404` con status `404`. Un catch-all en la raíz sigue casando con todo; ahí hace falta el opt-out por enlace.
+- **Si `/__data` fallaba al navegar, la dirección cambiaba y la pantalla no.** El router cambiaba la URL antes de pedir los datos y, si la respuesta era un error, lanzaba sin pintar nada: la pantalla se quedaba en la página anterior sin avisar. Ahora recarga la página para que el servidor la pinte. `revalidate()` no cambia: rechaza y deja los datos anteriores.
+
+### Packages
+
+| Paquete                      | Version anterior | Nueva version |
+| ---------------------------- | ---------------- | ------------- |
+| `@calumet/suamox-create-app` | 0.5.7            | 0.5.8         |
+| `@calumet/suamox-router`     | 0.13.1           | 0.13.2        |
+
 ## 0.25.4 (2026-10-18)
 
 ### Correcciones

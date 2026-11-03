@@ -17,7 +17,7 @@ if (localStorage.getItem("tema") === "oscuro") {
 
 ## Qué hace
 
-- Intercepta clicks en links internos.
+- Intercepta clicks en links a rutas de la aplicación.
 - Resuelve la ruta desde el manifest `virtual:pages`.
 - Obtiene datos del loader via `/__data?path=...` (los loaders son server-only, nunca se ejecutan en el browser).
 - Sigue las redirecciones del servidor: si el destino es una ruta del cliente navega sin recargar y reemplaza la entrada del historial; si no (ruta SSG, API u otro origen), hace una carga completa.
@@ -57,6 +57,8 @@ await router.navigate("/perfil", { replace: true, scroll: false });
 - `replace`: usa `history.replaceState` en vez de `pushState`.
 - `scroll`: controla scroll automático tras navegar (`true` por defecto).
 
+Un destino de otro origen se abre con una carga completa. `navigate()` rechaza los protocolos que ejecutan código o lo incrustan (`javascript:`, `data:`, `blob:` y compañía), igual que las redirecciones de un loader, para que un destino que viene del usuario no se convierta en un XSS. Si el destino viene de un `?returnTo=` o de un formulario y tiene que quedarse en la aplicación, valídalo también con `isSameOriginRedirect()` de `@calumet/suamox`.
+
 ## Revalidar
 
 Vuelve a ejecutar los loaders de la ruta activa, incluidos los de sus layouts, y actualiza lo que devuelve `useLoaderData()`. Sirve para refrescar la pantalla después de una escritura sin recargarla entera:
@@ -91,6 +93,12 @@ También se ignoran enlaces con:
 - `download`
 - `mailto:` y `tel:`
 
-## 404 en cliente
+## Rutas que no son de la aplicación
 
-Si existe la ruta `/404`, el router la usa cuando no encuentra coincidencia de ruta.
+El router solo intercepta los enlaces que casan con una ruta de la aplicación. A uno sin ruta propia lo deja pasar y el navegador se lo pide al servidor. Así, una URL del mismo origen que sirve otro backend detrás del proxy (por ejemplo, un sistema heredado) llega a ese backend. Si nadie la sirve, el servidor pinta `/404` con status `404`.
+
+Con un catch-all en la raíz (`src/pages/[...all].tsx`) todas las URLs casan. Los enlaces a otro backend necesitan entonces el opt-out por enlace.
+
+## Si fallan los datos
+
+Si `/__data` falla durante una navegación (por ejemplo, porque un loader lanza o la red se cae), el router recarga la página y el servidor pinta esa URL. La dirección ya cambió, así que la pantalla no puede quedarse en la página anterior. `revalidate()` no recarga: rechaza y deja los datos anteriores.
